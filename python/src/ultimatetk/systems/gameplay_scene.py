@@ -8,6 +8,7 @@ from ultimatetk.core.events import AppEvent, EventType, InputAction
 from ultimatetk.core.scenes import BaseScene, SceneTransition
 from ultimatetk.core.state import AppMode
 from ultimatetk.formats.efp import EfpImage
+from ultimatetk.formats.fnt import FontFile
 from ultimatetk.formats.lev import LevelData
 from ultimatetk.rendering import (
     RenderFlags,
@@ -37,12 +38,19 @@ from ultimatetk.systems.combat import (
 from ultimatetk.systems.player_control import (
     PLAYER_CENTER_OFFSET,
     PlayerState,
+    SHOP_ROW_AMMO,
+    SHOP_ROW_OTHER,
+    SHOP_ROW_WEAPONS,
+    SHOP_SHIELD_LEVEL_COST_STEP,
+    SHOP_TARGET_SYSTEM_COST,
     ShopSellPriceTable,
     ShopTransactionEvent,
     aim_point_from_player,
     apply_player_controls,
     bullet_ammo_capacities_snapshot,
     bullet_ammo_pools_snapshot,
+    bullet_shop_cost_for_type,
+    bullet_shop_units_for_type,
     buy_selected_shop_item,
     clamp_shop_selection,
     consume_pending_shots,
@@ -51,7 +59,11 @@ from ultimatetk.systems.player_control import (
     generate_shop_sell_prices,
     move_shop_selection,
     sell_selected_shop_item,
+    shield_shop_buy_cost_for_level,
+    shop_column_count_for_row,
     spawn_player_from_level,
+    weapon_sell_price_for_slot,
+    weapon_shop_cost_for_slot,
 )
 
 
@@ -62,6 +74,18 @@ class GameplayScene(BaseScene):
     _PROJECTILE_MARKER_PIXELS = bytes((252, 252, 252, 252))
     _PROJECTILE_MARKER_SIZE = 2
     _CRATE_FRAME_SIZE = CRATE_SIZE
+    _SHOP_GRID_ORIGIN_X = 8
+    _SHOP_GRID_ORIGIN_Y = 132
+    _SHOP_CELL_SIZE = 16
+    _SHOP_CELL_GAP = 2
+    _SHOP_TEXT_COLOR = 115
+    _SHOP_VALUE_COLOR = 126
+    _SHOP_PANEL_COLOR = 13
+    _SHOP_CELL_COLOR = 8
+    _SHOP_BORDER_COLOR = 98
+    _SHOP_SELECTED_COLOR = 96
+    _SHOP_SUCCESS_COLOR = 112
+    _SHOP_ERROR_COLOR = 28
 
     def __init__(self) -> None:
         self._renderer: SoftwareRenderer | None = None
@@ -93,6 +117,7 @@ class GameplayScene(BaseScene):
         self._shop_last_transaction: ShopTransactionEvent | None = None
 
         self._static_sprites: tuple[WorldSprite, ...] = ()
+        self._ui_font: FontFile | None = None
         self._target_pixels: bytes | None = None
         self._target_width = 0
         self._target_height = 0
@@ -178,6 +203,7 @@ class GameplayScene(BaseScene):
         self._shop_toggle_requested = False
         self._shop_last_transaction = None
         self._target_pixels = None
+        self._ui_font = None
         self._target_width = 0
         self._target_height = 0
         self._crate_frames = ()
@@ -202,6 +228,7 @@ class GameplayScene(BaseScene):
         repo = GameDataRepository(context.paths)
         episode = "DEFAULT"
         level_name = f"LEVEL{max(1, context.session.level_index + 1)}.LEV"
+        self._ui_font = self._load_ui_font(repo)
 
         try:
             level = repo.load_lev(level_name, episode=episode)
@@ -301,6 +328,7 @@ class GameplayScene(BaseScene):
         self._shop_sell_requested = False
         self._shop_toggle_requested = False
         self._shop_last_transaction = None
+        self._ui_font = None
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
         self._enemies.clear()
@@ -430,6 +458,11 @@ class GameplayScene(BaseScene):
             sprites=sprites,
         )
 
+        if self._shop_active and self._player is not None:
+            overlay_pixels = bytearray(pixels)
+            self._draw_shop_overlay(overlay_pixels)
+            pixels = bytes(overlay_pixels)
+
         context.runtime.last_render_width = SCREEN_WIDTH
         context.runtime.last_render_height = SCREEN_HEIGHT
         context.runtime.last_render_digest = frame_digest(pixels)
@@ -512,7 +545,7 @@ class GameplayScene(BaseScene):
                 ),
             )
 
-        if self._target_pixels is not None:
+        if self._target_pixels is not None and not self._shop_active:
             target_x, target_y = aim_point_from_player(self._player)
             sprites.append(
                 WorldSprite(
@@ -597,6 +630,321 @@ class GameplayScene(BaseScene):
             except ValueError:
                 continue
         return frames
+
+    def _load_ui_font(self, repo: GameDataRepository) -> FontFile | None:
+        for font_name in ("8X8.FNT", "8X8B.FNT"):
+            try:
+                return repo.load_fnt(font_name)
+            except (FileNotFoundError, ValueError):
+                continue
+        return None
+
+    def _draw_shop_overlay(self, pixels: bytearray) -> None:
+        if self._player is None:
+            return
+
+        header_x = 4
+        header_y = 4
+        header_width = SCREEN_WIDTH - 8
+        header_height = 96
+        grid_x = self._SHOP_GRID_ORIGIN_X
+        grid_y = self._SHOP_GRID_ORIGIN_Y
+        cell_pitch = self._SHOP_CELL_SIZE + self._SHOP_CELL_GAP
+        grid_height = (cell_pitch * 3) + 4
+
+        self._fill_rect(
+            pixels,
+            header_x,
+            header_y,
+            header_width,
+            header_height,
+            self._SHOP_PANEL_COLOR,
+        )
+        self._stroke_rect(
+            pixels,
+            header_x,
+            header_y,
+            header_width,
+            header_height,
+            self._SHOP_BORDER_COLOR,
+        )
+
+        self._fill_rect(
+            pixels,
+            grid_x - 2,
+            grid_y - 2,
+            316,
+            grid_height,
+            self._SHOP_PANEL_COLOR,
+        )
+        self._stroke_rect(
+            pixels,
+            grid_x - 2,
+            grid_y - 2,
+            316,
+            grid_height,
+            self._SHOP_BORDER_COLOR,
+        )
+
+        selection_label, buy_cost, sell_price, selection_state = self._shop_selection_info()
+
+        self._draw_shop_text(pixels, 10, 10, "THE SHOP", self._SHOP_VALUE_COLOR)
+        self._draw_shop_text(pixels, 10, 20, f"CASH {self._player.cash}", self._SHOP_VALUE_COLOR)
+        self._draw_shop_text(
+            pixels,
+            10,
+            30,
+            f"SEL R{self._shop_row + 1} C{self._shop_column + 1}",
+            self._SHOP_TEXT_COLOR,
+        )
+        self._draw_shop_text(
+            pixels,
+            10,
+            44,
+            f"ITEM {selection_label}",
+            self._SHOP_TEXT_COLOR,
+        )
+        self._draw_shop_text(
+            pixels,
+            10,
+            54,
+            f"BUY {buy_cost} SELL {sell_price}",
+            self._SHOP_TEXT_COLOR,
+        )
+        self._draw_shop_text(
+            pixels,
+            10,
+            64,
+            selection_state,
+            self._SHOP_TEXT_COLOR,
+        )
+
+        feedback_color = self._SHOP_TEXT_COLOR
+        feedback_text = "NO TRANSACTION"
+        if self._shop_last_transaction is not None:
+            tx = self._shop_last_transaction
+            tx_result = "OK" if tx.success else "BLOCKED"
+            feedback_text = (
+                f"{tx.action.upper()} {tx.category.upper()} {tx_result} "
+                f"U{tx.units} C{tx.cash_delta:+d}"
+            )
+            feedback_color = self._SHOP_SUCCESS_COLOR if tx.success else self._SHOP_ERROR_COLOR
+
+        self._draw_shop_text(pixels, 10, 78, feedback_text, feedback_color)
+        self._draw_shop_text(
+            pixels,
+            10,
+            88,
+            "W/S ROW A/D COL SPACE BUY TAB SELL R/ENT",
+            self._SHOP_TEXT_COLOR,
+        )
+
+        row_labels = ("WPN", "AMM", "OTH")
+        for row in range(3):
+            columns = shop_column_count_for_row(row)
+            row_y = grid_y + (row * cell_pitch)
+
+            self._draw_shop_text(
+                pixels,
+                214,
+                row_y + 4,
+                row_labels[row],
+                self._SHOP_TEXT_COLOR,
+            )
+
+            for column in range(columns):
+                cell_x = grid_x + (column * cell_pitch)
+                selected = row == self._shop_row and column == self._shop_column
+
+                fill_color = self._SHOP_SELECTED_COLOR if selected else self._SHOP_CELL_COLOR
+                border_color = self._SHOP_BORDER_COLOR if selected else self._SHOP_TEXT_COLOR
+
+                self._fill_rect(
+                    pixels,
+                    cell_x,
+                    row_y,
+                    self._SHOP_CELL_SIZE,
+                    self._SHOP_CELL_SIZE,
+                    fill_color,
+                )
+                self._stroke_rect(
+                    pixels,
+                    cell_x,
+                    row_y,
+                    self._SHOP_CELL_SIZE,
+                    self._SHOP_CELL_SIZE,
+                    border_color,
+                )
+
+                counter_text = self._shop_cell_counter_text(row, column)
+                if counter_text:
+                    self._draw_shop_text(
+                        pixels,
+                        cell_x + 2,
+                        row_y + 4,
+                        counter_text,
+                        self._SHOP_VALUE_COLOR,
+                    )
+
+    def _shop_selection_info(self) -> tuple[str, int, int, str]:
+        if self._player is None:
+            return "-", 0, 0, ""
+
+        if self._shop_row == SHOP_ROW_WEAPONS:
+            weapon_slot = self._shop_column + 1
+            owned = weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]
+            state_text = "OWNED" if owned else "LOCKED"
+            return (
+                f"WPN {weapon_slot:02d}",
+                weapon_shop_cost_for_slot(weapon_slot),
+                weapon_sell_price_for_slot(self._shop_sell_prices, weapon_slot),
+                state_text,
+            )
+
+        if self._shop_row == SHOP_ROW_AMMO:
+            ammo_type = self._shop_column
+            stock = self._player.bullets[ammo_type] if ammo_type < len(self._player.bullets) else 0
+            units_per_trade = max(1, bullet_shop_units_for_type(ammo_type))
+            stock_packs = stock // units_per_trade
+            if stock > 0 and stock_packs < 1:
+                stock_packs = 1
+            return (
+                f"AMMO {ammo_type + 1:02d}",
+                bullet_shop_cost_for_type(ammo_type),
+                bullet_shop_cost_for_type(ammo_type),
+                f"STOCK {stock} ({stock_packs})",
+            )
+
+        if self._shop_column == 0:
+            prior_level = max(0, self._player.shield - 1)
+            shield_sell_price = max(0, self._shop_sell_prices.shield_base)
+            shield_sell_price += (SHOP_SHIELD_LEVEL_COST_STEP * prior_level) // 2
+            return (
+                "SHIELD",
+                shield_shop_buy_cost_for_level(self._player.shield),
+                shield_sell_price,
+                f"LEVEL {self._player.shield}/30",
+            )
+
+        target_state = "ON" if self._player.target_system_enabled else "OFF"
+        return (
+            "TARGET",
+            SHOP_TARGET_SYSTEM_COST,
+            max(0, self._shop_sell_prices.target_system),
+            f"STATE {target_state}",
+        )
+
+    def _shop_cell_counter_text(self, row: int, column: int) -> str:
+        if self._player is None:
+            return ""
+
+        if row == SHOP_ROW_WEAPONS:
+            weapon_slot = column + 1
+            if weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]:
+                return "1"
+            return ""
+
+        if row == SHOP_ROW_AMMO:
+            if column >= len(self._player.bullets):
+                return ""
+            stock = max(0, self._player.bullets[column])
+            if stock <= 0:
+                return ""
+
+            units_per_trade = max(1, bullet_shop_units_for_type(column))
+            stock_packs = stock // units_per_trade
+            if stock_packs < 1:
+                stock_packs = 1
+            return str(stock_packs)
+
+        if row == SHOP_ROW_OTHER and column == 0:
+            if self._player.shield > 0:
+                return str(self._player.shield)
+            return ""
+
+        if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
+            return "1"
+        return ""
+
+    def _draw_shop_text(self, pixels: bytearray, x: int, y: int, text: str, color: int) -> None:
+        if not text:
+            return
+        if color < 0 or color > 255:
+            return
+
+        font = self._ui_font
+        if font is None:
+            return
+
+        glyph_width = font.glyph_width
+        glyph_height = font.glyph_height
+
+        cursor_x = x
+        for char in text:
+            glyph = font.glyph(ord(char) & 0xFF)
+            glyph_index = 0
+            for glyph_y in range(glyph_height):
+                screen_y = y + glyph_y
+                if screen_y < 0 or screen_y >= SCREEN_HEIGHT:
+                    glyph_index += glyph_width
+                    continue
+
+                row_offset = screen_y * SCREEN_WIDTH
+                for glyph_x in range(glyph_width):
+                    screen_x = cursor_x + glyph_x
+                    if screen_x < 0 or screen_x >= SCREEN_WIDTH:
+                        glyph_index += 1
+                        continue
+
+                    if glyph[glyph_index] > 0:
+                        pixels[row_offset + screen_x] = color
+                    glyph_index += 1
+
+            cursor_x += glyph_width
+            if cursor_x >= SCREEN_WIDTH:
+                break
+
+    def _fill_rect(
+        self,
+        pixels: bytearray,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        color: int,
+    ) -> None:
+        if width <= 0 or height <= 0:
+            return
+        if color < 0 or color > 255:
+            return
+
+        x0 = max(0, x)
+        y0 = max(0, y)
+        x1 = min(SCREEN_WIDTH, x + width)
+        y1 = min(SCREEN_HEIGHT, y + height)
+        if x0 >= x1 or y0 >= y1:
+            return
+
+        row_fill = bytes((color,)) * (x1 - x0)
+        for row in range(y0, y1):
+            row_start = row * SCREEN_WIDTH + x0
+            pixels[row_start : row_start + (x1 - x0)] = row_fill
+
+    def _stroke_rect(
+        self,
+        pixels: bytearray,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        color: int,
+    ) -> None:
+        if width <= 1 or height <= 1:
+            return
+        self._fill_rect(pixels, x, y, width, 1, color)
+        self._fill_rect(pixels, x, y + height - 1, width, 1, color)
+        self._fill_rect(pixels, x, y, 1, height, color)
+        self._fill_rect(pixels, x + width - 1, y, 1, height, color)
 
     def _resolve_pending_player_shots(self) -> None:
         if self._level is None or self._player is None:

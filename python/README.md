@@ -6,7 +6,7 @@ This directory contains the Python refactor work.
 - Section 1 (architecture/runtime skeleton) is implemented.
 - Section 2 (binary format parity loaders) is implemented.
 - Section 3 rendering baseline is implemented with a software-style indexed renderer.
-- Section 4 input/player control includes movement/collision/camera/weapon switching, shoot-reload cadence, and first-pass bi-directional combat (enemy spawn/aim/move/shoot + travel-time enemy projectiles + destructible/collectible crates with rewards + first-pass weapon ammo consumption/caps + ammo runtime telemetry snapshots for current weapon/full pools + first-pass shop trading helpers for ammo/weapons/shield/target + first-pass in-game shop flow with selection/transactions + player/enemy damage tracking + game-over flow).
+- Section 4 input/player control includes movement/collision/camera/weapon switching, shoot-reload cadence, and first-pass bi-directional combat (enemy spawn/aim/move/shoot + travel-time enemy projectiles + destructible/collectible crates with rewards + first-pass weapon ammo consumption/caps + ammo runtime telemetry snapshots for current weapon/full pools + first-pass shop trading helpers for ammo/weapons/shield/target + first-pass in-game shop flow with selection/transactions + first-pass visual shop overlay panel + player/enemy damage tracking + game-over flow).
 - Combat and full gameplay systems are still in progress.
 
 ## Run the skeleton

@@ -51,6 +51,26 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreater(app.context.runtime.player_shots_fired_total, 0)
         self.assertGreaterEqual(app.context.runtime.enemies_total, app.context.runtime.enemies_alive)
 
+    def test_scripted_shop_open_and_buy_attempt_sets_shop_runtime(self) -> None:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.0,
+            input_script="15:+SHOP;16:+SHOOT;17:+SHOOT;18:+SHOOT;19:+SHOOT;20:+SHOOT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(app.context.runtime.shop_active)
+        self.assertEqual(app.context.runtime.shop_last_action, "buy")
+        self.assertEqual(app.context.runtime.shop_last_category, "weapon")
+        self.assertFalse(app.context.runtime.shop_last_success)
+
 
 if __name__ == "__main__":
     unittest.main()

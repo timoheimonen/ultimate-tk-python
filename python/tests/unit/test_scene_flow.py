@@ -261,6 +261,39 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.shop_last_units, 0)
         self.assertEqual(context.runtime.shop_last_cash_delta, 0)
 
+    def test_gameplay_shop_overlay_changes_render_digest(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.cash = 1234
+        gameplay_scene._shop_row = 1
+        gameplay_scene._shop_column = 7
+
+        gameplay_scene._shop_active = False
+        manager.render(0.0)
+        digest_without_shop = context.runtime.last_render_digest
+
+        gameplay_scene._shop_active = True
+        manager.render(0.0)
+        digest_with_shop = context.runtime.last_render_digest
+
+        self.assertNotEqual(digest_without_shop, digest_with_shop)
+
 
 if __name__ == "__main__":
     unittest.main()

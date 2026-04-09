@@ -53,6 +53,7 @@ Implemented:
   - Added first-pass in-game shop mode toggled via input action, with row/column selection movement and buy/sell transaction handling wired into shop helpers.
   - Added deterministic per-level sell-price table generation hook on gameplay scene enter.
   - Runtime metadata now includes shop-active flag, shop selection row/column, and latest transaction outcome fields.
+  - Added first-pass visual shop overlay panel (selection grid, owned/stock counters, buy/sell info, and transaction feedback text) rendered on top of gameplay while shop mode is active.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
   - Touching a live crate now consumes it and applies crate-type reward effects.
@@ -83,5 +84,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
-- Build visual shop UI/HUD presentation parity (price panels, ownership/ammo counters, and feedback text) on top of the current interactive shop flow plumbing.
+- Refine visual shop/HUD parity details toward legacy presentation (font/color/layout polish and richer item naming/icons).
 - Continue parity tuning for collision feel and camera response.
