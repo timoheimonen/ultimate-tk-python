@@ -863,6 +863,92 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             enemies[0].walk_ticks,
         )
 
+    def _run_scripted_enemy_patrol_turn_lock_scenario(self) -> tuple[int, int, int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.08,
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(0, 20):
+            for tile_x in range(0, 20):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=0,
+                x=160.0,
+                y=160.0,
+                health=18.0,
+                max_health=18.0,
+                angle=0,
+                target_angle=90,
+                walk_ticks=0,
+                load_count=0,
+            ),
+        )
+
+        player.x = 0.0
+        player.y = 0.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+
+        with patch.object(combat, "enemy_speed_for_type", return_value=2.0), patch.object(
+            combat,
+            "_enemy_next_patrol_roll",
+            return_value=1,
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (enemies[0].angle, enemies[0].target_angle, enemies[0].walk_ticks)
+
     def _run_scripted_enemy_los_corner_graze_scenario(
         self,
         *,
@@ -1402,6 +1488,14 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(idle_end_y, idle_start_y)
         self.assertGreaterEqual(burst_walk_ticks, 0)
         self.assertGreater(abs(burst_end_x - burst_start_x) + abs(burst_end_y - burst_start_y), 5.0)
+
+    def test_scripted_enemy_patrol_turn_roll_waits_until_aligned(self) -> None:
+        angle, target_angle, walk_ticks = self._run_scripted_enemy_patrol_turn_lock_scenario()
+
+        self.assertEqual(target_angle, 90)
+        self.assertGreater(angle, 0)
+        self.assertLessEqual(angle, 90)
+        self.assertGreater(walk_ticks, 0)
 
     def test_scripted_enemy_front_vision_arc_blocks_rear_detection(self) -> None:
         shots, hits, damage = self._run_scripted_enemy_los_corner_graze_scenario(

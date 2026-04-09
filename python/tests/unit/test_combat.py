@@ -567,6 +567,32 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(enemy.walk_ticks, 0)
         self.assertLess(enemy.y, 120.0)
 
+    def test_enemy_patrol_turn_roll_waits_until_target_rotation_completes(self) -> None:
+        level = _build_level(height=20)
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=160.0,
+            y=160.0,
+            health=18.0,
+            max_health=18.0,
+            angle=0,
+            target_angle=90,
+            walk_ticks=0,
+            load_count=0,
+        )
+
+        with patch.object(combat_module, "_enemy_next_patrol_roll", return_value=1) as patrol_roll:
+            report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(enemy.target_angle, 90)
+        self.assertGreater(enemy.angle, 0)
+        self.assertLessEqual(enemy.angle, 18)
+        self.assertGreater(enemy.walk_ticks, 0)
+        self.assertEqual(patrol_roll.call_count, 2)
+
     def test_enemy_shoot_counter_tracks_attack_window_and_los_break(self) -> None:
         open_level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})

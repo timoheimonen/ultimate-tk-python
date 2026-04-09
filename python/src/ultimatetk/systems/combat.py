@@ -1497,9 +1497,10 @@ def _advance_enemy_patrol(
     player: PlayerState,
 ) -> None:
     if enemy.walk_ticks <= 0:
-        turn_roll = _enemy_next_patrol_roll(enemy)
-        if turn_roll % ENEMY_PATROL_TURN_CHANCE_DIVISOR == 1:
-            enemy.target_angle = _enemy_next_patrol_roll(enemy) % 360
+        if enemy.angle == enemy.target_angle:
+            turn_roll = _enemy_next_patrol_roll(enemy)
+            if turn_roll % ENEMY_PATROL_TURN_CHANCE_DIVISOR == 1:
+                enemy.target_angle = _enemy_next_patrol_roll(enemy) % 360
 
         start_roll = _enemy_next_patrol_roll(enemy)
         if start_roll % ENEMY_PATROL_START_CHANCE_DIVISOR == 1:
