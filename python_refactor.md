@@ -146,7 +146,7 @@ python/
 - Added first-pass crate pickup/reward flow (player overlap collection, weapon unlock crates, bullet-pack crates, and energy restore crates).
 - Added first-pass player ammo economy parity hooks (weapon ammo gating/consumption, bullet-crate ammo grants with per-type capacity caps, and empty-weapon fallback to fist).
 - Runtime telemetry now exposes ammo telemetry snapshots for HUD/shop parity work (current-weapon ammo type/units/cap plus full per-type ammo pools and capacities).
-- Added first-pass shop ammo buy/sell helpers with legacy-aligned cost/multiplier tables and runtime cash telemetry plumbing.
+- Added first-pass shop trading helpers with legacy-aligned price tables (ammo, weapons, shield, and target system), seeded sell-price generation, and runtime cash/shield/target telemetry plumbing.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

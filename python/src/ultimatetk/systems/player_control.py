@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import random
 from typing import Iterable
 
 from ultimatetk.core.events import InputAction
-from ultimatetk.formats.lev import DIFF_BULLETS, LevelData
+from ultimatetk.formats.lev import DIFF_BULLETS, DIFF_WEAPONS, LevelData
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
 
 
@@ -42,6 +43,13 @@ class ShotEvent:
     impact_y: int
 
 
+@dataclass(frozen=True, slots=True)
+class ShopSellPriceTable:
+    weapon_slots: tuple[int, ...]
+    shield_base: int
+    target_system: int
+
+
 WEAPON_PROFILES: tuple[WeaponProfile, ...] = (
     WeaponProfile(loading_time=10, is_gun=False),
     WeaponProfile(loading_time=10, is_gun=True),
@@ -71,6 +79,26 @@ WEAPON_BULLET_TYPE: tuple[int, ...] = (
     8,
     9,
 )
+
+WEAPON_SHOP_COSTS: tuple[int, ...] = (
+    0,
+    400,
+    1000,
+    2000,
+    4000,
+    4000,
+    6000,
+    6000,
+    6000,
+    1000,
+    3000,
+    1000,
+)
+
+SHOP_SHIELD_BASE_COST = 160
+SHOP_SHIELD_LEVEL_COST_STEP = 15
+SHOP_SHIELD_MAX_LEVEL = 30
+SHOP_TARGET_SYSTEM_COST = 500
 
 BULLET_TYPE_MAX_UNITS: tuple[int, ...] = (
     300,
@@ -128,6 +156,8 @@ class PlayerState:
     max_health: float = PLAYER_MAX_HEALTH
     health: float = PLAYER_MAX_HEALTH
     cash: int = 0
+    shield: int = 0
+    target_system_enabled: bool = False
     dead: bool = False
     current_weapon: int = 0
     weapons: list[bool] = field(default_factory=_default_weapon_slots)
@@ -186,6 +216,12 @@ def weapon_bullet_type_index_for_slot(weapon_slot: int) -> int | None:
         if bullet_type > 0:
             return bullet_type - 1
     return None
+
+
+def weapon_shop_cost_for_slot(weapon_slot: int) -> int:
+    if 0 <= weapon_slot < len(WEAPON_SHOP_COSTS):
+        return WEAPON_SHOP_COSTS[weapon_slot]
+    return WEAPON_SHOP_COSTS[0]
 
 
 def bullet_capacity_units_for_type(bullet_type_index: int) -> int:
@@ -252,6 +288,115 @@ def sell_bullet_ammo_to_shop(player: PlayerState, bullet_type_index: int) -> int
     player.bullets[bullet_type_index] = current - sold
     player.cash += max(0, bullet_shop_cost_for_type(bullet_type_index))
     return sold
+
+
+def generate_shop_sell_prices(*, random_seed: int | None = None) -> ShopSellPriceTable:
+    rng = random.Random(random_seed)
+
+    weapon_sell_prices: list[int] = []
+    for weapon_slot in range(1, DIFF_WEAPONS + 1):
+        cost = max(0, weapon_shop_cost_for_slot(weapon_slot))
+        random_range = max(1, cost // 2)
+        value = int(0.8 * cost) - rng.randrange(random_range)
+        weapon_sell_prices.append(max(0, value))
+
+    shield_random = max(1, SHOP_SHIELD_BASE_COST // 2)
+    shield_base = int(0.8 * SHOP_SHIELD_BASE_COST) - rng.randrange(shield_random)
+
+    target_random = max(1, SHOP_TARGET_SYSTEM_COST // 2)
+    target_system = int(0.8 * SHOP_TARGET_SYSTEM_COST) - rng.randrange(target_random)
+
+    return ShopSellPriceTable(
+        weapon_slots=tuple(max(0, value) for value in weapon_sell_prices),
+        shield_base=max(0, shield_base),
+        target_system=max(0, target_system),
+    )
+
+
+def weapon_sell_price_for_slot(sell_prices: ShopSellPriceTable, weapon_slot: int) -> int:
+    if weapon_slot <= 0:
+        return 0
+    if weapon_slot > len(sell_prices.weapon_slots):
+        return 0
+    return max(0, sell_prices.weapon_slots[weapon_slot - 1])
+
+
+def buy_weapon_from_shop(player: PlayerState, weapon_slot: int) -> bool:
+    if weapon_slot <= 0 or weapon_slot >= len(player.weapons):
+        return False
+    if player.weapons[weapon_slot]:
+        return False
+
+    cost = max(0, weapon_shop_cost_for_slot(weapon_slot))
+    if player.cash < cost:
+        return False
+
+    player.weapons[weapon_slot] = True
+    player.cash -= cost
+    return True
+
+
+def sell_weapon_to_shop(player: PlayerState, weapon_slot: int, sell_prices: ShopSellPriceTable) -> bool:
+    if weapon_slot <= 0 or weapon_slot >= len(player.weapons):
+        return False
+    if not player.weapons[weapon_slot]:
+        return False
+
+    player.weapons[weapon_slot] = False
+    if player.current_weapon == weapon_slot:
+        player.current_weapon = 0
+        player.load_count = 0
+
+    player.cash += weapon_sell_price_for_slot(sell_prices, weapon_slot)
+    return True
+
+
+def shield_shop_buy_cost_for_level(shield_level: int) -> int:
+    return SHOP_SHIELD_BASE_COST + max(0, shield_level) * SHOP_SHIELD_LEVEL_COST_STEP
+
+
+def buy_shield_from_shop(player: PlayerState) -> bool:
+    if player.shield >= SHOP_SHIELD_MAX_LEVEL:
+        return False
+
+    cost = shield_shop_buy_cost_for_level(player.shield)
+    if player.cash < cost:
+        return False
+
+    player.cash -= cost
+    player.shield += 1
+    return True
+
+
+def sell_shield_to_shop(player: PlayerState, sell_prices: ShopSellPriceTable) -> bool:
+    if player.shield <= 0:
+        return False
+
+    prior_level = max(0, player.shield - 1)
+    player.cash += max(0, sell_prices.shield_base)
+    player.cash += (SHOP_SHIELD_LEVEL_COST_STEP * prior_level) // 2
+    player.shield -= 1
+    return True
+
+
+def buy_target_system_from_shop(player: PlayerState) -> bool:
+    if player.target_system_enabled:
+        return False
+    if player.cash < SHOP_TARGET_SYSTEM_COST:
+        return False
+
+    player.target_system_enabled = True
+    player.cash -= SHOP_TARGET_SYSTEM_COST
+    return True
+
+
+def sell_target_system_to_shop(player: PlayerState, sell_prices: ShopSellPriceTable) -> bool:
+    if not player.target_system_enabled:
+        return False
+
+    player.target_system_enabled = False
+    player.cash += max(0, sell_prices.target_system)
+    return True
 
 
 def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:

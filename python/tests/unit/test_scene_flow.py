@@ -129,6 +129,8 @@ class SceneFlowTests(unittest.TestCase):
         player.grant_weapon(1)
         player.current_weapon = 1
         player.cash = 321
+        player.shield = 4
+        player.target_system_enabled = True
         gained = grant_bullet_ammo(player, 0, 37)
         self.assertEqual(gained, 37)
         gained = grant_bullet_ammo(player, 7, 4000)
@@ -139,6 +141,8 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.player_current_ammo_units, 37)
         self.assertEqual(context.runtime.player_current_ammo_capacity, 300)
         self.assertEqual(context.runtime.player_cash, 321)
+        self.assertEqual(context.runtime.player_shield, 4)
+        self.assertTrue(context.runtime.player_target_system_enabled)
         self.assertEqual(
             context.runtime.player_ammo_pools,
             (37, 0, 0, 0, 0, 0, 0, 3000, 0),

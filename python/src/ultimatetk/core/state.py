@@ -35,6 +35,8 @@ class RuntimeState:
     player_fire_ticks: int = 0
     player_shots_fired_total: int = 0
     player_cash: int = 0
+    player_shield: int = 0
+    player_target_system_enabled: bool = False
     player_health: int = 0
     player_dead: bool = False
     player_hits_total: int = 0

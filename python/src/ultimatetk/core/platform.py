@@ -234,7 +234,7 @@ def _log_runtime_status(
     ammo_pools_text = ",".join(str(units) for units in ammo_pools) if ammo_pools else "-"
 
     context.logger.info(
-        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d cash=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
+        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d cash=%d shield=%d target=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
         frame,
         context.runtime.mode.value,
         scene_name,
@@ -256,6 +256,8 @@ def _log_runtime_status(
         context.runtime.player_shots_fired_total,
         context.runtime.player_hits_total,
         context.runtime.player_cash,
+        context.runtime.player_shield,
+        context.runtime.player_target_system_enabled,
         context.runtime.player_health,
         context.runtime.player_dead,
         context.runtime.enemy_hits_total,
