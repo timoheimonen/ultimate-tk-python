@@ -127,5 +127,8 @@ python/
 ## Current Status
 - Folder scaffold created.
 - Self-contained asset destination scaffold created at `python/game_data/`.
+- Section 1 implementation started and completed with a runnable runtime skeleton (`python/src/ultimatetk/core/`).
+- Fixed-step clock (40 FPS target) and scene/state boundaries are in place.
+- Unit tests added for clock behavior and scene flow.
 - Planning document created.
-- No Python gameplay implementation started yet.
+- Gameplay content systems are still placeholders.
