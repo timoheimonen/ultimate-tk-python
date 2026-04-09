@@ -1257,6 +1257,226 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             app.context.runtime.enemies_killed_by_player,
         )
 
+    def _run_scripted_enemy_strafe_fallback_scenario(
+        self,
+    ) -> tuple[tuple[tuple[int, bool], ...], int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.15,
+            input_script="8:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(0, 12):
+            for tile_x in range(0, 12):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        set_block(0, 2, WALL_BLOCK_TYPE)
+        set_block(2, 0, WALL_BLOCK_TYPE)
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=2,
+                x=10.0,
+                y=10.0,
+                health=40.0,
+                max_health=40.0,
+                angle=45,
+                target_angle=45,
+                load_count=1,
+                shoot_count=0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+
+        movement_calls: list[tuple[int, bool]] = []
+        original_move_enemy = combat._move_enemy_with_collision
+
+        def record_enemy_movement(*args: object, **kwargs: object) -> bool:
+            moved = original_move_enemy(*args, **kwargs)
+            angle = kwargs.get("angle")
+            if isinstance(angle, int):
+                movement_calls.append((angle % 360, moved))
+            return moved
+
+        with patch.object(combat, "enemy_speed_for_type", return_value=10.0), patch.object(
+            combat,
+            "_enemy_strafe_angle",
+            return_value=45,
+        ), patch.object(
+            combat,
+            "_can_enemy_fire",
+            return_value=False,
+        ), patch.object(combat, "_move_enemy_with_collision", side_effect=record_enemy_movement):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            tuple(movement_calls),
+            app.context.runtime.enemy_shots_fired_total,
+        )
+
+    def _run_scripted_projectile_expiry_crate_cover_scenario(
+        self,
+        *,
+        with_cover: bool,
+    ) -> tuple[float, int, int, int, float]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.15,
+            input_script="8:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(0, 12):
+            for tile_x in range(0, 12):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        cover_crate: combat.CrateState | None = None
+        if with_cover:
+            cover_crate = combat.CrateState(
+                crate_id=0,
+                type1=0,
+                type2=0,
+                x=28.0,
+                y=64.0,
+                health=12.0,
+                max_health=12.0,
+            )
+            crates.append(cover_crate)
+
+        player.x = 20.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.hits_taken_total = 0
+        player.damage_taken_total = 0.0
+
+        enemy_projectiles.append(
+            combat.EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=1,
+                radius=0,
+                splash_radius=48,
+            ),
+        )
+
+        gameplay_scene._enemy_hits_on_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._enemy_damage_to_player = 0.0  # type: ignore[attr-defined]
+        gameplay_scene._enemy_shots_fired = 0  # type: ignore[attr-defined]
+
+        exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            app.context.runtime.player_damage_taken_total,
+            app.context.runtime.enemy_hits_total,
+            app.context.runtime.enemy_projectiles_active,
+            app.context.runtime.crates_collected_by_player,
+            0.0 if cover_crate is None else cover_crate.health,
+        )
+
     def test_scripted_turn_changes_player_angle(self) -> None:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
@@ -1535,6 +1755,47 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked_shots, 0)
         self.assertEqual(blocked_hits, 0)
         self.assertEqual(blocked_damage, 0.0)
+
+    def test_scripted_enemy_strafe_blocked_lane_retries_opposite_direction(self) -> None:
+        movement_calls, shots = self._run_scripted_enemy_strafe_fallback_scenario()
+
+        self.assertEqual(shots, 0)
+        self.assertGreaterEqual(len(movement_calls), 3)
+
+        blocked_lane_retry_seen = False
+        for index in range(len(movement_calls) - 1):
+            primary_angle, primary_moved = movement_calls[index]
+            fallback_angle, fallback_moved = movement_calls[index + 1]
+            if (
+                primary_angle == 45
+                and not primary_moved
+                and fallback_angle == 225
+                and fallback_moved
+            ):
+                blocked_lane_retry_seen = True
+                break
+
+        self.assertTrue(blocked_lane_retry_seen)
+
+    def test_scripted_projectile_expiry_crate_cover_reduces_splash_damage(self) -> None:
+        open_damage, open_hits, open_projectiles, open_collected, _ = (
+            self._run_scripted_projectile_expiry_crate_cover_scenario(with_cover=False)
+        )
+        cover_damage, cover_hits, cover_projectiles, cover_collected, cover_crate_health = (
+            self._run_scripted_projectile_expiry_crate_cover_scenario(with_cover=True)
+        )
+
+        self.assertEqual(open_hits, 1)
+        self.assertEqual(cover_hits, 1)
+        self.assertGreater(open_damage, 0.0)
+        self.assertGreater(cover_damage, 0.0)
+        self.assertLess(cover_damage, open_damage)
+        self.assertEqual(open_projectiles, 0)
+        self.assertEqual(cover_projectiles, 0)
+        self.assertEqual(open_collected, 0)
+        self.assertEqual(cover_collected, 0)
+        self.assertGreater(cover_crate_health, 0.0)
+        self.assertLess(cover_crate_health, 12.0)
 
     def test_scripted_enemy_explosive_long_range_shot_applies_forward_pressure(self) -> None:
         start_x, start_y, end_x, pressured_y, pressured_shots = self._run_scripted_enemy_explosive_pressure_scenario(

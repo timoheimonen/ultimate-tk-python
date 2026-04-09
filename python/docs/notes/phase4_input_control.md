@@ -161,6 +161,8 @@ Verification:
   - Added scripted enemy direct-shot corner-graze scenario asserting open-lane hits versus blocked wall-graze no-fire behavior under legacy LOS cadence.
   - Added scripted player-shot corner-graze scenario asserting open-lane hits/kills versus blocked wall-graze no-hit behavior.
   - Added scripted enemy projectile corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
+  - Added scripted blocked-lane enemy strafe fallback scenario asserting same-tick opposite-lane retry when primary strafe movement is blocked.
+  - Added scripted projectile-expiry crate-cover scenario asserting reduced expiry splash damage with live crate cover versus open-lane expiry damage.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
   - Added enemy crate-cover LOS and enemy-hitscan-into-crate unit coverage.
   - Added mine proximity-trigger crate-obstruction unit coverage.
@@ -184,7 +186,6 @@ Finalized and locked (do not retune further unless a regression appears):
 
 Remaining work for Phase 4:
 
-- Add scripted (headless `--input-script`) parity coverage for blocked-lane enemy strafe fallback and projectile-expiry crate-cover interactions to validate runtime ordering beyond unit-level checks.
 - Retune enemy combat cadence around sight reacquisition and reload transitions in multi-enemy rooms (focus: avoid over-synchronized stutter/side-switch patterns).
 - Validate mine/C4 arm/trigger timing against legacy frame windows (`N-1`, `N`, `N+1`) at the arm-transition boundary and remote-trigger boundary.
 - Add multi-contact mine/C4 micro-cases in tight lanes (simultaneous enemy edges, chained explosives, and nearest-contact ordering) with scripted runtime assertions.
