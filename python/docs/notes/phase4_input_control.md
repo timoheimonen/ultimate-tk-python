@@ -103,6 +103,7 @@ Verification:
   - Added scripted enemy grenade obstruction scenario asserting partial-damage lane behavior versus fully blocked lane behavior.
   - Added scripted enemy LOS corner-graze scenario asserting open-lane enemy fire versus blocked wall-edge no-fire behavior.
   - Added scripted enemy direct-shot corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
+  - Added scripted player-shot corner-graze scenario asserting open-lane hits/kills versus blocked wall-graze no-hit behavior.
   - Added scripted enemy projectile corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
 
