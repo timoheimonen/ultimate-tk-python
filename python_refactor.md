@@ -136,6 +136,8 @@ python/
 - Legacy-style movement/rotation, wall collision checks, camera follow, and weapon slot switching are now scaffolded.
 - Added initial shoot/reload cadence and wall-hit shot tracing hooks for early combat plumbing.
 - Added first-pass enemy spawning, hit resolution, and enemy kill bookkeeping in gameplay simulation.
+- Added first-pass enemy behavior loop with line-of-sight aiming, rotation, movement, and reload-gated enemy shooting.
+- Combat loop is now bi-directional: enemies can damage the player, and runtime telemetry tracks player health plus enemy shot/hit totals.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
@@ -144,4 +146,4 @@ python/
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Combat/enemy/progression systems are still placeholders.
+- Combat/entity/progression systems are still in progress (advanced projectiles, crates/effects interactions, UI/progression flow).

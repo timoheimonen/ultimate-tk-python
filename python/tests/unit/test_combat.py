@@ -25,8 +25,9 @@ from ultimatetk.systems.combat import (
     alive_enemy_count,
     resolve_shot_against_enemies,
     spawn_enemies_for_level,
+    update_enemy_behavior,
 )
-from ultimatetk.systems.player_control import ShotEvent
+from ultimatetk.systems.player_control import PlayerState, ShotEvent
 
 
 def _build_level(
@@ -147,6 +148,75 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(alive_enemy_count(enemies), 1)
         advance_enemy_effects(enemies)
         self.assertEqual(enemies[1].hit_flash_ticks, 1)
+
+    def test_enemy_behavior_rotates_and_moves_toward_player(self) -> None:
+        level = _build_level(width=12, height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=140.0,
+            health=18.0,
+            max_health=18.0,
+            angle=90,
+            target_angle=90,
+            load_count=0,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertTrue(enemy.sees_player)
+        self.assertEqual(enemy.angle, 99)
+        self.assertGreater(enemy.x, 40.0)
+        self.assertLess(enemy.y, 140.0)
+
+    def test_enemy_behavior_shoots_and_hits_player(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 1)
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertEqual(report.damage_to_player, 5.0)
+        self.assertEqual(player.health, 95.0)
+        self.assertEqual(player.hits_taken_total, 1)
+        self.assertGreater(player.hit_flash_ticks, 0)
+
+    def test_enemy_behavior_does_not_shoot_through_walls(self) -> None:
+        level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(player.health, 100.0)
+        self.assertFalse(enemy.sees_player)
 
 
 if __name__ == "__main__":

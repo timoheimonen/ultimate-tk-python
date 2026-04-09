@@ -29,6 +29,8 @@ Implemented:
   - Hitscan-style shot resolution against walls and enemy hitboxes.
   - Weapon-slot damage table for first pass damage application.
   - Enemy hit flash and alive/dead state bookkeeping.
+  - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
+  - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
 - Gameplay integration in `python/src/ultimatetk/systems/gameplay_scene.py`:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.
@@ -57,5 +59,5 @@ Verification:
 
 Remaining work for Phase 4:
 
-- Extend combat behavior (enemy movement/AI, enemy shooting, and richer weapon-specific projectile/explosive behavior).
+- Extend combat behavior with richer projectile/explosive weapon parity, crate interactions, and enemy behavior tuning.
 - Continue parity tuning for collision feel and camera response.

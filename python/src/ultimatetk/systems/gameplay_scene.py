@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from typing import Sequence
 
 from ultimatetk.assets import GameDataRepository
@@ -25,6 +24,7 @@ from ultimatetk.systems.combat import (
     alive_enemy_count,
     resolve_shot_against_enemies,
     spawn_enemies_for_level,
+    update_enemy_behavior,
 )
 from ultimatetk.systems.player_control import (
     PLAYER_CENTER_OFFSET,
@@ -64,6 +64,9 @@ class GameplayScene(BaseScene):
         self._enemies: list[EnemyState] = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
+        self._enemy_shots_fired = 0
+        self._enemy_hits_on_player = 0
+        self._enemy_damage_to_player = 0.0
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.GAMEPLAY
@@ -77,10 +80,17 @@ class GameplayScene(BaseScene):
         context.runtime.player_load_count = 0
         context.runtime.player_fire_ticks = 0
         context.runtime.player_shots_fired_total = 0
+        context.runtime.player_health = 0
+        context.runtime.player_dead = False
         context.runtime.player_hits_total = 0
+        context.runtime.player_hits_taken_total = 0
+        context.runtime.player_damage_taken_total = 0.0
         context.runtime.enemies_total = 0
         context.runtime.enemies_alive = 0
         context.runtime.enemies_killed_by_player = 0
+        context.runtime.enemy_shots_fired_total = 0
+        context.runtime.enemy_hits_total = 0
+        context.runtime.enemy_damage_to_player_total = 0.0
 
         self._held_actions.clear()
         self._cycle_weapon_requested = False
@@ -93,6 +103,9 @@ class GameplayScene(BaseScene):
         self._enemies = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
+        self._enemy_shots_fired = 0
+        self._enemy_hits_on_player = 0
+        self._enemy_damage_to_player = 0.0
         self._static_sprites = ()
         self._spot_phase = 0
         self._render_flags = RenderFlags()
@@ -206,14 +219,24 @@ class GameplayScene(BaseScene):
         if self._renderer is None or self._level is None or self._player is None:
             return None
 
-        apply_player_controls(
-            self._player,
+        if not self._player.dead:
+            apply_player_controls(
+                self._player,
+                self._level,
+                self._held_actions,
+                cycle_weapon=self._cycle_weapon_requested,
+                select_weapon_slot=self._pending_weapon_slot,
+            )
+            self._resolve_pending_player_shots()
+
+        report = update_enemy_behavior(
             self._level,
-            self._held_actions,
-            cycle_weapon=self._cycle_weapon_requested,
-            select_weapon_slot=self._pending_weapon_slot,
+            self._enemies,
+            self._player,
         )
-        self._resolve_pending_player_shots()
+        self._enemy_shots_fired += report.shots_fired
+        self._enemy_hits_on_player += report.hits_on_player
+        self._enemy_damage_to_player += report.damage_to_player
         advance_enemy_effects(self._enemies)
 
         self._cycle_weapon_requested = False
@@ -261,7 +284,7 @@ class GameplayScene(BaseScene):
             if not frames:
                 continue
 
-            angle_index = (_enemy_angle_to_point(enemy, self._player.center_x, self._player.center_y) // 9) % len(frames)
+            angle_index = (enemy.angle // 9) % len(frames)
             sprites.append(
                 WorldSprite(
                     world_x=int(enemy.center_x),
@@ -403,10 +426,17 @@ class GameplayScene(BaseScene):
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
             context.runtime.player_shots_fired_total = 0
+            context.runtime.player_health = 0
+            context.runtime.player_dead = False
             context.runtime.player_hits_total = 0
+            context.runtime.player_hits_taken_total = 0
+            context.runtime.player_damage_taken_total = 0.0
             context.runtime.enemies_total = 0
             context.runtime.enemies_alive = 0
             context.runtime.enemies_killed_by_player = 0
+            context.runtime.enemy_shots_fired_total = 0
+            context.runtime.enemy_hits_total = 0
+            context.runtime.enemy_damage_to_player_total = 0.0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
@@ -416,10 +446,17 @@ class GameplayScene(BaseScene):
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
         context.runtime.player_shots_fired_total = self._player.shots_fired_total
+        context.runtime.player_health = int(self._player.health)
+        context.runtime.player_dead = self._player.dead
         context.runtime.player_hits_total = self._enemy_hits_by_player
+        context.runtime.player_hits_taken_total = self._player.hits_taken_total
+        context.runtime.player_damage_taken_total = self._player.damage_taken_total
         context.runtime.enemies_total = len(self._enemies)
         context.runtime.enemies_alive = alive_enemy_count(self._enemies)
         context.runtime.enemies_killed_by_player = self._enemies_killed_by_player
+        context.runtime.enemy_shots_fired_total = self._enemy_shots_fired
+        context.runtime.enemy_hits_total = self._enemy_hits_on_player
+        context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
 
 
 def _extract_actor_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:
@@ -451,10 +488,3 @@ def _extract_actor_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes
     if not frames:
         raise ValueError("failed to extract actor angle frames")
     return tuple(frames)
-
-
-def _enemy_angle_to_point(enemy: EnemyState, target_x: float, target_y: float) -> int:
-    dx = target_x - enemy.center_x
-    dy = target_y - enemy.center_y
-    angle = int(math.degrees(math.atan2(dx, dy)))
-    return angle % 360

@@ -14,6 +14,8 @@ PLAYER_BASE_SPEED = 2.0
 PLAYER_COLLISION_SIZE = 28
 PLAYER_CENTER_OFFSET = PLAYER_COLLISION_SIZE // 2
 PLAYER_WEAPON_SLOTS = 12
+PLAYER_MAX_HEALTH = 100.0
+PLAYER_HIT_FLASH_TICKS = 6
 CAMERA_LOOK_AHEAD_DISTANCE = 25.0
 DEFAULT_AIM_DISTANCE = 10.0
 FIRE_ANIMATION_TICKS = 3
@@ -68,15 +70,21 @@ class PlayerState:
     y: float
     angle: int = 0
     speed: float = PLAYER_BASE_SPEED
+    max_health: float = PLAYER_MAX_HEALTH
+    health: float = PLAYER_MAX_HEALTH
+    dead: bool = False
     current_weapon: int = 0
     weapons: list[bool] = field(default_factory=_default_weapon_slots)
     load_count: int = 0
     shoot_hold_count: int = 0
     fire_animation_ticks: int = 0
+    hit_flash_ticks: int = 0
     shot_effect_ticks: int = 0
     shot_effect_x: int = 0
     shot_effect_y: int = 0
     shots_fired_total: int = 0
+    hits_taken_total: int = 0
+    damage_taken_total: float = 0.0
     walking: bool = False
     pending_shots: list[ShotEvent] = field(default_factory=list)
 
@@ -124,6 +132,10 @@ def apply_player_controls(
     select_weapon_slot: int | None = None,
 ) -> None:
     _decay_player_effects(player)
+
+    if player.dead:
+        player.walking = False
+        return
 
     active = set(held_actions)
     speed_i = player.speed
@@ -244,6 +256,22 @@ def consume_pending_shots(player: PlayerState) -> tuple[ShotEvent, ...]:
     return shots
 
 
+def apply_player_damage(player: PlayerState, damage: float) -> bool:
+    if damage <= 0 or player.dead:
+        return False
+
+    player.health -= damage
+    if player.health < 0:
+        player.health = 0.0
+    player.hit_flash_ticks = PLAYER_HIT_FLASH_TICKS
+    player.hits_taken_total += 1
+    player.damage_taken_total += damage
+    if player.health <= 0:
+        player.dead = True
+        return True
+    return False
+
+
 def _handle_shoot_input(player: PlayerState, level: LevelData, active: set[InputAction]) -> None:
     if InputAction.SHOOT in active:
         if player.load_count >= player.current_weapon_profile.loading_time:
@@ -299,6 +327,8 @@ def _advance_reload_counter(player: PlayerState) -> None:
 def _decay_player_effects(player: PlayerState) -> None:
     if player.fire_animation_ticks > 0:
         player.fire_animation_ticks -= 1
+    if player.hit_flash_ticks > 0:
+        player.hit_flash_ticks -= 1
     if player.shot_effect_ticks > 0:
         player.shot_effect_ticks -= 1
 
