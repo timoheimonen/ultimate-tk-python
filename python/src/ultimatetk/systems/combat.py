@@ -166,6 +166,9 @@ PLAYER_MINE_EXPLOSION_RADIUS = 20
 PLAYER_EXPLOSIVE_BASE_DAMAGE = 30.0
 PLAYER_EXPLOSIVE_RAY_OFFSETS: tuple[float, ...] = (0.0, -6.0, 6.0, -12.0, 12.0)
 PLAYER_EXPLOSIVE_RAY_WEIGHTS: tuple[float, ...] = (0.4, 0.2, 0.2, 0.1, 0.1)
+PLAYER_EXPLOSIVE_MIN_SPREAD_SCALE = 0.35
+PLAYER_EXPLOSIVE_SIDE_ONLY_DISTANCE_RATIO = 0.5
+PLAYER_EXPLOSIVE_SIDE_ONLY_DAMAGE_SCALE = 0.65
 
 
 @dataclass(slots=True)
@@ -1118,6 +1121,7 @@ def _player_explosive_damage(
         blast_y=impact_y,
         target_x=target_x,
         target_y=target_y,
+        radius=radius,
     )
     if ray_coverage <= 0.0:
         return 0.0
@@ -1131,6 +1135,7 @@ def _explosive_ray_coverage(
     blast_y: float,
     target_x: float,
     target_y: float,
+    radius: int,
 ) -> float:
     dx = target_x - blast_x
     dy = target_y - blast_y
@@ -1148,16 +1153,26 @@ def _explosive_ray_coverage(
     if len(PLAYER_EXPLOSIVE_RAY_OFFSETS) != len(PLAYER_EXPLOSIVE_RAY_WEIGHTS):
         return 0.0
 
+    if radius <= 0:
+        spread_scale = 1.0
+    else:
+        spread_scale = max(
+            PLAYER_EXPLOSIVE_MIN_SPREAD_SCALE,
+            min(1.0, distance / float(radius)),
+        )
+
     clear_weight = 0.0
+    center_ray_clear = False
 
     for lateral, weight in zip(PLAYER_EXPLOSIVE_RAY_OFFSETS, PLAYER_EXPLOSIVE_RAY_WEIGHTS):
         if weight <= 0.0:
             continue
 
-        ray_start_x = blast_x + (normal_x * lateral)
-        ray_start_y = blast_y + (normal_y * lateral)
-        ray_end_x = target_x + (normal_x * lateral)
-        ray_end_y = target_y + (normal_y * lateral)
+        end_lateral = lateral * spread_scale
+        ray_start_x = blast_x
+        ray_start_y = blast_y
+        ray_end_x = target_x + (normal_x * end_lateral)
+        ray_end_y = target_y + (normal_y * end_lateral)
         if _line_of_sight_clear(
             level,
             start_x=ray_start_x,
@@ -1166,8 +1181,17 @@ def _explosive_ray_coverage(
             end_y=ray_end_y,
         ):
             clear_weight += weight
+            if abs(lateral) < 0.5:
+                center_ray_clear = True
 
-    return clear_weight / total_weight
+    coverage = clear_weight / total_weight
+    if coverage <= 0.0:
+        return 0.0
+
+    if not center_ray_clear and radius > 0 and distance > (float(radius) * PLAYER_EXPLOSIVE_SIDE_ONLY_DISTANCE_RATIO):
+        coverage *= PLAYER_EXPLOSIVE_SIDE_ONLY_DAMAGE_SCALE
+
+    return coverage
 
 
 def _radial_damage(

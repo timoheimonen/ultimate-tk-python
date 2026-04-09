@@ -920,7 +920,7 @@ class CombatSystemTests(unittest.TestCase):
 
     def test_player_c4_explosion_partial_cover_reduces_damage(self) -> None:
         open_level = _build_level(height=12)
-        partial_cover_level = _build_level(height=12, walls={(2, 5)})
+        partial_cover_level = _build_level(height=12, walls={(2, 7)})
         player = PlayerState(x=40.0, y=40.0)
         shot = ShotEvent(
             origin_x=54.0,
@@ -936,7 +936,7 @@ class CombatSystemTests(unittest.TestCase):
             enemy_id=0,
             type_index=0,
             x=40.0,
-            y=120.0,
+            y=140.0,
             health=18.0,
             max_health=18.0,
         )
@@ -944,7 +944,7 @@ class CombatSystemTests(unittest.TestCase):
             enemy_id=0,
             type_index=0,
             x=40.0,
-            y=120.0,
+            y=140.0,
             health=18.0,
             max_health=18.0,
         )
@@ -982,8 +982,8 @@ class CombatSystemTests(unittest.TestCase):
         self.assertTrue(enemy_partial.alive)
 
     def test_player_c4_center_obstruction_reduces_more_than_side_obstruction(self) -> None:
-        center_block_level = _build_level(height=12, walls={(2, 5)})
-        side_block_level = _build_level(height=12, walls={(3, 5)})
+        center_block_level = _build_level(height=12, walls={(2, 7)})
+        side_block_level = _build_level(height=12, walls={(3, 7)})
         player = PlayerState(x=40.0, y=40.0)
         shot = ShotEvent(
             origin_x=54.0,
@@ -999,7 +999,7 @@ class CombatSystemTests(unittest.TestCase):
             enemy_id=0,
             type_index=0,
             x=40.0,
-            y=120.0,
+            y=140.0,
             health=18.0,
             max_health=18.0,
         )
@@ -1007,7 +1007,7 @@ class CombatSystemTests(unittest.TestCase):
             enemy_id=0,
             type_index=0,
             x=40.0,
-            y=120.0,
+            y=140.0,
             health=18.0,
             max_health=18.0,
         )
