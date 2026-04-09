@@ -102,9 +102,11 @@ Implemented:
   - Added first-pass gameplay HUD overlay (weapon/ammo/health status bars, cash/shield/target text, and shop-open control hint) while shop mode is closed.
   - HUD health readout now renders current/effective-capacity values so shield-based health capacity changes are visible during gameplay.
   - Shop overlay cell rendering now includes icon-like pixel glyphs with per-weapon/per-ammo identity (distinct silhouettes for each weapon slot and ammo type) plus highlighted selected-state icon color.
+  - Completed shop icon/detail fidelity pass for dense shop grids: refined remaining weapon/ammo silhouettes and enforced fixed-width 2-character label/counter alignment (including zero-padded numeric counters).
   - HUD layout/styling updated with multi-meter bars (health/ammo/reload), denser status readout, and explicit active mine/C4 counters.
   - HUD explosive status polish now includes armed-vs-active mine counts and hot-vs-active C4 counts, with dedicated readiness meters for mine arming and near-fuse C4 state.
   - HUD hint/readout polish now color-codes explosive readiness segments (mine and C4 status values) for faster glance parsing while preserving compact legacy-style text layout.
+  - Added explicit HUD warning-transition parity checks for low-HP, low-ammo, unarmed-mine, and hot-C4 state changes by asserting meter/text color transitions at threshold boundaries.
   - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
   - HUD/runtime telemetry now also exposes mine armed-count and C4 hot-count snapshots for explosive readiness visibility.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
@@ -182,6 +184,8 @@ Verification:
   - Added mine trigger partial-corner near-versus-far unit coverage.
   - Added camera action-active idle dead-zone unit coverage (shoot-hold/fire-animation versus fully idle behavior).
   - Added scene-flow coverage for shop cell state classification and state-driven color mapping.
+  - Added scene-flow coverage for full shop icon bitmap catalog/distinctness and fixed-width 2-character shop cell label/counter alignment.
+  - Added scene-flow HUD warning-transition coverage asserting color-state transitions for low HP, low ammo, unarmed-vs-armed mines, and cool-vs-hot C4 indicators.
   - Added C4 remote-trigger ammo-conservation scene-flow coverage.
   - Added enemy-projectile dead-player guard unit coverage so in-flight projectiles no longer count/player-damage after death.
   - Added scene-flow coverage for C4 remote-trigger behavior and new explosive readiness runtime counters.
@@ -194,7 +198,5 @@ Finalized and locked (do not retune further unless a regression appears):
 
 Remaining work for Phase 4:
 
-- Complete shop icon/detail fidelity pass for remaining weapon/ammo silhouettes and 2-character label/counter alignment in dense grid cells.
-- Add explicit HUD warning-transition checks (low HP, low ammo, hot C4, unarmed mines) so color/readability states are asserted, not only render-digest changed.
 - Run side-by-side movement/camera feel checks for turn-in-place firing, backward movement, and strafe-turn blends; tune response constants from those captures.
 - Retune camera edge behavior at map bounds (look-ahead clamp/release) to avoid sticky edge drift when re-entering open space.

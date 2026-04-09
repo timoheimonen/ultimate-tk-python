@@ -16,9 +16,11 @@ from ultimatetk.core.context import GameContext
 from ultimatetk.core.events import AppEvent, InputAction
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.scenes import SceneManager
-from ultimatetk.systems.combat import CrateState, EnemyState
+from ultimatetk.rendering import SCREEN_HEIGHT, SCREEN_WIDTH
+from ultimatetk.systems.combat import CrateState, EnemyState, PlayerExplosive
 from ultimatetk.systems.player_control import (
     SHOP_ROW_AMMO,
+    SHOP_ROW_OTHER,
     SHOP_ROW_WEAPONS,
     ShotEvent,
     bullet_capacity_units_for_type,
@@ -27,6 +29,85 @@ from ultimatetk.systems.player_control import (
 
 
 class SceneFlowTests(unittest.TestCase):
+    def _capture_hud_draw_state(
+        self,
+        gameplay_scene: object,
+    ) -> tuple[list[dict[str, object]], list[tuple[str, int]]]:
+        meter_calls: list[dict[str, object]] = []
+        text_calls: list[tuple[str, int]] = []
+
+        original_draw_meter = gameplay_scene._draw_meter  # type: ignore[attr-defined]
+        original_draw_shop_text = gameplay_scene._draw_shop_text  # type: ignore[attr-defined]
+
+        def capture_meter(
+            pixels: bytearray,
+            *,
+            x: int,
+            y: int,
+            width: int,
+            height: int,
+            ratio: float,
+            fill_color: int,
+            border_color: int,
+            background_color: int,
+        ) -> None:
+            del pixels
+            meter_calls.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                    "ratio": ratio,
+                    "fill_color": fill_color,
+                    "border_color": border_color,
+                    "background_color": background_color,
+                },
+            )
+
+        def capture_shop_text(
+            pixels: bytearray,
+            x: int,
+            y: int,
+            text: str,
+            color: int,
+        ) -> None:
+            del pixels, x, y
+            text_calls.append((text, color))
+
+        gameplay_scene._draw_meter = capture_meter  # type: ignore[attr-defined]
+        gameplay_scene._draw_shop_text = capture_shop_text  # type: ignore[attr-defined]
+
+        try:
+            gameplay_scene._draw_gameplay_hud(bytearray(SCREEN_WIDTH * SCREEN_HEIGHT))  # type: ignore[attr-defined]
+        finally:
+            gameplay_scene._draw_meter = original_draw_meter  # type: ignore[attr-defined]
+            gameplay_scene._draw_shop_text = original_draw_shop_text  # type: ignore[attr-defined]
+
+        return meter_calls, text_calls
+
+    def _hud_meter_fill_color(
+        self,
+        meter_calls: list[dict[str, object]],
+        *,
+        x: int,
+    ) -> int:
+        for call in meter_calls:
+            if call["x"] == x:
+                return int(call["fill_color"])
+        self.fail(f"missing HUD meter call for x={x}")
+
+    def _hud_text_color_by_prefix(
+        self,
+        text_calls: list[tuple[str, int]],
+        *,
+        prefix: str,
+    ) -> int:
+        for text, color in text_calls:
+            if text.startswith(prefix):
+                return color
+        self.fail(f"missing HUD text call for prefix={prefix!r}")
+
     def test_boot_to_menu_to_gameplay_autostart(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(
@@ -357,6 +438,101 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(buy_colors[5], gameplay_scene._SHOP_VALUE_COLOR)
         self.assertEqual(gameplay_scene._shop_selection_state_color(), gameplay_scene._SHOP_VALUE_COLOR)
 
+    def test_gameplay_shop_icon_catalog_covers_all_slots_with_distinct_silhouettes(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        icon_bitmaps = gameplay_scene._SHOP_ICON_BITMAPS
+        weapon_kinds = [
+            gameplay_scene._shop_cell_icon_kind(SHOP_ROW_WEAPONS, column)
+            for column in range(11)
+        ]
+        ammo_kinds = [
+            gameplay_scene._shop_cell_icon_kind(SHOP_ROW_AMMO, column)
+            for column in range(9)
+        ]
+        other_kinds = [
+            gameplay_scene._shop_cell_icon_kind(SHOP_ROW_OTHER, 0),
+            gameplay_scene._shop_cell_icon_kind(SHOP_ROW_OTHER, 1),
+        ]
+
+        for kind in weapon_kinds + ammo_kinds + other_kinds:
+            self.assertIn(kind, icon_bitmaps)
+            pattern = icon_bitmaps[kind]
+            self.assertEqual(len(pattern), 7)
+            self.assertTrue(all(len(row) == 7 for row in pattern))
+            self.assertGreaterEqual(sum(row.count("#") for row in pattern), 8)
+
+        self.assertEqual(
+            len({icon_bitmaps[kind] for kind in weapon_kinds}),
+            len(weapon_kinds),
+        )
+        self.assertEqual(
+            len({icon_bitmaps[kind] for kind in ammo_kinds}),
+            len(ammo_kinds),
+        )
+
+    def test_gameplay_shop_cell_text_alignment_uses_two_character_slots(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.bullets[0] = 1
+        player.bullets[7] = 40
+        player.shield = 3
+
+        self.assertEqual(gameplay_scene._shop_cell_counter_text(SHOP_ROW_AMMO, 0), "01")
+        self.assertEqual(gameplay_scene._shop_cell_counter_text(SHOP_ROW_AMMO, 7), "04")
+        self.assertEqual(gameplay_scene._shop_cell_counter_text(SHOP_ROW_OTHER, 0), "03")
+
+        self.assertEqual(gameplay_scene._shop_cell_aligned_text("7", pad_numeric=True), "07")
+        self.assertEqual(gameplay_scene._shop_cell_aligned_text("x"), "X ")
+
+        cell_x = 52
+        weapon_label = gameplay_scene._shop_cell_aligned_text(
+            gameplay_scene._shop_cell_label_text(SHOP_ROW_WEAPONS, 0),
+        )
+        ammo_label = gameplay_scene._shop_cell_aligned_text(
+            gameplay_scene._shop_cell_label_text(SHOP_ROW_AMMO, 0),
+        )
+        self.assertEqual(len(weapon_label), 2)
+        self.assertEqual(len(ammo_label), 2)
+        self.assertEqual(gameplay_scene._shop_cell_text_x(cell_x, weapon_label), cell_x)
+        self.assertEqual(gameplay_scene._shop_cell_text_x(cell_x, ammo_label), cell_x)
+        self.assertEqual(
+            gameplay_scene._shop_cell_text_x(cell_x, gameplay_scene._shop_cell_counter_text(SHOP_ROW_AMMO, 0)),
+            cell_x,
+        )
+
     def test_gameplay_shop_overlay_changes_render_digest(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(
@@ -428,6 +604,85 @@ class SceneFlowTests(unittest.TestCase):
         digest_after = context.runtime.last_render_digest
 
         self.assertNotEqual(digest_before, digest_after)
+
+    def test_gameplay_hud_warning_transitions_cover_hp_ammo_c4_and_mines(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        player.load_count = player.current_weapon_profile.loading_time
+        player.health = 31.0
+        player.bullets[0] = 61
+        gameplay_scene._player_explosives = []
+
+        meter_calls, text_calls = self._capture_hud_draw_state(gameplay_scene)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=4), gameplay_scene._HUD_OK_COLOR)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=80), gameplay_scene._HUD_OK_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="HP "), gameplay_scene._HUD_OK_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="AM "), gameplay_scene._HUD_OK_COLOR)
+
+        player.health = 30.0
+        player.bullets[0] = 60
+        meter_calls, text_calls = self._capture_hud_draw_state(gameplay_scene)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=4), gameplay_scene._HUD_WARN_COLOR)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=80), gameplay_scene._HUD_WARN_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="HP "), gameplay_scene._HUD_WARN_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="AM "), gameplay_scene._HUD_WARN_COLOR)
+
+        player.health = 31.0
+        player.bullets[0] = 61
+        unarmed_mine = PlayerExplosive(
+            kind="mine",
+            x=player.x,
+            y=player.y,
+            angle=0,
+            fuse_ticks=180,
+            arming_ticks=3,
+            radius=26,
+            damage=120.0,
+            trigger_radius=20,
+        )
+        cool_c4 = PlayerExplosive(
+            kind="c4",
+            x=player.x + 8.0,
+            y=player.y,
+            angle=0,
+            fuse_ticks=30,
+            arming_ticks=0,
+            radius=28,
+            damage=100.0,
+        )
+        gameplay_scene._player_explosives = [unarmed_mine, cool_c4]
+
+        meter_calls, text_calls = self._capture_hud_draw_state(gameplay_scene)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=216), gameplay_scene._HUD_TEXT_COLOR)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=268), gameplay_scene._HUD_TEXT_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="M "), gameplay_scene._HUD_TEXT_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="C4 "), gameplay_scene._HUD_TEXT_COLOR)
+
+        unarmed_mine.arming_ticks = 0
+        cool_c4.fuse_ticks = gameplay_scene._C4_HOT_FUSE_TICKS
+        meter_calls, text_calls = self._capture_hud_draw_state(gameplay_scene)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=216), gameplay_scene._HUD_OK_COLOR)
+        self.assertEqual(self._hud_meter_fill_color(meter_calls, x=268), gameplay_scene._HUD_WARN_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="M "), gameplay_scene._HUD_OK_COLOR)
+        self.assertEqual(self._hud_text_color_by_prefix(text_calls, prefix="C4 "), gameplay_scene._HUD_WARN_COLOR)
 
     def test_gameplay_player_mine_shot_deploys_and_detonates(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)

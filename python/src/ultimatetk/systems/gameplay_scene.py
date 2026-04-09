@@ -108,6 +108,7 @@ class GameplayScene(BaseScene):
     _SHOP_STATE_MARKER_SIZE = 2
     _SHOP_SUCCESS_COLOR = 112
     _SHOP_ERROR_COLOR = 28
+    _SHOP_CELL_TEXT_MAX_CHARS = 2
     _HUD_PANEL_COLOR = 13
     _HUD_CELL_COLOR = 8
     _HUD_BORDER_COLOR = 98
@@ -117,6 +118,215 @@ class GameplayScene(BaseScene):
     _HUD_WARN_COLOR = 28
     _HUD_OK_COLOR = 112
     _C4_HOT_FUSE_TICKS = 12
+    _SHOP_ICON_BITMAPS: dict[str, tuple[str, ...]] = {
+        "w_pistol": (
+            "..###..",
+            "..#....",
+            ".#####.",
+            "...#...",
+            "..##...",
+            ".......",
+            ".......",
+        ),
+        "w_shotgun": (
+            ".######",
+            ".#.....",
+            "######.",
+            "....##.",
+            ".....#.",
+            ".......",
+            ".......",
+        ),
+        "w_uzi": (
+            ".####..",
+            ".#..##.",
+            ".#####.",
+            "...##..",
+            "..##...",
+            ".......",
+            ".......",
+        ),
+        "w_rifle": (
+            "#######",
+            "#....##",
+            "######.",
+            "..#....",
+            ".##....",
+            ".......",
+            ".......",
+        ),
+        "w_gl": (
+            ".#####.",
+            ".#...##",
+            "######.",
+            "....##.",
+            "...##..",
+            ".......",
+            ".......",
+        ),
+        "w_ag": (
+            ".#####.",
+            ".#.#.#.",
+            "#######",
+            "..#.#..",
+            ".##.##.",
+            ".......",
+            ".......",
+        ),
+        "w_hl": (
+            "#######",
+            "##...##",
+            "#######",
+            "..###..",
+            "..###..",
+            "...#...",
+            ".......",
+        ),
+        "w_as": (
+            "#######",
+            "#.#.#.#",
+            "#######",
+            "..###..",
+            ".##.##.",
+            "...#...",
+            ".......",
+        ),
+        "w_c4": (
+            ".#####.",
+            ".#.#.#.",
+            ".#####.",
+            "...#...",
+            "..###..",
+            "...#...",
+            ".......",
+        ),
+        "w_flame": (
+            "...#...",
+            "..###..",
+            ".#####.",
+            ".##.##.",
+            "..###..",
+            "...#...",
+            ".......",
+        ),
+        "w_mine": (
+            "..###..",
+            ".#####.",
+            "##.#.##",
+            ".#####.",
+            "..###..",
+            "..#.#..",
+            ".......",
+        ),
+        "w_generic": (
+            ".#####.",
+            ".#...#.",
+            ".#####.",
+            "...#...",
+            "..###..",
+            ".......",
+            ".......",
+        ),
+        "a_9mm": (
+            ".#.#...",
+            ".#.#...",
+            ".#.#...",
+            ".#.#...",
+            "..#....",
+            ".......",
+            ".......",
+        ),
+        "a_12mm": (
+            ".##.##.",
+            ".##.##.",
+            ".##.##.",
+            ".##.##.",
+            "..#.#..",
+            "...#...",
+            ".......",
+        ),
+        "a_shell": (
+            ".#####.",
+            ".#...#.",
+            ".#...#.",
+            ".#####.",
+            "..###..",
+            "...#...",
+            ".......",
+        ),
+        "a_lg": (
+            "...#...",
+            "..###..",
+            ".#####.",
+            ".#####.",
+            "..###..",
+            "...#...",
+            ".......",
+        ),
+        "a_mg": (
+            "..###..",
+            ".#####.",
+            "#######",
+            "#######",
+            ".#####.",
+            "..###..",
+            "...#...",
+        ),
+        "a_hg": (
+            ".#####.",
+            "#######",
+            "#######",
+            "#######",
+            ".#####.",
+            "..###..",
+            "...#...",
+        ),
+        "a_c4": (
+            ".#####.",
+            ".#...#.",
+            ".##.##.",
+            ".#...#.",
+            ".#####.",
+            "..#.#..",
+            ".......",
+        ),
+        "a_gas": (
+            "..###..",
+            ".#...#.",
+            ".#.#.#.",
+            ".#####.",
+            ".#...#.",
+            ".#####.",
+            ".......",
+        ),
+        "a_mine": (
+            "..###..",
+            ".#####.",
+            "##.#.##",
+            ".#####.",
+            "..###..",
+            "..#.#..",
+            ".......",
+        ),
+        "shield": (
+            "..###..",
+            ".#####.",
+            ".#...#.",
+            ".#####.",
+            "..###..",
+            "...#...",
+            ".......",
+        ),
+        "target": (
+            ".#####.",
+            ".#...#.",
+            ".#.#.#.",
+            ".#...#.",
+            ".#####.",
+            "...#...",
+            ".......",
+        ),
+    }
 
     def __init__(self) -> None:
         self._renderer: SoftwareRenderer | None = None
@@ -910,9 +1120,9 @@ class GameplayScene(BaseScene):
                         color=icon_color,
                     )
 
-                cell_label = self._fit_shop_cell_text(self._shop_cell_label_text(row, column), max_chars=2)
+                cell_label = self._shop_cell_aligned_text(self._shop_cell_label_text(row, column))
                 if cell_label:
-                    label_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(cell_label) * 8)) // 2)
+                    label_x = self._shop_cell_text_x(cell_x, cell_label)
                     self._draw_shop_text(
                         pixels,
                         label_x,
@@ -923,8 +1133,8 @@ class GameplayScene(BaseScene):
 
                 counter_text = self._shop_cell_counter_text(row, column)
                 if counter_text:
-                    counter_label = self._fit_shop_cell_text(counter_text, max_chars=2)
-                    counter_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(counter_label) * 8)) // 2)
+                    counter_label = self._shop_cell_aligned_text(counter_text, pad_numeric=True)
+                    counter_x = self._shop_cell_text_x(cell_x, counter_label)
                     self._draw_shop_text(
                         pixels,
                         counter_x,
@@ -1074,217 +1284,7 @@ class GameplayScene(BaseScene):
         if color < 0 or color > 255:
             return
 
-        icon_bitmaps: dict[str, tuple[str, ...]] = {
-            "w_pistol": (
-                "..####.",
-                "..#....",
-                ".#####.",
-                "...#...",
-                "...#...",
-                ".......",
-                ".......",
-            ),
-            "w_shotgun": (
-                ".######",
-                ".#.....",
-                "######.",
-                ".....#.",
-                ".......",
-                ".......",
-                ".......",
-            ),
-            "w_uzi": (
-                ".#####.",
-                ".#...#.",
-                ".####..",
-                "...#...",
-                "..##...",
-                ".......",
-                ".......",
-            ),
-            "w_rifle": (
-                "#######",
-                "#.....#",
-                "#####..",
-                "..#....",
-                ".##....",
-                ".......",
-                ".......",
-            ),
-            "w_gl": (
-                ".#####.",
-                ".#...#.",
-                "######.",
-                "....##.",
-                "...##..",
-                ".......",
-                ".......",
-            ),
-            "w_ag": (
-                ".#####.",
-                ".#.#.#.",
-                "#######",
-                "...###.",
-                "..###..",
-                ".......",
-                ".......",
-            ),
-            "w_hl": (
-                "#######",
-                "##...##",
-                "#######",
-                "...###.",
-                "..###..",
-                ".......",
-                ".......",
-            ),
-            "w_as": (
-                "#######",
-                "#.#.#.#",
-                "#######",
-                "..#.#..",
-                ".##.##.",
-                ".......",
-                ".......",
-            ),
-            "w_c4": (
-                ".#####.",
-                ".#...#.",
-                ".#.###.",
-                ".#...#.",
-                ".#####.",
-                "...#...",
-                ".......",
-            ),
-            "w_flame": (
-                "...#...",
-                "..###..",
-                ".#####.",
-                "..###..",
-                "..##...",
-                "...#...",
-                ".......",
-            ),
-            "w_mine": (
-                "..###..",
-                ".#####.",
-                "##.#.##",
-                ".#####.",
-                "..###..",
-                "...#...",
-                ".......",
-            ),
-            "w_generic": (
-                ".#####.",
-                ".#...#.",
-                ".#####.",
-                "...#...",
-                "..###..",
-                ".......",
-                ".......",
-            ),
-            "a_9mm": (
-                ".#.#...",
-                ".#.#...",
-                ".#.#...",
-                ".#.#...",
-                "..#....",
-                ".......",
-                ".......",
-            ),
-            "a_12mm": (
-                ".##.##.",
-                ".##.##.",
-                ".##.##.",
-                "..#.#..",
-                "...#...",
-                ".......",
-                ".......",
-            ),
-            "a_shell": (
-                ".#####.",
-                ".#...#.",
-                ".#...#.",
-                ".#####.",
-                "..###..",
-                ".......",
-                ".......",
-            ),
-            "a_lg": (
-                "..###..",
-                ".#####.",
-                ".#####.",
-                "..###..",
-                "...#...",
-                "...#...",
-                ".......",
-            ),
-            "a_mg": (
-                "..###..",
-                ".#####.",
-                "#######",
-                ".#####.",
-                "..###..",
-                "...#...",
-                ".......",
-            ),
-            "a_hg": (
-                ".#####.",
-                "#######",
-                "#######",
-                ".#####.",
-                "..###..",
-                "...#...",
-                ".......",
-            ),
-            "a_c4": (
-                ".#####.",
-                ".#...#.",
-                ".#.###.",
-                ".#...#.",
-                ".#####.",
-                ".......",
-                ".......",
-            ),
-            "a_gas": (
-                "..###..",
-                ".#...#.",
-                ".#...#.",
-                ".#####.",
-                ".#...#.",
-                ".#####.",
-                ".......",
-            ),
-            "a_mine": (
-                "..###..",
-                ".#####.",
-                "##.#.##",
-                ".#####.",
-                "..###..",
-                ".......",
-                ".......",
-            ),
-            "shield": (
-                ".#####.",
-                ".#...#.",
-                ".#####.",
-                "..###..",
-                "..###..",
-                "...#...",
-                ".......",
-            ),
-            "target": (
-                ".#####.",
-                ".#...#.",
-                ".#.#.#.",
-                ".#...#.",
-                ".#####.",
-                "...#...",
-                ".......",
-            ),
-        }
-
-        pattern = icon_bitmaps.get(kind)
+        pattern = self._SHOP_ICON_BITMAPS.get(kind)
         if pattern is None:
             return
         self._draw_shop_icon_bitmap(pixels, x=x, y=y, pattern=pattern, color=color)
@@ -1322,6 +1322,26 @@ class GameplayScene(BaseScene):
             return trimmed
         return trimmed[:max_chars]
 
+    def _shop_cell_aligned_text(self, text: str, *, pad_numeric: bool = False) -> str:
+        trimmed = self._fit_shop_cell_text(text, max_chars=self._SHOP_CELL_TEXT_MAX_CHARS)
+        if not trimmed:
+            return ""
+
+        if pad_numeric and trimmed.isdigit():
+            value = min(99, max(0, int(trimmed)))
+            return f"{value:0{self._SHOP_CELL_TEXT_MAX_CHARS}d}"
+
+        if len(trimmed) >= self._SHOP_CELL_TEXT_MAX_CHARS:
+            return trimmed
+
+        return trimmed.ljust(self._SHOP_CELL_TEXT_MAX_CHARS)
+
+    def _shop_cell_text_x(self, cell_x: int, text: str) -> int:
+        if not text:
+            return cell_x
+        draw_chars = min(self._SHOP_CELL_TEXT_MAX_CHARS, len(text))
+        return cell_x + max(0, (self._SHOP_CELL_SIZE - (draw_chars * 8)) // 2)
+
     def _shop_cell_counter_text(self, row: int, column: int) -> str:
         if self._player is None:
             return ""
@@ -1344,11 +1364,11 @@ class GameplayScene(BaseScene):
             if stock_packs < 1:
                 stock_packs = 1
             stock_packs = min(99, stock_packs)
-            return str(stock_packs)
+            return f"{stock_packs:02d}"
 
         if row == SHOP_ROW_OTHER and column == 0:
             if self._player.shield > 0:
-                return str(min(99, self._player.shield))
+                return f"{min(99, self._player.shield):02d}"
             return ""
 
         if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
