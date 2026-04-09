@@ -1,0 +1,131 @@
+# Python Refactor Plan (No Multiplayer)
+
+## Objective
+Port The Ultimate TK from DOS C/C++ to Python while preserving gameplay feel and data compatibility, with multiplayer/IPX removed from scope and all runtime data packaged inside `python/`.
+
+## Scope
+- In scope:
+  - Single-player gameplay loop
+  - Existing level/content formats (`.LEV`, `.EFP`, `.FNT`, `palette.tab`, `options.cfg`)
+  - Menus, options, shop, combat, enemies, effects, rendering
+  - Self-contained Python runtime and assets under `python/` only
+- Out of scope:
+  - IPX networking, lobby/join flow, chat, server/client sync
+  - Any code under legacy network transport modules
+
+## Python Folder Layout
+The following structure has been created under `python/`:
+
+```text
+python/
+  game_data/            # runtime assets bundled for Python version
+    efps/               # migrated image assets
+    fnts/               # migrated font assets
+    levs/               # migrated level/episode assets
+    music/              # migrated module music assets
+    wavs/               # migrated sound effects
+    palette.tab         # migrated lighting/palette tables
+    options.cfg         # migrated/default runtime options (or generated on first run)
+  src/
+    ultimatetk/
+      core/         # bootstrap, timing, constants, shared utilities
+      formats/      # binary format readers/writers (.lev, .efp, .fnt, cfg, palette)
+      assets/       # asset registry and runtime resource management
+      world/        # map state, level state, spatial helpers
+      entities/     # player, enemy, bullet, crate, effect models/behavior
+      systems/      # game loop systems: input, movement, combat, progression
+      rendering/    # software-style render pipeline and lighting compositing
+      ui/           # menu flow, HUD, shop, option screens
+      audio/        # music/sfx playback facade and mixer behavior
+      debug/        # profiling hooks, frame metrics, capture tools
+  tests/
+    unit/           # isolated parser and logic tests
+    integration/    # subsystem interaction tests
+    regression/     # golden checks for behavior/visual parity
+  tools/            # one-off converters, inspectors, validation scripts
+  docs/
+    notes/          # implementation notes and parity findings
+  runs/
+    screenshots/    # captured outputs for visual comparison
+    profiles/       # perf traces and timing reports
+```
+
+## Legacy-to-Python Mapping
+- `SRC/GAME.CPP` -> `core/`, `systems/`, `ui/` (startup, menu, loop orchestration)
+- `SRC/CLASSES.CPP` + `SRC/CLASSES.H` -> `entities/` + `world/` + `systems/`
+- `SRC/DRAW.CPP` -> `rendering/`
+- `SRC/WRITE.CPP` -> `rendering/` + font support in `formats/`
+- `SRC/MISCFUNC.CPP` -> `core/` + `systems/` utility flows
+- `SRC/OPTIONS.CPP` -> `ui/` + `core/config`
+- `SRC/SHOP.H` -> `ui/shop` + economy logic in `systems/`
+- `SRC/EFP/EFP.CPP` -> `formats/efp`
+- `SRC/CLASSES.CPP:Level::load` -> `formats/lev`
+- `SRC/GAME.CPP:load_tables` -> `formats/palette_tab`
+
+## Multiplayer Removal Plan
+- Exclude all runtime behavior tied to:
+  - `SRC/IPX/IPX.CPP`, `SRC/IPX/IPX.H`
+  - `SRC/IPXDEFS.CPP`, `SRC/IPXDEFS.H`
+  - `SRC/INT/INT.ASM`, `SRC/INT/INT.H`
+- Remove/dead-end network branches in logic port:
+  - packet send/receive paths
+  - server/client state updates
+  - network-specific menu entries and join flow
+
+## Asset Packaging Requirement
+- Final Python game must not depend on `EFPS/`, `FNTS/`, `LEVS/`, `MUSIC/`, `WAVS/`, or other data from repository root.
+- All required runtime data must exist under `python/game_data/`.
+- End state: original legacy file structure is not needed anymore for the Python build.
+- Asset path resolution in Python code must be relative to `python/`.
+- Keep a migration checklist/manifest so required files are verifiable before release.
+
+## Milestones
+1. Architecture and runtime skeleton
+   - Define app entrypoint, fixed tick model, global state boundaries
+2. Binary format parity
+   - Load `.EFP`, `.FNT`, `.LEV`, `palette.tab`, `options.cfg` into Python structures
+3. Rendering baseline
+   - Tile/sprite drawing, transparency rules, palette/shadow/light table usage
+4. Input and player control
+   - Movement, collision, aiming/rotation, weapon switching
+5. Combat and entities
+   - Bullets, enemies, crates, effects, damage/death flow
+6. UI and progression
+   - Main menu, options, episode/level flow, shop, HUD
+7. Balancing and parity pass
+   - Timing adjustments, camera behavior, spawn and effect cadence
+8. Regression suite
+   - Golden snapshots and behavior checks from known scenarios
+9. Data colocation and release hardening
+   - Migrate all required runtime assets into `python/game_data/`
+   - Verify the game launches and runs without reading root-level legacy data paths
+
+## Validation Strategy
+- Data parity:
+  - Parse real repository assets and verify dimensions/counts and key fields
+- Logic parity:
+  - Recreate controlled scenarios (movement speed, fire rate, enemy reaction)
+- Visual parity:
+  - Compare frame captures on known rooms/events
+- Timing parity:
+  - Keep fixed-step target equivalent to original 40 FPS behavior
+- Isolation parity:
+  - Validate startup/gameplay works when only `python/` data paths are available
+
+## Risks and Watch Items
+- Palette/shadow/light math must match legacy table behavior
+- Collision and movement feel are sensitive to small integer/float differences
+- Legacy random/event cadence can drift if update order changes
+- Signed byte vs unsigned byte handling in asset decoding
+
+## Definition of Done (Single-Player)
+- Player can launch, choose episode, play through levels, fight enemies, use shop, and complete progression without network code.
+- All runtime content required by Python build exists inside `python/`.
+- Python build runs correctly without reading root-level DOS asset directories.
+- Gameplay and visuals are close enough to legacy behavior for practical parity.
+
+## Current Status
+- Folder scaffold created.
+- Self-contained asset destination scaffold created at `python/game_data/`.
+- Planning document created.
+- No Python gameplay implementation started yet.
