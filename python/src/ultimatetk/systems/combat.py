@@ -838,6 +838,14 @@ def resolve_enemy_shot_against_player(
     damage: float | None = None,
     max_distance: int | None = None,
 ) -> EnemyShotResolution:
+    if not enemy.alive or player.dead:
+        return EnemyShotResolution(
+            player_hit=False,
+            impact_x=int(enemy.center_x),
+            impact_y=int(enemy.center_y),
+            damage=0.0,
+        )
+
     angle_radians = math.radians((enemy.angle if angle is None else angle) % 360)
     ray_damage = weapon_damage_for_slot(weapon_slot) if damage is None else max(0.0, damage)
     trace_distance = weapon_range_for_slot(weapon_slot) if max_distance is None else max(0, max_distance)
@@ -890,6 +898,9 @@ def resolve_enemy_attack_against_player(
     weapon_slot: int,
     crates: Sequence[CrateState] | None = None,
 ) -> EnemyAttackResult:
+    if not enemy.alive or player.dead:
+        return EnemyAttackResult()
+
     pellet_count = max(1, weapon_pellet_count_for_slot(weapon_slot))
     spread = weapon_angle_spread_for_slot(weapon_slot)
     pellet_damage = weapon_damage_for_slot(weapon_slot) / pellet_count
@@ -996,9 +1007,18 @@ def update_enemy_projectiles(
     player: PlayerState,
     *,
     crates: Sequence[CrateState] | None = None,
+    enemies: Sequence[EnemyState] | None = None,
 ) -> EnemyProjectileReport:
     if not projectiles:
         return EnemyProjectileReport()
+
+    if player.dead:
+        projectiles.clear()
+        return EnemyProjectileReport()
+
+    enemy_alive_by_id: dict[int, bool] | None = None
+    if enemies is not None:
+        enemy_alive_by_id = {enemy.enemy_id: enemy.alive for enemy in enemies}
 
     hits_on_player = 0
     damage_to_player = 0.0
@@ -1007,6 +1027,11 @@ def update_enemy_projectiles(
     active: list[EnemyProjectile] = []
 
     for projectile in projectiles:
+        if enemy_alive_by_id is not None:
+            owner_alive = enemy_alive_by_id.get(projectile.owner_enemy_id)
+            if owner_alive is False:
+                continue
+
         advance = _advance_enemy_projectile(
             level,
             projectile,

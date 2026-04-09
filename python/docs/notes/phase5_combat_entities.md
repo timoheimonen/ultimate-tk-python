@@ -23,7 +23,7 @@ Current baseline already implemented:
    - Verify crate/player/enemy resolution ordering for simultaneous-contact frames.
    - Validate deterministic ordering where multiple valid contacts exist in the same tick.
 
-2. Entity lifecycle and state-transition hygiene
+2. Entity lifecycle and state-transition hygiene (completed)
    - Verify dead-state gating across all enemy attack/damage paths (including in-flight projectile and delayed splash outcomes).
    - Validate removal timing for spent projectiles/explosives so runtime counters and rendered state stay in sync.
    - Validate hit-flash and death state transitions for enemies/crates against expected single-trigger behavior.
@@ -54,6 +54,31 @@ Current baseline already implemented:
 - Verification run after Workstream 1 changes:
   - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Started Workstream 2 by hardening dead-state gating and delayed-path cleanup in enemy attack/projectile flows:
+  - `resolve_enemy_shot_against_player` and `resolve_enemy_attack_against_player` now return no-hit/no-damage for dead enemies (and skip dead-player attack resolution), preventing late-state attack side effects when called from delayed or direct paths.
+  - `update_enemy_projectiles` now clears in-flight projectiles immediately when the player is already dead, preventing post-death delayed splash side effects and keeping active-projectile state in sync.
+  - `update_enemy_projectiles` now supports optional owner-liveness gating (`enemies=`) and drops projectiles whose known owner enemy is dead, while preserving standalone scripted projectile micro-cases with unknown owners.
+  - Gameplay update loop now passes current enemies into projectile updates so owner-liveness gating applies during normal runtime.
+- Added Workstream 2 regression coverage in `python/tests/unit/test_combat.py`:
+  - `test_enemy_projectile_dead_player_path_does_not_damage_crates`
+  - `test_enemy_projectile_discarded_when_owner_enemy_is_dead`
+  - `test_dead_enemy_attack_resolution_is_gated`
+- Extended Workstream 2 transition hygiene coverage:
+  - Added dead-entity non-retrigger assertions for direct hit paths so dead enemy/crate states are ignored by subsequent shot traces without reapplying hit-flash/death transitions.
+  - Added dead-entity non-retrigger assertions for player C4 detonation paths so dead enemy/crate states are ignored by later blast resolution.
+  - Added gameplay scene-flow coverage verifying active projectile/explosive buffers are cleared in the same tick that game-over activates, and runtime active counters immediately reflect zero.
+  - Gameplay update loop now short-circuits into game-over activation at tick start when player is already dead, preventing post-death simulation side effects in that frame (including pending explosive detonation/hit counter drift) before runtime publication.
+- Verification run after this Workstream 2 start chunk:
+  - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py`
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+  - `python3 -m pytest tests/unit/test_player_control.py`
+- Closed Workstream 2 after completing all three lifecycle goals:
+  - dead-state gating is now explicit across direct and delayed enemy attack/projectile paths,
+  - spent/invalid combat entities are removed before they can leak post-death side effects into runtime counters,
+  - enemy/crate hit-flash and death transitions are covered by non-retrigger regression cases for both direct shot and C4 splash paths.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
 
 ## Verification plan
 

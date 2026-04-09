@@ -636,57 +636,62 @@ class GameplayScene(BaseScene):
         elif not self._game_over_active:
             context.runtime.mode = AppMode.GAMEPLAY
 
-            if self._shop_toggle_requested:
-                self._toggle_shop(context)
-
-            if self._shop_active:
-                self._update_shop_state(context)
+            if self._player.dead:
+                self._activate_game_over(context)
+                transition = self._update_game_over_flow(context)
             else:
-                apply_player_controls(
-                    self._player,
-                    self._level,
-                    self._held_actions,
-                    cycle_weapon=self._cycle_weapon_requested,
-                    select_weapon_slot=self._pending_weapon_slot,
-                )
-                collected = collect_crates_for_player(self._crates, self._player)
-                self._crates_collected_by_player += collected.crates_collected
-                self._resolve_pending_player_shots()
+                if self._shop_toggle_requested:
+                    self._toggle_shop(context)
 
-                explosive_report = update_player_explosives(
-                    self._player_explosives,
-                    self._enemies,
-                    self._player,
-                    level=self._level,
-                    crates=self._crates,
-                )
-                self._player_explosive_detonations += explosive_report.detonations
-                self._enemy_hits_by_player += explosive_report.enemies_hit
-                self._enemies_killed_by_player += explosive_report.enemies_killed
-                self._crates_destroyed_by_player += explosive_report.crates_destroyed
+                if self._shop_active:
+                    self._update_shop_state(context)
+                else:
+                    apply_player_controls(
+                        self._player,
+                        self._level,
+                        self._held_actions,
+                        cycle_weapon=self._cycle_weapon_requested,
+                        select_weapon_slot=self._pending_weapon_slot,
+                    )
+                    collected = collect_crates_for_player(self._crates, self._player)
+                    self._crates_collected_by_player += collected.crates_collected
+                    self._resolve_pending_player_shots()
 
-                report = update_enemy_behavior(
-                    self._level,
-                    self._enemies,
-                    self._player,
-                    enemy_projectiles=self._enemy_projectiles,
-                    crates=self._crates,
-                )
-                projectile_report = update_enemy_projectiles(
-                    self._level,
-                    self._enemy_projectiles,
-                    self._player,
-                    crates=self._crates,
-                )
-                self._enemy_shots_fired += report.shots_fired
-                self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
-                self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
-                advance_enemy_effects(self._enemies)
-                advance_crate_effects(self._crates)
+                    explosive_report = update_player_explosives(
+                        self._player_explosives,
+                        self._enemies,
+                        self._player,
+                        level=self._level,
+                        crates=self._crates,
+                    )
+                    self._player_explosive_detonations += explosive_report.detonations
+                    self._enemy_hits_by_player += explosive_report.enemies_hit
+                    self._enemies_killed_by_player += explosive_report.enemies_killed
+                    self._crates_destroyed_by_player += explosive_report.crates_destroyed
 
-                if self._player.dead:
-                    self._activate_game_over(context)
-                    transition = self._update_game_over_flow(context)
+                    report = update_enemy_behavior(
+                        self._level,
+                        self._enemies,
+                        self._player,
+                        enemy_projectiles=self._enemy_projectiles,
+                        crates=self._crates,
+                    )
+                    projectile_report = update_enemy_projectiles(
+                        self._level,
+                        self._enemy_projectiles,
+                        self._player,
+                        crates=self._crates,
+                        enemies=self._enemies,
+                    )
+                    self._enemy_shots_fired += report.shots_fired
+                    self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
+                    self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
+                    advance_enemy_effects(self._enemies)
+                    advance_crate_effects(self._crates)
+
+                    if self._player.dead:
+                        self._activate_game_over(context)
+                        transition = self._update_game_over_flow(context)
         else:
             context.runtime.mode = AppMode.GAME_OVER
 

@@ -17,7 +17,7 @@ from ultimatetk.core.events import AppEvent, InputAction
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.scenes import SceneManager
 from ultimatetk.rendering import SCREEN_HEIGHT, SCREEN_WIDTH
-from ultimatetk.systems.combat import CrateState, EnemyState, PlayerExplosive
+from ultimatetk.systems.combat import CrateState, EnemyProjectile, EnemyState, PlayerExplosive
 from ultimatetk.systems.player_control import (
     SHOP_ROW_AMMO,
     SHOP_ROW_OTHER,
@@ -156,6 +156,76 @@ class SceneFlowTests(unittest.TestCase):
 
         manager.update(0.025)
         self.assertEqual(manager.current_scene_name, "main_menu")
+
+    def test_gameplay_death_clears_active_projectiles_and_explosives_same_tick(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if player is None or enemy_projectiles is None or player_explosives is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemy_projectiles.clear()
+        player_explosives.clear()
+        enemy_projectiles.append(
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=1,
+                x=220.0,
+                y=220.0,
+                vx=0.0,
+                vy=1.0,
+                speed=0.0,
+                damage=5.0,
+                remaining_ticks=20,
+                radius=1,
+                splash_radius=0,
+            ),
+        )
+        player_explosives.append(
+            PlayerExplosive(
+                kind="c4",
+                x=120.0,
+                y=120.0,
+                angle=0,
+                fuse_ticks=1,
+                arming_ticks=0,
+                radius=80,
+                damage=30.0,
+                falloff_exponent=1.05,
+            ),
+        )
+        gameplay_scene._player_explosive_detonations = 0  # type: ignore[attr-defined]
+        gameplay_scene._enemy_hits_on_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._enemy_damage_to_player = 0.0  # type: ignore[attr-defined]
+
+        player.dead = True
+        player.health = 0.0
+
+        manager.update(0.025)
+
+        self.assertEqual(len(enemy_projectiles), 0)
+        self.assertEqual(len(player_explosives), 0)
+        self.assertEqual(context.runtime.enemy_projectiles_active, 0)
+        self.assertEqual(context.runtime.player_explosives_active, 0)
+        self.assertEqual(context.runtime.player_explosive_detonations_total, 0)
+        self.assertEqual(context.runtime.enemy_hits_total, 0)
+        self.assertEqual(context.runtime.enemy_damage_to_player_total, 0.0)
+        self.assertTrue(context.runtime.game_over_active)
+        self.assertTrue(context.runtime.player_dead)
 
     def test_gameplay_collects_touching_crate_and_updates_runtime_counter(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)

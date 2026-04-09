@@ -337,6 +337,35 @@ class CombatSystemTests(unittest.TestCase):
         self.assertFalse(enemy.alive)
         self.assertEqual(enemy.health, 0.0)
 
+    def test_resolve_shot_dead_enemy_does_not_retrigger_hit_flash(self) -> None:
+        level = _build_level(height=12)
+        dead_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=0.0,
+            max_health=18.0,
+            alive=False,
+            hit_flash_ticks=2,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=170,
+            weapon_slot=1,
+            impact_x=54,
+            impact_y=120,
+        )
+
+        result = resolve_shot_against_enemies(level, [dead_enemy], shot)
+
+        self.assertIsNone(result.enemy_id)
+        self.assertFalse(result.enemy_killed)
+        self.assertEqual(result.damage, 0.0)
+        self.assertEqual(dead_enemy.hit_flash_ticks, 2)
+
     def test_resolve_shot_hits_crate_before_enemy(self) -> None:
         level = _build_level(height=12)
         enemy = EnemyState(enemy_id=0, type_index=0, x=40.0, y=120.0, health=18.0, max_health=18.0)
@@ -394,6 +423,36 @@ class CombatSystemTests(unittest.TestCase):
         self.assertTrue(result.crate_destroyed)
         self.assertFalse(crate.alive)
         self.assertEqual(crate.health, 0.0)
+
+    def test_resolve_shot_dead_crate_does_not_retrigger_hit_flash(self) -> None:
+        level = _build_level(height=12)
+        dead_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=84.0,
+            health=0.0,
+            max_health=12.0,
+            alive=False,
+            hit_flash_ticks=2,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=170,
+            weapon_slot=1,
+            impact_x=54,
+            impact_y=130,
+        )
+
+        result = resolve_shot_against_enemies(level, [], shot, crates=[dead_crate])
+
+        self.assertIsNone(result.crate_id)
+        self.assertFalse(result.crate_destroyed)
+        self.assertEqual(result.damage, 0.0)
+        self.assertEqual(dead_crate.hit_flash_ticks, 2)
 
     def test_resolve_shot_stops_at_wall_before_enemy(self) -> None:
         level = _build_level(height=12, walls={(2, 4)})
@@ -903,6 +962,118 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.health, 0.0)
         self.assertEqual(player.hits_taken_total, 0)
         self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_dead_player_path_does_not_damage_crates(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=0.0, dead=True)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=56.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=1,
+                x=54.0,
+                y=54.0,
+                vx=0.0,
+                vy=1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, crates=[crate])
+
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertEqual(report.crates_hit, 0)
+        self.assertEqual(report.crates_destroyed, 0)
+        self.assertEqual(crate.health, crate.max_health)
+        self.assertTrue(crate.alive)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_discarded_when_owner_enemy_is_dead(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        dead_enemy = EnemyState(
+            enemy_id=7,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=0.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            alive=False,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=7,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, enemies=[dead_enemy])
+
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertEqual(player.hits_taken_total, 0)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_dead_enemy_attack_resolution_is_gated(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        dead_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=0.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            alive=False,
+            load_count=10,
+        )
+
+        attack = resolve_enemy_attack_against_player(
+            level,
+            enemy=dead_enemy,
+            player=player,
+            weapon_slot=1,
+        )
+        shot = combat_module.resolve_enemy_shot_against_player(
+            level,
+            enemy=dead_enemy,
+            player=player,
+            weapon_slot=1,
+        )
+
+        self.assertEqual(attack.hit_count, 0)
+        self.assertEqual(attack.total_damage, 0.0)
+        self.assertFalse(shot.player_hit)
+        self.assertEqual(shot.damage, 0.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertEqual(player.hits_taken_total, 0)
 
     def test_enemy_projectile_stops_at_wall_before_player(self) -> None:
         level = _build_level(height=12)
@@ -2018,6 +2189,90 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(len(explosives), 0)
         self.assertFalse(enemy.alive)
         self.assertFalse(crate.alive)
+
+    def test_player_c4_ignores_dead_enemy_and_does_not_retrigger_flash(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        dead_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=0.0,
+            max_health=18.0,
+            alive=False,
+            hit_flash_ticks=2,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+        explosive.fuse_ticks = 1
+
+        report = update_player_explosives(
+            [explosive],
+            [dead_enemy],
+            player,
+            level=level,
+        )
+
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(report.enemies_hit, 0)
+        self.assertEqual(report.enemies_killed, 0)
+        self.assertEqual(dead_enemy.hit_flash_ticks, 2)
+        self.assertEqual(dead_enemy.health, 0.0)
+
+    def test_player_c4_ignores_dead_crate_and_does_not_retrigger_flash(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        dead_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=20.0,
+            y=60.0,
+            health=0.0,
+            max_health=12.0,
+            alive=False,
+            hit_flash_ticks=2,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+        explosive.fuse_ticks = 1
+
+        report = update_player_explosives(
+            [explosive],
+            [],
+            player,
+            level=level,
+            crates=[dead_crate],
+        )
+
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(report.crates_hit, 0)
+        self.assertEqual(report.crates_destroyed, 0)
+        self.assertEqual(dead_crate.hit_flash_ticks, 2)
+        self.assertEqual(dead_crate.health, 0.0)
 
     def test_player_c4_explosion_is_blocked_by_wall(self) -> None:
         level = _build_level(height=12, walls={(2, 5), (3, 5)})
