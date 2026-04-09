@@ -6,7 +6,7 @@ This directory contains the Python refactor work.
 - Section 1 (architecture/runtime skeleton) is implemented.
 - Section 2 (binary format parity loaders) is implemented.
 - Section 3 rendering baseline is implemented with a software-style indexed renderer.
-- Section 4 input/player control has started with movement, collision, camera follow, and weapon switching scaffolding.
+- Section 4 input/player control includes movement/collision/camera/weapon switching plus initial shoot-reload cadence and shot tracing scaffolding.
 - Combat and full gameplay systems are still in progress.
 
 ## Run the skeleton

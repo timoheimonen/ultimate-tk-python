@@ -25,6 +25,9 @@ class RuntimeState:
     player_world_y: int = 0
     player_angle_degrees: int = 0
     player_weapon_slot: int = 0
+    player_load_count: int = 0
+    player_fire_ticks: int = 0
+    player_shots_fired_total: int = 0
 
 
 @dataclass(slots=True)

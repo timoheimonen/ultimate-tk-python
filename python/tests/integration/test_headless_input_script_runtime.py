@@ -33,6 +33,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertNotEqual(app.context.runtime.player_angle_degrees, 0)
 
+    def test_scripted_shoot_increments_shot_counter(self) -> None:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.8,
+            input_script="5:+SHOOT;40:-SHOOT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        self.assertGreater(app.context.runtime.player_shots_fired_total, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

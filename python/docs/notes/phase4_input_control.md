@@ -21,17 +21,20 @@ Implemented:
   - Legacy movement behavior for forward/backward, strafe modifier, and dedicated strafe keys.
   - Wall collision checks based on floor-vs-wall level blocks.
   - Weapon slot cycling and direct slot selection.
+  - Initial shoot/reload cadence based on legacy weapon loading times.
+  - Simple shot tracing to wall impact points for first combat plumbing.
   - Camera follow behavior adapted from legacy `Player::move_scr`.
 - Gameplay integration in `python/src/ultimatetk/systems/gameplay_scene.py`:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.
   - Camera follows the player and aiming direction.
-  - Runtime metadata now includes player position, angle, and weapon slot.
+  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, and shots fired.
 
 Visual baseline updates:
 
 - Gameplay scene now draws a player sprite frame from `RAMBO2.EFP` based on current view angle.
 - Gameplay scene also renders a translucent aim marker (`TARGET.EFP`) at player look direction.
+- Gameplay scene now renders a short-lived shot impact marker at traced hit points.
 
 Verification:
 
@@ -47,5 +50,5 @@ Verification:
 
 Remaining work for Phase 4:
 
-- Extend player interaction logic (shoot/load cadence and state transitions).
+- Extend player interaction logic (damage application, projectiles/hitscan rules, and enemy/player combat states).
 - Continue parity tuning for collision feel and camera response.

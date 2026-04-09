@@ -183,6 +183,56 @@ class PlayerControlTests(unittest.TestCase):
         player.angle = 90
         self.assertEqual(aim_point_from_player(player), (64, 54))
 
+    def test_shoot_requires_weapon_reload_time(self) -> None:
+        level = _build_level(height=12)
+        player = spawn_player_from_level(level)
+
+        for _ in range(10):
+            apply_player_controls(player, level, {InputAction.SHOOT})
+        self.assertEqual(player.shots_fired_total, 0)
+
+        apply_player_controls(player, level, {InputAction.SHOOT})
+        self.assertEqual(player.shots_fired_total, 1)
+        self.assertEqual(player.load_count, 1)
+        self.assertGreater(player.fire_animation_ticks, 0)
+
+    def test_autofire_respects_loading_cadence(self) -> None:
+        level = _build_level(height=12)
+        player = spawn_player_from_level(level)
+
+        for _ in range(21):
+            apply_player_controls(player, level, {InputAction.SHOOT})
+
+        self.assertEqual(player.shots_fired_total, 2)
+
+    def test_shot_impact_stops_before_wall(self) -> None:
+        level = _build_level(height=12, walls={(2, 4)})
+        player = spawn_player_from_level(level)
+
+        for _ in range(11):
+            apply_player_controls(player, level, {InputAction.SHOOT})
+
+        self.assertEqual(player.shots_fired_total, 1)
+        self.assertEqual(player.shot_effect_x, 54)
+        self.assertLess(player.shot_effect_y, 80)
+        self.assertGreater(player.shot_effect_y, 64)
+
+    def test_weapon_change_resets_reload_counter(self) -> None:
+        level = _build_level()
+        player = spawn_player_from_level(level)
+        player.grant_weapon(1)
+        player.load_count = 7
+
+        apply_player_controls(player, level, (), cycle_weapon=True)
+        self.assertEqual(player.current_weapon, 1)
+        self.assertEqual(player.load_count, 1)
+
+        player.grant_weapon(5)
+        player.load_count = 6
+        apply_player_controls(player, level, (), select_weapon_slot=5)
+        self.assertEqual(player.current_weapon, 5)
+        self.assertEqual(player.load_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

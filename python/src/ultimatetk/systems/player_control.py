@@ -16,6 +16,33 @@ PLAYER_CENTER_OFFSET = PLAYER_COLLISION_SIZE // 2
 PLAYER_WEAPON_SLOTS = 12
 CAMERA_LOOK_AHEAD_DISTANCE = 25.0
 DEFAULT_AIM_DISTANCE = 10.0
+FIRE_ANIMATION_TICKS = 3
+SHOT_EFFECT_TICKS = 3
+DEFAULT_SHOT_TRACE_DISTANCE = 170
+MELEE_SHOT_TRACE_DISTANCE = 34
+SHOT_TRACE_STEP = 4
+
+
+@dataclass(frozen=True, slots=True)
+class WeaponProfile:
+    loading_time: int
+    is_gun: bool
+
+
+WEAPON_PROFILES: tuple[WeaponProfile, ...] = (
+    WeaponProfile(loading_time=10, is_gun=False),
+    WeaponProfile(loading_time=10, is_gun=True),
+    WeaponProfile(loading_time=17, is_gun=True),
+    WeaponProfile(loading_time=4, is_gun=True),
+    WeaponProfile(loading_time=5, is_gun=True),
+    WeaponProfile(loading_time=30, is_gun=True),
+    WeaponProfile(loading_time=10, is_gun=True),
+    WeaponProfile(loading_time=40, is_gun=True),
+    WeaponProfile(loading_time=5, is_gun=True),
+    WeaponProfile(loading_time=10, is_gun=False),
+    WeaponProfile(loading_time=1, is_gun=True),
+    WeaponProfile(loading_time=20, is_gun=False),
+)
 
 
 def _default_weapon_slots() -> list[bool]:
@@ -32,6 +59,14 @@ class PlayerState:
     speed: float = PLAYER_BASE_SPEED
     current_weapon: int = 0
     weapons: list[bool] = field(default_factory=_default_weapon_slots)
+    load_count: int = 0
+    shoot_hold_count: int = 0
+    fire_animation_ticks: int = 0
+    shot_effect_ticks: int = 0
+    shot_effect_x: int = 0
+    shot_effect_y: int = 0
+    shots_fired_total: int = 0
+    walking: bool = False
 
     @property
     def center_x(self) -> float:
@@ -45,6 +80,14 @@ class PlayerState:
         if 0 <= slot < len(self.weapons):
             self.weapons[slot] = True
 
+    @property
+    def current_weapon_profile(self) -> WeaponProfile:
+        return weapon_profile_for_slot(self.current_weapon)
+
+    @property
+    def current_weapon_is_gun(self) -> bool:
+        return self.current_weapon_profile.is_gun
+
 
 def spawn_player_from_level(level: LevelData, player_index: int = 0) -> PlayerState:
     index = 0 if player_index <= 0 else 1
@@ -52,6 +95,12 @@ def spawn_player_from_level(level: LevelData, player_index: int = 0) -> PlayerSt
         x=float(level.player_start_x[index] * TILE_SIZE),
         y=float(level.player_start_y[index] * TILE_SIZE),
     )
+
+
+def weapon_profile_for_slot(weapon_slot: int) -> WeaponProfile:
+    if 0 <= weapon_slot < len(WEAPON_PROFILES):
+        return WEAPON_PROFILES[weapon_slot]
+    return WEAPON_PROFILES[0]
 
 
 def apply_player_controls(
@@ -62,8 +111,11 @@ def apply_player_controls(
     cycle_weapon: bool = False,
     select_weapon_slot: int | None = None,
 ) -> None:
+    _decay_player_effects(player)
+
     active = set(held_actions)
     speed_i = player.speed
+    walked = False
 
     has_strafe_modifier = InputAction.STRAFE_MODIFIER in active
 
@@ -77,6 +129,7 @@ def apply_player_controls(
             speed=player.speed * 0.9,
         )
         speed_i = player.speed * 0.8
+        walked = True
 
     if InputAction.TURN_RIGHT in active and not has_strafe_modifier:
         rotate_player(player, -PLAYER_ROTATION_STEP_DEGREES)
@@ -88,9 +141,11 @@ def apply_player_controls(
             speed=player.speed * 0.9,
         )
         speed_i = player.speed * 0.8
+        walked = True
 
     if InputAction.MOVE_FORWARD in active:
         move_player_with_collision(player, level, angle=player.angle, speed=speed_i)
+        walked = True
     if InputAction.MOVE_BACKWARD in active:
         move_player_with_collision(
             player,
@@ -98,34 +153,123 @@ def apply_player_controls(
             angle=(player.angle + 180) % 360,
             speed=0.75 * speed_i,
         )
+        walked = True
 
+    player.walking = walked
+
+    _handle_shoot_input(player, level, active)
+
+    weapon_changed = False
     if cycle_weapon:
-        cycle_weapon_slot(player)
+        weapon_changed = cycle_weapon_slot(player) or weapon_changed
     if select_weapon_slot is not None:
-        select_weapon_slot_if_owned(player, select_weapon_slot)
+        weapon_changed = select_weapon_slot_if_owned(player, select_weapon_slot) or weapon_changed
+
+    if weapon_changed:
+        player.load_count = 0
+
+    _advance_reload_counter(player)
 
 
 def rotate_player(player: PlayerState, change: int) -> None:
     player.angle = (player.angle + change) % 360
 
 
-def cycle_weapon_slot(player: PlayerState) -> None:
+def cycle_weapon_slot(player: PlayerState) -> bool:
     if not player.weapons:
-        return
+        return False
 
     slot = (player.current_weapon + 1) % len(player.weapons)
     for _ in range(len(player.weapons)):
         if player.weapons[slot]:
+            if slot == player.current_weapon:
+                return False
             player.current_weapon = slot
-            return
+            return True
         slot = (slot + 1) % len(player.weapons)
+    return False
 
 
-def select_weapon_slot_if_owned(player: PlayerState, weapon_slot: int) -> None:
+def select_weapon_slot_if_owned(player: PlayerState, weapon_slot: int) -> bool:
     if weapon_slot < 0 or weapon_slot >= len(player.weapons):
-        return
+        return False
     if player.weapons[weapon_slot]:
+        if player.current_weapon == weapon_slot:
+            return False
         player.current_weapon = weapon_slot
+        return True
+    return False
+
+
+def trace_shot_impact(
+    level: LevelData,
+    *,
+    origin_x: float,
+    origin_y: float,
+    angle: int,
+    max_distance: int,
+    step: int = SHOT_TRACE_STEP,
+) -> tuple[int, int]:
+    angle_radians = math.radians(angle % 360)
+
+    px = int(origin_x)
+    py = int(origin_y)
+    for distance in range(0, max_distance + 1, max(1, step)):
+        x = int(origin_x + (distance * math.sin(angle_radians)))
+        y = int(origin_y + (distance * math.cos(angle_radians)))
+        if not _is_floor_pixel(level, x, y):
+            return px, py
+        px = x
+        py = y
+    return px, py
+
+
+def _handle_shoot_input(player: PlayerState, level: LevelData, active: set[InputAction]) -> None:
+    if InputAction.SHOOT in active:
+        if player.load_count >= player.current_weapon_profile.loading_time:
+            _fire_weapon(player, level)
+        player.shoot_hold_count += 1
+    else:
+        player.shoot_hold_count = 0
+
+
+def _fire_weapon(player: PlayerState, level: LevelData) -> None:
+    angle_radians = math.radians(player.angle)
+    origin_x = player.center_x + (10.0 * math.sin(angle_radians))
+    origin_y = player.center_y + (10.0 * math.cos(angle_radians))
+
+    max_distance = (
+        DEFAULT_SHOT_TRACE_DISTANCE
+        if player.current_weapon_is_gun
+        else MELEE_SHOT_TRACE_DISTANCE
+    )
+    impact_x, impact_y = trace_shot_impact(
+        level,
+        origin_x=origin_x,
+        origin_y=origin_y,
+        angle=player.angle,
+        max_distance=max_distance,
+    )
+
+    player.shots_fired_total += 1
+    player.load_count = 0
+    player.fire_animation_ticks = FIRE_ANIMATION_TICKS
+    player.shot_effect_ticks = SHOT_EFFECT_TICKS
+    player.shot_effect_x = impact_x
+    player.shot_effect_y = impact_y
+
+
+def _advance_reload_counter(player: PlayerState) -> None:
+    loading_time = player.current_weapon_profile.loading_time
+    if player.load_count < loading_time:
+        player.load_count += 1
+
+
+def _decay_player_effects(player: PlayerState) -> None:
+    if player.fire_animation_ticks > 0:
+        player.fire_animation_ticks -= 1
+    if player.shot_effect_ticks > 0:
+        player.shot_effect_ticks -= 1
 
 
 def move_player_with_collision(

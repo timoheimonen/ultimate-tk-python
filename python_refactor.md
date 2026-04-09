@@ -134,6 +134,7 @@ python/
 - Tile rendering, transparent/translucent sprite paths, and palette shadow/light table application are now active.
 - Section 4 implementation started in `python/src/ultimatetk/systems/player_control.py` and `GameplayScene`.
 - Legacy-style movement/rotation, wall collision checks, camera follow, and weapon slot switching are now scaffolded.
+- Added initial shoot/reload cadence and wall-hit shot tracing hooks for early combat plumbing.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

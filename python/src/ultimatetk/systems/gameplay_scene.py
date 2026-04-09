@@ -61,6 +61,9 @@ class GameplayScene(BaseScene):
         context.runtime.player_world_y = 0
         context.runtime.player_angle_degrees = 0
         context.runtime.player_weapon_slot = 0
+        context.runtime.player_load_count = 0
+        context.runtime.player_fire_ticks = 0
+        context.runtime.player_shots_fired_total = 0
 
         self._held_actions.clear()
         self._cycle_weapon_requested = False
@@ -247,6 +250,20 @@ class GameplayScene(BaseScene):
                 ),
             )
 
+            if self._player.shot_effect_ticks > 0:
+                sprites.append(
+                    WorldSprite(
+                        world_x=self._player.shot_effect_x,
+                        world_y=self._player.shot_effect_y,
+                        width=self._target_width,
+                        height=self._target_height,
+                        pixels=self._target_pixels,
+                        anchor_x=self._target_width // 2,
+                        anchor_y=self._target_height // 2,
+                        translucent=False,
+                    ),
+                )
+
         return tuple(sprites)
 
     def _load_static_sprites(self, repo: GameDataRepository, *, player: PlayerState) -> tuple[WorldSprite, ...]:
@@ -301,12 +318,18 @@ class GameplayScene(BaseScene):
             context.runtime.player_world_y = 0
             context.runtime.player_angle_degrees = 0
             context.runtime.player_weapon_slot = 0
+            context.runtime.player_load_count = 0
+            context.runtime.player_fire_ticks = 0
+            context.runtime.player_shots_fired_total = 0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
         context.runtime.player_world_y = int(self._player.center_y)
         context.runtime.player_angle_degrees = self._player.angle
         context.runtime.player_weapon_slot = self._player.current_weapon
+        context.runtime.player_load_count = self._player.load_count
+        context.runtime.player_fire_ticks = self._player.fire_animation_ticks
+        context.runtime.player_shots_fired_total = self._player.shots_fired_total
 
 
 def _extract_rambo_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:
