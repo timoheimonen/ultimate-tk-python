@@ -1688,6 +1688,89 @@ class CombatSystemTests(unittest.TestCase):
         self.assertLess(cover_damage, open_damage)
         self.assertGreater(player_cover.health, player_open.health)
 
+    def test_grenade_projectile_crate_impact_splash_respects_secondary_crate_cover_for_player(self) -> None:
+        level = _build_level(height=12)
+        player_open = PlayerState(x=40.0, y=40.0)
+        player_cover = PlayerState(x=40.0, y=40.0)
+
+        open_projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=61.0,
+                y=81.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=48,
+            ),
+        ]
+        cover_projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=61.0,
+                y=81.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=48,
+            ),
+        ]
+
+        impact_crate_open = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=54.0,
+            y=74.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        impact_crate_cover = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=54.0,
+            y=74.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        secondary_cover_crate = CrateState(
+            crate_id=1,
+            type1=0,
+            type2=0,
+            x=54.0,
+            y=64.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        open_report = update_enemy_projectiles(
+            level,
+            open_projectiles,
+            player_open,
+            crates=[impact_crate_open],
+        )
+        cover_report = update_enemy_projectiles(
+            level,
+            cover_projectiles,
+            player_cover,
+            crates=[impact_crate_cover, secondary_cover_crate],
+        )
+
+        self.assertGreater(open_report.damage_to_player, 0.0)
+        self.assertLess(cover_report.damage_to_player, open_report.damage_to_player)
+        self.assertLess(player_open.health, player_cover.health)
+        self.assertFalse(impact_crate_open.alive)
+        self.assertFalse(impact_crate_cover.alive)
+
     def test_grenade_projectile_expiry_splash_is_reduced_by_crate_cover(self) -> None:
         level = _build_level(height=12)
         player_open = PlayerState(x=40.0, y=68.0)
@@ -2226,6 +2309,115 @@ class CombatSystemTests(unittest.TestCase):
         self.assertLess(enemy_open.health, enemy_cover.health)
         self.assertEqual(enemy_cover.health, enemy_cover.max_health)
         self.assertFalse(cover_crate.alive)
+
+    def test_player_c4_destroyed_cover_crate_still_reduces_same_blast_player_damage(self) -> None:
+        level = _build_level(height=12, walls={(2, 6), (3, 6), (4, 6)})
+        open_player = PlayerState(x=30.0, y=100.0)
+        cover_player = PlayerState(x=30.0, y=100.0)
+        cover_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=36.0,
+            y=104.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        open_explosive = deploy_player_explosive_from_shot(shot)
+        cover_explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(open_explosive)
+        self.assertIsNotNone(cover_explosive)
+        assert open_explosive is not None
+        assert cover_explosive is not None
+        open_explosive.fuse_ticks = 1
+        cover_explosive.fuse_ticks = 1
+
+        open_report = update_player_explosives(
+            [open_explosive],
+            [],
+            open_player,
+            level=level,
+        )
+        cover_report = update_player_explosives(
+            [cover_explosive],
+            [],
+            cover_player,
+            level=level,
+            crates=[cover_crate],
+        )
+
+        self.assertGreater(open_report.damage_to_player, 0.0)
+        self.assertLess(cover_report.damage_to_player, open_report.damage_to_player)
+        self.assertLess(open_player.health, cover_player.health)
+        self.assertFalse(cover_crate.alive)
+
+    def test_enemy_projectile_splash_evaluates_crates_nearest_first(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=0.0, y=0.0)
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=1,
+                radius=0,
+                splash_radius=48,
+            ),
+        ]
+        far_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=52.0,
+            y=56.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        near_crate = CrateState(
+            crate_id=1,
+            type1=0,
+            type2=0,
+            x=52.0,
+            y=72.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        damage_targets: list[tuple[float, float]] = []
+        original_player_explosive_damage = combat_module._player_explosive_damage
+
+        def record_damage(*args: object, **kwargs: object) -> float:
+            target_x = kwargs.get("target_x")
+            target_y = kwargs.get("target_y")
+            if isinstance(target_x, float) and isinstance(target_y, float):
+                damage_targets.append((target_x, target_y))
+            return original_player_explosive_damage(*args, **kwargs)
+
+        with patch.object(combat_module, "_player_explosive_damage", side_effect=record_damage):
+            update_enemy_projectiles(level, projectiles, player, crates=[far_crate, near_crate])
+
+        self.assertGreaterEqual(len(damage_targets), 2)
+        first_target = damage_targets[0]
+        second_target = damage_targets[1]
+        self.assertAlmostEqual(first_target[0], near_crate.center_x)
+        self.assertAlmostEqual(first_target[1], near_crate.center_y)
+        self.assertAlmostEqual(second_target[0], far_crate.center_x)
+        self.assertAlmostEqual(second_target[1], far_crate.center_y)
 
     def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
         player = PlayerState(x=0.0, y=0.0)

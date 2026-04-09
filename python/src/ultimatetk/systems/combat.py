@@ -1156,12 +1156,11 @@ def _detonate_player_explosive(
     crates: Sequence[CrateState] | None = None,
 ) -> _PlayerExplosiveDetonation:
     blast_x, blast_y = _player_explosive_blast_center(explosive)
+    blast_crate_cover = _alive_crate_cover_snapshot(crates)
 
     enemies_hit = 0
     enemies_killed = 0
-    for enemy in enemies:
-        if not enemy.alive:
-            continue
+    for enemy in _alive_enemies_by_blast_distance(enemies, blast_x=blast_x, blast_y=blast_y):
 
         damage = _player_explosive_damage(
             level=level,
@@ -1172,7 +1171,7 @@ def _detonate_player_explosive(
             max_damage=explosive.damage,
             radius=explosive.radius,
             falloff_exponent=explosive.falloff_exponent,
-            crates=crates,
+            crates=blast_crate_cover,
         )
         if damage <= 0:
             continue
@@ -1185,9 +1184,7 @@ def _detonate_player_explosive(
     crates_hit = 0
     crates_destroyed = 0
     if crates is not None:
-        for crate in crates:
-            if not crate.alive:
-                continue
+        for crate in _alive_crates_by_blast_distance(crates, blast_x=blast_x, blast_y=blast_y):
 
             damage = _player_explosive_damage(
                 level=level,
@@ -1198,7 +1195,7 @@ def _detonate_player_explosive(
                 max_damage=explosive.damage,
                 radius=explosive.radius,
                 falloff_exponent=explosive.falloff_exponent,
-                crates=crates,
+                crates=blast_crate_cover,
                 ignore_crate_id=crate.crate_id,
             )
             if damage <= 0:
@@ -1218,7 +1215,7 @@ def _detonate_player_explosive(
         max_damage=explosive.damage,
         radius=explosive.radius,
         falloff_exponent=explosive.falloff_exponent,
-        crates=crates,
+        crates=blast_crate_cover,
     )
     if player_damage > 0:
         apply_player_damage(player, player_damage)
@@ -1317,6 +1314,66 @@ def _closest_point_on_enemy_collision_bounds(
         _clamp_float(x, left, right),
         _clamp_float(y, top, bottom),
     )
+
+
+def _alive_enemies_by_blast_distance(
+    enemies: Sequence[EnemyState],
+    *,
+    blast_x: float,
+    blast_y: float,
+) -> list[EnemyState]:
+    ordered = [enemy for enemy in enemies if enemy.alive]
+    ordered.sort(
+        key=lambda enemy: (
+            math.hypot(enemy.center_x - blast_x, enemy.center_y - blast_y),
+            enemy.enemy_id,
+        ),
+    )
+    return ordered
+
+
+def _alive_crates_by_blast_distance(
+    crates: Sequence[CrateState],
+    *,
+    blast_x: float,
+    blast_y: float,
+    ignore_crate_id: int | None = None,
+) -> list[CrateState]:
+    ordered = [
+        crate
+        for crate in crates
+        if crate.alive and (ignore_crate_id is None or crate.crate_id != ignore_crate_id)
+    ]
+    ordered.sort(
+        key=lambda crate: (
+            math.hypot(crate.center_x - blast_x, crate.center_y - blast_y),
+            crate.crate_id,
+        ),
+    )
+    return ordered
+
+
+def _alive_crate_cover_snapshot(crates: Sequence[CrateState] | None) -> tuple[CrateState, ...] | None:
+    if crates is None:
+        return None
+
+    snapshot: list[CrateState] = []
+    for crate in crates:
+        if not crate.alive:
+            continue
+        snapshot.append(
+            CrateState(
+                crate_id=crate.crate_id,
+                type1=crate.type1,
+                type2=crate.type2,
+                x=crate.x,
+                y=crate.y,
+                health=max(1.0, crate.health),
+                max_health=max(1.0, crate.max_health),
+                alive=True,
+            ),
+        )
+    return tuple(snapshot)
 
 
 def _clamp_float(value: float, low: float, high: float) -> float:
@@ -1957,7 +2014,19 @@ def _advance_enemy_projectile(
             if crate is not None:
                 crate.hit_flash_ticks = CRATE_FLASH_TICKS
                 destroyed = crate.apply_damage(projectile.damage)
-                damage = _projectile_splash_damage(level, projectile, player)
+                splash_cover = _alive_crate_cover_snapshot(crates)
+                if splash_cover is not None:
+                    splash_cover = tuple(
+                        blocker
+                        for blocker in splash_cover
+                        if blocker.crate_id != crate.crate_id
+                    )
+                damage = _projectile_splash_damage(
+                    level,
+                    projectile,
+                    player,
+                    crates=splash_cover,
+                )
                 _, splash_crate_destroyed = _projectile_splash_against_crates(
                     level,
                     projectile,
@@ -2106,12 +2175,14 @@ def _projectile_splash_against_crates(
     crate_destroyed = False
     impact_x = int(projectile.x)
     impact_y = int(projectile.y)
-    for crate in crates:
-        if not crate.alive:
-            continue
-        if ignore_crate_id is not None and crate.crate_id == ignore_crate_id:
-            continue
-
+    splash_cover = _alive_crate_cover_snapshot(crates)
+    pending_hits: list[tuple[CrateState, float]] = []
+    for crate in _alive_crates_by_blast_distance(
+        crates,
+        blast_x=float(impact_x),
+        blast_y=float(impact_y),
+        ignore_crate_id=ignore_crate_id,
+    ):
         damage = _player_explosive_damage(
             level=level,
             target_x=crate.center_x,
@@ -2121,8 +2192,16 @@ def _projectile_splash_against_crates(
             max_damage=projectile.damage,
             radius=projectile.splash_radius,
             falloff_exponent=1.0,
+            crates=splash_cover,
+            ignore_crate_id=crate.crate_id,
         )
         if damage <= 0.0:
+            continue
+
+        pending_hits.append((crate, damage))
+
+    for crate, damage in pending_hits:
+        if not crate.alive:
             continue
 
         crate.hit_flash_ticks = CRATE_FLASH_TICKS

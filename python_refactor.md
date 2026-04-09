@@ -191,4 +191,5 @@ python/
 - Planning document created.
 - Phase 4 input/control parity checklist is complete and locked in `python/docs/notes/phase4_input_control.md`.
 - Phase 5 combat/entities planning note created at `python/docs/notes/phase5_combat_entities.md` and is now the active implementation guide.
+- Started and completed Phase 5 Workstream 1 (projectile/explosive resolution hardening): stabilized same-tick crate-cover geometry for explosive attenuation, added deterministic nearest-first contact ordering for crate splash evaluation, and aligned direct-crate-impact projectile splash-to-player attenuation with secondary crate cover behavior; added targeted combat regression coverage and re-ran unit/integration verification suites.
 - Next focus is Phase 5 combat/entity closeout and hardening; broader UI/progression flow remains Phase 6 scope.
