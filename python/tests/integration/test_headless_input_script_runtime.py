@@ -70,6 +70,7 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(app.context.runtime.shop_last_action, "buy")
         self.assertEqual(app.context.runtime.shop_last_category, "weapon")
         self.assertFalse(app.context.runtime.shop_last_success)
+        self.assertEqual(app.context.runtime.shop_last_reason, "NO CASH")
 
 
 if __name__ == "__main__":

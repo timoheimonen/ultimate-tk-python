@@ -198,6 +198,7 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.shop_last_category, "weapon")
         self.assertTrue(context.runtime.shop_last_success)
         self.assertEqual(context.runtime.shop_last_cash_delta, -400)
+        self.assertEqual(context.runtime.shop_last_reason, "")
 
         sell_price = gameplay_scene._shop_sell_prices.weapon_slots[0]
         manager.handle_events((AppEvent.action_pressed(InputAction.NEXT_WEAPON),))
@@ -208,6 +209,7 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.shop_last_category, "weapon")
         self.assertTrue(context.runtime.shop_last_success)
         self.assertEqual(context.runtime.shop_last_cash_delta, sell_price)
+        self.assertEqual(context.runtime.shop_last_reason, "")
 
         manager.handle_events((AppEvent.action_pressed(InputAction.TOGGLE_SHOP),))
         manager.update(0.025)
@@ -260,6 +262,7 @@ class SceneFlowTests(unittest.TestCase):
         self.assertFalse(context.runtime.shop_last_success)
         self.assertEqual(context.runtime.shop_last_units, 0)
         self.assertEqual(context.runtime.shop_last_cash_delta, 0)
+        self.assertEqual(context.runtime.shop_last_reason, "NO CASH")
 
     def test_gameplay_shop_overlay_changes_render_digest(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)

@@ -27,6 +27,8 @@ from ultimatetk.systems.player_control import (
     apply_player_controls,
     bullet_ammo_capacities_snapshot,
     bullet_ammo_pools_snapshot,
+    bullet_shop_name_for_type,
+    bullet_shop_short_label_for_type,
     bullet_shop_cost_for_type,
     bullet_shop_units_for_type,
     buy_selected_shop_item,
@@ -51,6 +53,8 @@ from ultimatetk.systems.player_control import (
     shield_shop_buy_cost_for_level,
     shop_column_count_for_row,
     spawn_player_from_level,
+    weapon_shop_name_for_slot,
+    weapon_shop_short_label_for_slot,
     weapon_sell_price_for_slot,
     weapon_shop_cost_for_slot,
 )
@@ -380,6 +384,18 @@ class PlayerControlTests(unittest.TestCase):
             (400, 1000, 2000, 4000, 4000, 6000, 6000, 6000, 1000, 3000, 1000),
         )
 
+    def test_shop_name_and_short_label_tables_match_legacy_items(self) -> None:
+        self.assertEqual(weapon_shop_name_for_slot(1), "Pistola")
+        self.assertEqual(weapon_shop_name_for_slot(5), "Grenade launcher")
+        self.assertEqual(weapon_shop_name_for_slot(11), "Mine dropper")
+        self.assertEqual(weapon_shop_short_label_for_slot(9), "C4")
+
+        self.assertEqual(bullet_shop_name_for_type(0), "9mm bullets")
+        self.assertEqual(bullet_shop_name_for_type(6), "C4-explosives")
+        self.assertEqual(bullet_shop_name_for_type(8), "Mines")
+        self.assertEqual(bullet_shop_short_label_for_type(3), "LG")
+        self.assertEqual(bullet_shop_short_label_for_type(8), "MN")
+
     def test_buy_weapon_requires_cash_and_unowned_slot(self) -> None:
         player = PlayerState(x=40.0, y=40.0, cash=399)
 
@@ -507,6 +523,7 @@ class PlayerControlTests(unittest.TestCase):
         self.assertTrue(event.success)
         self.assertEqual(event.units, 1)
         self.assertEqual(event.cash_delta, -400)
+        self.assertEqual(event.reason, "")
         self.assertTrue(player.weapons[1])
         self.assertEqual(player.cash, 100)
 
@@ -515,7 +532,21 @@ class PlayerControlTests(unittest.TestCase):
         self.assertTrue(event.success)
         self.assertEqual(event.units, 10)
         self.assertEqual(event.cash_delta, -6)
+        self.assertEqual(event.reason, "")
         self.assertEqual(player.bullets[7], 10)
+
+    def test_buy_selected_shop_item_reports_block_reason(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=0)
+
+        event = buy_selected_shop_item(player, 2, 1)
+        self.assertFalse(event.success)
+        self.assertEqual(event.reason, "NO CASH")
+
+        player.cash = 1000
+        player.target_system_enabled = True
+        event = buy_selected_shop_item(player, 2, 1)
+        self.assertFalse(event.success)
+        self.assertEqual(event.reason, "TARGET ON")
 
     def test_sell_selected_shop_item_returns_transaction_metadata(self) -> None:
         player = PlayerState(x=40.0, y=40.0, cash=0, shield=2, target_system_enabled=True)
@@ -532,6 +563,7 @@ class PlayerControlTests(unittest.TestCase):
         self.assertEqual(event.category, "weapon")
         self.assertTrue(event.success)
         self.assertEqual(event.cash_delta, 6)
+        self.assertEqual(event.reason, "")
         self.assertFalse(player.weapons[2])
 
         event = sell_selected_shop_item(player, 1, 0, sell_prices)
@@ -539,16 +571,43 @@ class PlayerControlTests(unittest.TestCase):
         self.assertTrue(event.success)
         self.assertEqual(event.units, 1)
         self.assertEqual(event.cash_delta, 3)
+        self.assertEqual(event.reason, "")
 
         event = sell_selected_shop_item(player, 2, 0, sell_prices)
         self.assertEqual(event.category, "shield")
         self.assertTrue(event.success)
         self.assertEqual(event.cash_delta, 107)
+        self.assertEqual(event.reason, "")
 
         event = sell_selected_shop_item(player, 2, 1, sell_prices)
         self.assertEqual(event.category, "target")
         self.assertTrue(event.success)
         self.assertEqual(event.cash_delta, 50)
+        self.assertEqual(event.reason, "")
+
+    def test_sell_selected_shop_item_reports_block_reason(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=0)
+        sell_prices = ShopSellPriceTable(
+            weapon_slots=(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+            shield_base=10,
+            target_system=10,
+        )
+
+        event = sell_selected_shop_item(player, 0, 0, sell_prices)
+        self.assertFalse(event.success)
+        self.assertEqual(event.reason, "NOT OWNED")
+
+        event = sell_selected_shop_item(player, 1, 0, sell_prices)
+        self.assertFalse(event.success)
+        self.assertEqual(event.reason, "NO STOCK")
+
+        event = sell_selected_shop_item(player, 2, 0, sell_prices)
+        self.assertFalse(event.success)
+        self.assertEqual(event.reason, "NO SHIELD")
+
+        event = sell_selected_shop_item(player, 2, 1, sell_prices)
+        self.assertFalse(event.success)
+        self.assertEqual(event.reason, "TARGET OFF")
 
 
 if __name__ == "__main__":

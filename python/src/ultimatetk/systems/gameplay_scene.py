@@ -40,6 +40,7 @@ from ultimatetk.systems.player_control import (
     PlayerState,
     SHOP_ROW_AMMO,
     SHOP_ROW_OTHER,
+    SHOP_SHIELD_MAX_LEVEL,
     SHOP_ROW_WEAPONS,
     SHOP_SHIELD_LEVEL_COST_STEP,
     SHOP_TARGET_SYSTEM_COST,
@@ -48,6 +49,9 @@ from ultimatetk.systems.player_control import (
     aim_point_from_player,
     apply_player_controls,
     bullet_ammo_capacities_snapshot,
+    bullet_capacity_units_for_type,
+    bullet_shop_name_for_type,
+    bullet_shop_short_label_for_type,
     bullet_ammo_pools_snapshot,
     bullet_shop_cost_for_type,
     bullet_shop_units_for_type,
@@ -61,7 +65,10 @@ from ultimatetk.systems.player_control import (
     sell_selected_shop_item,
     shield_shop_buy_cost_for_level,
     shop_column_count_for_row,
+    weapon_shop_name_for_slot,
+    weapon_shop_short_label_for_slot,
     spawn_player_from_level,
+    weapon_bullet_type_index_for_slot,
     weapon_sell_price_for_slot,
     weapon_shop_cost_for_slot,
 )
@@ -80,6 +87,7 @@ class GameplayScene(BaseScene):
     _SHOP_CELL_GAP = 2
     _SHOP_TEXT_COLOR = 115
     _SHOP_VALUE_COLOR = 126
+    _SHOP_MUTED_COLOR = 78
     _SHOP_PANEL_COLOR = 13
     _SHOP_CELL_COLOR = 8
     _SHOP_BORDER_COLOR = 98
@@ -166,6 +174,7 @@ class GameplayScene(BaseScene):
         context.runtime.shop_last_success = False
         context.runtime.shop_last_units = 0
         context.runtime.shop_last_cash_delta = 0
+        context.runtime.shop_last_reason = ""
         context.runtime.player_health = 0
         context.runtime.player_dead = False
         context.runtime.player_hits_total = 0
@@ -646,7 +655,7 @@ class GameplayScene(BaseScene):
         header_x = 4
         header_y = 4
         header_width = SCREEN_WIDTH - 8
-        header_height = 96
+        header_height = 108
         grid_x = self._SHOP_GRID_ORIGIN_X
         grid_y = self._SHOP_GRID_ORIGIN_Y
         cell_pitch = self._SHOP_CELL_SIZE + self._SHOP_CELL_GAP
@@ -659,6 +668,14 @@ class GameplayScene(BaseScene):
             header_width,
             header_height,
             self._SHOP_PANEL_COLOR,
+        )
+        self._fill_rect(
+            pixels,
+            header_x + 1,
+            header_y + 1,
+            header_width - 2,
+            10,
+            self._SHOP_CELL_COLOR,
         )
         self._stroke_rect(
             pixels,
@@ -687,14 +704,15 @@ class GameplayScene(BaseScene):
         )
 
         selection_label, buy_cost, sell_price, selection_state = self._shop_selection_info()
+        row_label = self._shop_row_label(self._shop_row)
 
-        self._draw_shop_text(pixels, 10, 10, "THE SHOP", self._SHOP_VALUE_COLOR)
+        self._draw_shop_text(pixels, 10, 7, "THE SHOP", self._SHOP_VALUE_COLOR)
         self._draw_shop_text(pixels, 10, 20, f"CASH {self._player.cash}", self._SHOP_VALUE_COLOR)
         self._draw_shop_text(
             pixels,
             10,
             30,
-            f"SEL R{self._shop_row + 1} C{self._shop_column + 1}",
+            f"ROW {row_label} COL {self._shop_column + 1:02d}",
             self._SHOP_TEXT_COLOR,
         )
         self._draw_shop_text(
@@ -702,7 +720,7 @@ class GameplayScene(BaseScene):
             10,
             44,
             f"ITEM {selection_label}",
-            self._SHOP_TEXT_COLOR,
+            self._SHOP_VALUE_COLOR,
         )
         self._draw_shop_text(
             pixels,
@@ -716,30 +734,34 @@ class GameplayScene(BaseScene):
             10,
             64,
             selection_state,
-            self._SHOP_TEXT_COLOR,
+            self._SHOP_MUTED_COLOR,
         )
 
         feedback_color = self._SHOP_TEXT_COLOR
-        feedback_text = "NO TRANSACTION"
+        feedback_text = "BUY SPACE / SELL TAB"
         if self._shop_last_transaction is not None:
             tx = self._shop_last_transaction
-            tx_result = "OK" if tx.success else "BLOCKED"
-            feedback_text = (
-                f"{tx.action.upper()} {tx.category.upper()} {tx_result} "
-                f"U{tx.units} C{tx.cash_delta:+d}"
-            )
-            feedback_color = self._SHOP_SUCCESS_COLOR if tx.success else self._SHOP_ERROR_COLOR
+            if tx.success:
+                feedback_text = (
+                    f"{tx.action.upper()} {tx.category.upper()} OK "
+                    f"U{tx.units} C{tx.cash_delta:+d}"
+                )
+                feedback_color = self._SHOP_SUCCESS_COLOR
+            else:
+                reason = tx.reason.upper() if tx.reason else "BLOCKED"
+                feedback_text = f"{tx.action.upper()} {tx.category.upper()} BLOCKED {reason}"
+                feedback_color = self._SHOP_ERROR_COLOR
 
         self._draw_shop_text(pixels, 10, 78, feedback_text, feedback_color)
         self._draw_shop_text(
             pixels,
             10,
-            88,
+            90,
             "W/S ROW A/D COL SPACE BUY TAB SELL R/ENT",
             self._SHOP_TEXT_COLOR,
         )
 
-        row_labels = ("WPN", "AMM", "OTH")
+        row_labels = ("WEAP", "AMMO", "OTHR")
         for row in range(3):
             columns = shop_column_count_for_row(row)
             row_y = grid_y + (row * cell_pitch)
@@ -755,9 +777,12 @@ class GameplayScene(BaseScene):
             for column in range(columns):
                 cell_x = grid_x + (column * cell_pitch)
                 selected = row == self._shop_row and column == self._shop_column
+                selected_pulse = ((self._spot_phase // 15) % 2) == 0
 
                 fill_color = self._SHOP_SELECTED_COLOR if selected else self._SHOP_CELL_COLOR
-                border_color = self._SHOP_BORDER_COLOR if selected else self._SHOP_TEXT_COLOR
+                border_color = self._SHOP_TEXT_COLOR
+                if selected:
+                    border_color = self._SHOP_VALUE_COLOR if selected_pulse else self._SHOP_BORDER_COLOR
 
                 self._fill_rect(
                     pixels,
@@ -775,14 +800,36 @@ class GameplayScene(BaseScene):
                     self._SHOP_CELL_SIZE,
                     border_color,
                 )
+                if selected and self._SHOP_CELL_SIZE > 4:
+                    self._stroke_rect(
+                        pixels,
+                        cell_x + 1,
+                        row_y + 1,
+                        self._SHOP_CELL_SIZE - 2,
+                        self._SHOP_CELL_SIZE - 2,
+                        self._SHOP_BORDER_COLOR,
+                    )
+
+                cell_label = self._fit_shop_cell_text(self._shop_cell_label_text(row, column), max_chars=2)
+                if cell_label:
+                    label_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(cell_label) * 8)) // 2)
+                    self._draw_shop_text(
+                        pixels,
+                        label_x,
+                        row_y + 1,
+                        cell_label,
+                        self._SHOP_TEXT_COLOR,
+                    )
 
                 counter_text = self._shop_cell_counter_text(row, column)
                 if counter_text:
+                    counter_label = self._fit_shop_cell_text(counter_text, max_chars=2)
+                    counter_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(counter_label) * 8)) // 2)
                     self._draw_shop_text(
                         pixels,
-                        cell_x + 2,
-                        row_y + 4,
-                        counter_text,
+                        counter_x,
+                        row_y + 8,
+                        counter_label,
                         self._SHOP_VALUE_COLOR,
                     )
 
@@ -793,26 +840,31 @@ class GameplayScene(BaseScene):
         if self._shop_row == SHOP_ROW_WEAPONS:
             weapon_slot = self._shop_column + 1
             owned = weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]
-            state_text = "OWNED" if owned else "LOCKED"
+            state_text = "OWNED" if owned else "FOR SALE"
+
+            ammo_type = weapon_bullet_type_index_for_slot(weapon_slot)
+            if ammo_type is None:
+                ammo_text = "MELEE"
+            else:
+                ammo_text = bullet_shop_name_for_type(ammo_type)
+
             return (
-                f"WPN {weapon_slot:02d}",
+                weapon_shop_name_for_slot(weapon_slot),
                 weapon_shop_cost_for_slot(weapon_slot),
                 weapon_sell_price_for_slot(self._shop_sell_prices, weapon_slot),
-                state_text,
+                f"{state_text} / AMMO {ammo_text}",
             )
 
         if self._shop_row == SHOP_ROW_AMMO:
             ammo_type = self._shop_column
             stock = self._player.bullets[ammo_type] if ammo_type < len(self._player.bullets) else 0
             units_per_trade = max(1, bullet_shop_units_for_type(ammo_type))
-            stock_packs = stock // units_per_trade
-            if stock > 0 and stock_packs < 1:
-                stock_packs = 1
+            capacity = bullet_capacity_units_for_type(ammo_type)
             return (
-                f"AMMO {ammo_type + 1:02d}",
+                bullet_shop_name_for_type(ammo_type),
                 bullet_shop_cost_for_type(ammo_type),
                 bullet_shop_cost_for_type(ammo_type),
-                f"STOCK {stock} ({stock_packs})",
+                f"STOCK {stock}/{capacity} PACK {units_per_trade}",
             )
 
         if self._shop_column == 0:
@@ -823,7 +875,7 @@ class GameplayScene(BaseScene):
                 "SHIELD",
                 shield_shop_buy_cost_for_level(self._player.shield),
                 shield_sell_price,
-                f"LEVEL {self._player.shield}/30",
+                f"LEVEL {self._player.shield}/{SHOP_SHIELD_MAX_LEVEL}",
             )
 
         target_state = "ON" if self._player.target_system_enabled else "OFF"
@@ -834,6 +886,37 @@ class GameplayScene(BaseScene):
             f"STATE {target_state}",
         )
 
+    def _shop_row_label(self, row: int) -> str:
+        if row == SHOP_ROW_WEAPONS:
+            return "WEAPONS"
+        if row == SHOP_ROW_AMMO:
+            return "AMMO"
+        if row == SHOP_ROW_OTHER:
+            return "OTHER"
+        return "UNKNOWN"
+
+    def _shop_cell_label_text(self, row: int, column: int) -> str:
+        if row == SHOP_ROW_WEAPONS:
+            return weapon_shop_short_label_for_slot(column + 1)
+
+        if row == SHOP_ROW_AMMO:
+            return bullet_shop_short_label_for_type(column)
+
+        if row == SHOP_ROW_OTHER and column == 0:
+            return "SH"
+
+        if row == SHOP_ROW_OTHER and column == 1:
+            return "TG"
+        return ""
+
+    def _fit_shop_cell_text(self, text: str, *, max_chars: int) -> str:
+        trimmed = text.strip().upper()
+        if not trimmed:
+            return ""
+        if len(trimmed) <= max_chars:
+            return trimmed
+        return trimmed[:max_chars]
+
     def _shop_cell_counter_text(self, row: int, column: int) -> str:
         if self._player is None:
             return ""
@@ -841,7 +924,7 @@ class GameplayScene(BaseScene):
         if row == SHOP_ROW_WEAPONS:
             weapon_slot = column + 1
             if weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]:
-                return "1"
+                return "ON"
             return ""
 
         if row == SHOP_ROW_AMMO:
@@ -855,15 +938,16 @@ class GameplayScene(BaseScene):
             stock_packs = stock // units_per_trade
             if stock_packs < 1:
                 stock_packs = 1
+            stock_packs = min(99, stock_packs)
             return str(stock_packs)
 
         if row == SHOP_ROW_OTHER and column == 0:
             if self._player.shield > 0:
-                return str(self._player.shield)
+                return str(min(99, self._player.shield))
             return ""
 
         if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
-            return "1"
+            return "ON"
         return ""
 
     def _draw_shop_text(self, pixels: bytearray, x: int, y: int, text: str, color: int) -> None:
@@ -1044,8 +1128,9 @@ class GameplayScene(BaseScene):
             return
 
         result = "ok" if event.success else "blocked"
+        reason = event.reason if event.reason else "-"
         context.logger.info(
-            "Shop %s %s row=%d col=%d units=%d cash_delta=%d cash=%d result=%s",
+            "Shop %s %s row=%d col=%d units=%d cash_delta=%d cash=%d result=%s reason=%s",
             event.action,
             event.category,
             event.row,
@@ -1054,6 +1139,7 @@ class GameplayScene(BaseScene):
             event.cash_delta,
             self._player.cash,
             result,
+            reason,
         )
 
     def _activate_game_over(self, context: GameContext) -> None:
@@ -1120,6 +1206,7 @@ class GameplayScene(BaseScene):
             context.runtime.shop_last_success = False
             context.runtime.shop_last_units = 0
             context.runtime.shop_last_cash_delta = 0
+            context.runtime.shop_last_reason = ""
             context.runtime.player_health = 0
             context.runtime.player_dead = False
             context.runtime.player_hits_total = 0
@@ -1166,12 +1253,14 @@ class GameplayScene(BaseScene):
             context.runtime.shop_last_success = False
             context.runtime.shop_last_units = 0
             context.runtime.shop_last_cash_delta = 0
+            context.runtime.shop_last_reason = ""
         else:
             context.runtime.shop_last_action = self._shop_last_transaction.action
             context.runtime.shop_last_category = self._shop_last_transaction.category
             context.runtime.shop_last_success = self._shop_last_transaction.success
             context.runtime.shop_last_units = self._shop_last_transaction.units
             context.runtime.shop_last_cash_delta = self._shop_last_transaction.cash_delta
+            context.runtime.shop_last_reason = self._shop_last_transaction.reason
         context.runtime.player_health = int(self._player.health)
         context.runtime.player_dead = self._player.dead
         context.runtime.player_hits_total = self._enemy_hits_by_player

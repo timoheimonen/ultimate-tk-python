@@ -45,6 +45,7 @@ class RuntimeState:
     shop_last_success: bool = False
     shop_last_units: int = 0
     shop_last_cash_delta: int = 0
+    shop_last_reason: str = ""
     player_health: int = 0
     player_dead: bool = False
     player_hits_total: int = 0
