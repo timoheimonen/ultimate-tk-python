@@ -60,6 +60,8 @@ Implemented:
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
   - Retuned enemy strafe edge behavior so blocked primary strafe lanes now retry the opposite strafe direction in the same tick, reducing reload-phase side-wall stalls.
   - Retuned enemy strafe cadence around reload and sight reacquisition by decoupling strafe-side choice from shoot-counter parity and adding per-enemy reload-phase stagger, reducing synchronized side-switch jitter in multi-enemy rooms.
+  - Added scripted runtime parity checks for mine/C4 timing boundaries: mine arm-transition trigger timing and C4 remote-trigger detonation timing now validated at `N-1`, `N`, and `N+1` frame windows.
+  - Added scripted runtime multi-contact explosive micro-cases in tight lanes: simultaneous enemy-edge mine contact, chained mine detonations across sequential placements, and nearest-contact mine trigger ordering.
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
   - Added crate-aware enemy cover/impact handling: enemy LOS checks now treat live crates as blockers, and non-projectile enemy hitscan traces impact/damage crates instead of piercing through them.
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
@@ -165,6 +167,8 @@ Verification:
   - Added scripted blocked-lane enemy strafe fallback scenario asserting same-tick opposite-lane retry when primary strafe movement is blocked.
   - Added scripted projectile-expiry crate-cover scenario asserting reduced expiry splash damage with live crate cover versus open-lane expiry damage.
   - Added scripted multi-enemy strafe cadence scenario asserting staggered reload-side switch timing across nearby enemies (no synchronized switch tick).
+  - Added scripted mine/C4 boundary-window timing assertions covering mine arm-trigger and C4 remote-trigger transitions at `N-1`, `N`, and `N+1` frames.
+  - Added scripted mine multi-contact micro-cases for simultaneous edge contacts, chained detonations across two mine placements, and nearest-contact trigger ordering.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
   - Added enemy crate-cover LOS and enemy-hitscan-into-crate unit coverage.
   - Added mine proximity-trigger crate-obstruction unit coverage.
@@ -173,6 +177,7 @@ Verification:
   - Added enemy explosive crate-cover splash unit coverage for direct near-miss and projectile wall-impact cases.
   - Added enemy strafe blocked-lane opposite-retry unit coverage and projectile-expiry splash crate-cover unit coverage.
   - Added enemy strafe cadence unit coverage for shoot-counter-independent side stability and per-enemy staggered switch timing.
+  - Added mine multi-contact nearest-order unit coverage so mine trigger checks prioritize nearest valid enemy contact when multiple contacts overlap.
   - Added player C4/mine tight-corridor crate-cover splash unit coverage.
   - Added mine trigger partial-corner near-versus-far unit coverage.
   - Added camera action-active idle dead-zone unit coverage (shoot-hold/fire-animation versus fully idle behavior).
@@ -189,8 +194,6 @@ Finalized and locked (do not retune further unless a regression appears):
 
 Remaining work for Phase 4:
 
-- Validate mine/C4 arm/trigger timing against legacy frame windows (`N-1`, `N`, `N+1`) at the arm-transition boundary and remote-trigger boundary.
-- Add multi-contact mine/C4 micro-cases in tight lanes (simultaneous enemy edges, chained explosives, and nearest-contact ordering) with scripted runtime assertions.
 - Complete shop icon/detail fidelity pass for remaining weapon/ammo silhouettes and 2-character label/counter alignment in dense grid cells.
 - Add explicit HUD warning-transition checks (low HP, low ammo, hot C4, unarmed mines) so color/readability states are asserted, not only render-digest changed.
 - Run side-by-side movement/camera feel checks for turn-in-place firing, backward movement, and strafe-turn blends; tune response constants from those captures.

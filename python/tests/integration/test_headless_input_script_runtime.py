@@ -18,6 +18,7 @@ from ultimatetk.core.paths import GamePaths
 from ultimatetk.formats.lev import Block
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, WALL_BLOCK_TYPE
 from ultimatetk.systems import combat
+import ultimatetk.systems.gameplay_scene as gameplay_scene_module
 from ultimatetk.systems.player_control import grant_bullet_ammo
 
 
@@ -1607,6 +1608,624 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             for enemy_id, angles in movement_angles.items()
         }
 
+    def _run_scripted_mine_arm_transition_boundary_scenario(
+        self,
+    ) -> tuple[int, dict[int, tuple[tuple[int, ...], int, int]], int, int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.0,
+            input_script="20:+SHOOT;35:-SHOOT;80:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 10):
+            for tile_x in range(1, 6):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=0,
+                x=40.0,
+                y=50.0,
+                health=18.0,
+                max_health=18.0,
+                angle=180,
+                target_angle=180,
+                load_count=0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(11)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        self.assertGreater(grant_bullet_ammo(player, 8, 1), 0)
+        player.current_weapon = 11
+        player.load_count = player.current_weapon_profile.loading_time
+
+        gameplay_scene._enemy_hits_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._enemies_killed_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._player_explosive_detonations = 0  # type: ignore[attr-defined]
+
+        deployment_frames: list[int] = []
+        frame_samples: dict[int, tuple[tuple[int, ...], int, int]] = {}
+
+        original_deploy = gameplay_scene_module.deploy_player_explosive_from_shot
+        original_update_player_explosives = gameplay_scene_module.update_player_explosives
+
+        def record_mine_deploy(*args: object, **kwargs: object) -> combat.PlayerExplosive | None:
+            explosive = original_deploy(*args, **kwargs)
+            if explosive is not None and explosive.kind == "mine":
+                deployment_frames.append(app.context.runtime.simulation_frame)
+            return explosive
+
+        def record_explosive_update(*args: object, **kwargs: object) -> combat.PlayerExplosiveReport:
+            frame = app.context.runtime.simulation_frame
+            explosives = args[0] if args else []
+            mine_arming_before: tuple[int, ...] = ()
+            if isinstance(explosives, list):
+                mine_arming_before = tuple(
+                    explosive.arming_ticks
+                    for explosive in explosives
+                    if isinstance(explosive, combat.PlayerExplosive) and explosive.kind == "mine"
+                )
+
+            report = original_update_player_explosives(*args, **kwargs)
+
+            mine_count_after = 0
+            if isinstance(explosives, list):
+                mine_count_after = sum(
+                    1
+                    for explosive in explosives
+                    if isinstance(explosive, combat.PlayerExplosive) and explosive.kind == "mine"
+                )
+            frame_samples[frame] = (
+                mine_arming_before,
+                report.detonations,
+                mine_count_after,
+            )
+            return report
+
+        with patch.object(combat, "PLAYER_MINE_SLEEP_TICKS", 2), patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_enemy_projectiles",
+            return_value=combat.EnemyProjectileReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "deploy_player_explosive_from_shot",
+            side_effect=record_mine_deploy,
+        ), patch.object(
+            gameplay_scene_module,
+            "update_player_explosives",
+            side_effect=record_explosive_update,
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(deployment_frames)
+        return (
+            deployment_frames[0],
+            frame_samples,
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.player_explosive_detonations_total,
+        )
+
+    def _run_scripted_c4_remote_trigger_boundary_scenario(
+        self,
+    ) -> tuple[dict[int, tuple[tuple[int, ...], int, int]], int | None, int, int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.6,
+            input_script="20:+SHOOT;35:-SHOOT;60:+SHOOT;75:-SHOOT;120:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 10):
+            for tile_x in range(1, 6):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(9)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        self.assertGreater(grant_bullet_ammo(player, 6, 2), 0)
+        player.current_weapon = 9
+        player.load_count = player.current_weapon_profile.loading_time
+
+        gameplay_scene._player_explosive_detonations = 0  # type: ignore[attr-defined]
+
+        frame_samples: dict[int, tuple[tuple[int, ...], int, int]] = {}
+        remote_trigger_frame: int | None = None
+        original_update_player_explosives = gameplay_scene_module.update_player_explosives
+
+        def record_explosive_update(*args: object, **kwargs: object) -> combat.PlayerExplosiveReport:
+            nonlocal remote_trigger_frame
+
+            frame = app.context.runtime.simulation_frame
+            explosives = args[0] if args else []
+            c4_fuse_before: tuple[int, ...] = ()
+            if isinstance(explosives, list):
+                c4_fuse_before = tuple(
+                    explosive.fuse_ticks
+                    for explosive in explosives
+                    if isinstance(explosive, combat.PlayerExplosive) and explosive.kind == "c4"
+                )
+                if remote_trigger_frame is None and any(fuse <= 0 for fuse in c4_fuse_before):
+                    remote_trigger_frame = frame
+
+            report = original_update_player_explosives(*args, **kwargs)
+
+            c4_count_after = 0
+            if isinstance(explosives, list):
+                c4_count_after = sum(
+                    1
+                    for explosive in explosives
+                    if isinstance(explosive, combat.PlayerExplosive) and explosive.kind == "c4"
+                )
+            frame_samples[frame] = (
+                c4_fuse_before,
+                report.detonations,
+                c4_count_after,
+            )
+            return report
+
+        with patch.object(combat, "PLAYER_C4_FUSE_TICKS", 40), patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_enemy_projectiles",
+            return_value=combat.EnemyProjectileReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_player_explosives",
+            side_effect=record_explosive_update,
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            frame_samples,
+            remote_trigger_frame,
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.player_explosive_detonations_total,
+        )
+
+    def _run_scripted_mine_simultaneous_edge_contacts_scenario(self) -> tuple[int, int, int, int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.0,
+            input_script="20:+SHOOT;35:-SHOOT;80:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 10):
+            for tile_x in range(1, 8):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        for enemy_id, enemy_x in enumerate((32.0, 48.0)):
+            enemies.append(
+                combat.EnemyState(
+                    enemy_id=enemy_id,
+                    type_index=5,
+                    x=enemy_x,
+                    y=50.0,
+                    health=10.0,
+                    max_health=10.0,
+                    angle=180,
+                    target_angle=180,
+                    load_count=0,
+                ),
+            )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(11)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        self.assertGreater(grant_bullet_ammo(player, 8, 1), 0)
+        player.current_weapon = 11
+        player.load_count = player.current_weapon_profile.loading_time
+
+        with patch.object(combat, "PLAYER_MINE_SLEEP_TICKS", 2), patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_enemy_projectiles",
+            return_value=combat.EnemyProjectileReport(),
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.player_explosive_detonations_total,
+            app.context.runtime.enemies_killed_by_player,
+            app.context.runtime.enemies_alive,
+        )
+
+    def _run_scripted_mine_chained_detonations_scenario(self) -> tuple[int, int, int, float, bool]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.8,
+            input_script="20:+SHOOT;35:-SHOOT;60:+SHOOT;75:-SHOOT;120:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 12):
+            for tile_x in range(1, 8):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=6,
+                x=40.0,
+                y=50.0,
+                health=120.0,
+                max_health=120.0,
+                angle=180,
+                target_angle=180,
+                load_count=0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(11)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        self.assertGreater(grant_bullet_ammo(player, 8, 2), 0)
+        player.current_weapon = 11
+        player.load_count = player.current_weapon_profile.loading_time
+
+        with patch.object(combat, "PLAYER_MINE_SLEEP_TICKS", 2), patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_enemy_projectiles",
+            return_value=combat.EnemyProjectileReport(),
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        enemy = enemies[0]
+        return (
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.player_explosive_detonations_total,
+            app.context.runtime.enemies_killed_by_player,
+            enemy.health,
+            enemy.alive,
+        )
+
+    def _run_scripted_mine_nearest_contact_ordering_scenario(
+        self,
+    ) -> tuple[tuple[tuple[float, float], ...], int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.0,
+            input_script="20:+SHOOT;35:-SHOOT;80:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 10):
+            for tile_x in range(1, 8):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=0,
+                x=40.0,
+                y=64.0,
+                health=18.0,
+                max_health=18.0,
+                angle=180,
+                target_angle=180,
+                load_count=0,
+            ),
+        )
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=1,
+                type_index=0,
+                x=40.0,
+                y=50.0,
+                health=18.0,
+                max_health=18.0,
+                angle=180,
+                target_angle=180,
+                load_count=0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(11)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        self.assertGreater(grant_bullet_ammo(player, 8, 1), 0)
+        player.current_weapon = 11
+        player.load_count = player.current_weapon_profile.loading_time
+
+        los_endpoints: list[tuple[float, float]] = []
+        original_line_of_sight_clear = combat._line_of_sight_clear
+
+        def record_line_of_sight(*args: object, **kwargs: object) -> bool:
+            end_x = kwargs.get("end_x")
+            end_y = kwargs.get("end_y")
+            if isinstance(end_x, float) and isinstance(end_y, float):
+                los_endpoints.append((end_x, end_y))
+            return original_line_of_sight_clear(*args, **kwargs)
+
+        with patch.object(combat, "PLAYER_MINE_SLEEP_TICKS", 2), patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_enemy_projectiles",
+            return_value=combat.EnemyProjectileReport(),
+        ), patch.object(
+            combat,
+            "_line_of_sight_clear",
+            side_effect=record_line_of_sight,
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            tuple(los_endpoints),
+            app.context.runtime.player_explosive_detonations_total,
+        )
+
     def test_scripted_turn_changes_player_angle(self) -> None:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
@@ -1737,6 +2356,91 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(app.context.runtime.player_mines_active, 1)
         self.assertEqual(app.context.runtime.player_c4_active, 0)
         self.assertGreaterEqual(app.context.runtime.player_explosives_active, 1)
+
+    def test_scripted_mine_arm_transition_uses_n_minus_1_n_n_plus_1_timing(self) -> None:
+        deploy_frame, frame_samples, shots, detonations = self._run_scripted_mine_arm_transition_boundary_scenario()
+
+        arm_transition_frame = deploy_frame + 2
+        self.assertIn(arm_transition_frame - 1, frame_samples)
+        self.assertIn(arm_transition_frame, frame_samples)
+        self.assertIn(arm_transition_frame + 1, frame_samples)
+
+        n_minus_1_arming, n_minus_1_detonations, n_minus_1_mines_after = frame_samples[
+            arm_transition_frame - 1
+        ]
+        n_arming, n_detonations, n_mines_after = frame_samples[arm_transition_frame]
+        n_plus_1_arming, n_plus_1_detonations, n_plus_1_mines_after = frame_samples[arm_transition_frame + 1]
+
+        self.assertEqual(shots, 1)
+        self.assertEqual(detonations, 1)
+        self.assertEqual(n_minus_1_arming, (2,))
+        self.assertEqual(n_minus_1_detonations, 0)
+        self.assertEqual(n_minus_1_mines_after, 1)
+
+        self.assertEqual(n_arming, (1,))
+        self.assertEqual(n_detonations, 1)
+        self.assertEqual(n_mines_after, 0)
+
+        self.assertEqual(n_plus_1_arming, ())
+        self.assertEqual(n_plus_1_detonations, 0)
+        self.assertEqual(n_plus_1_mines_after, 0)
+
+    def test_scripted_c4_remote_trigger_uses_n_minus_1_n_n_plus_1_timing(self) -> None:
+        frame_samples, remote_frame, shots, detonations = self._run_scripted_c4_remote_trigger_boundary_scenario()
+
+        self.assertIsNotNone(remote_frame)
+        assert remote_frame is not None
+
+        self.assertIn(remote_frame - 1, frame_samples)
+        self.assertIn(remote_frame, frame_samples)
+        self.assertIn(remote_frame + 1, frame_samples)
+
+        n_minus_1_fuse, n_minus_1_detonations, n_minus_1_c4_after = frame_samples[remote_frame - 1]
+        n_fuse, n_detonations, n_c4_after = frame_samples[remote_frame]
+        n_plus_1_fuse, n_plus_1_detonations, n_plus_1_c4_after = frame_samples[remote_frame + 1]
+
+        self.assertEqual(shots, 2)
+        self.assertEqual(detonations, 1)
+        self.assertTrue(n_minus_1_fuse)
+        self.assertTrue(all(fuse > 0 for fuse in n_minus_1_fuse))
+        self.assertEqual(n_minus_1_detonations, 0)
+        self.assertEqual(n_minus_1_c4_after, 1)
+
+        self.assertTrue(any(fuse <= 0 for fuse in n_fuse))
+        self.assertEqual(n_detonations, 1)
+        self.assertEqual(n_c4_after, 0)
+
+        self.assertEqual(n_plus_1_fuse, ())
+        self.assertEqual(n_plus_1_detonations, 0)
+        self.assertEqual(n_plus_1_c4_after, 0)
+
+    def test_scripted_mine_simultaneous_enemy_edge_contacts_hit_both_targets(self) -> None:
+        shots, detonations, kills, enemies_alive = self._run_scripted_mine_simultaneous_edge_contacts_scenario()
+
+        self.assertEqual(shots, 1)
+        self.assertEqual(detonations, 1)
+        self.assertEqual(kills, 2)
+        self.assertEqual(enemies_alive, 0)
+
+    def test_scripted_mine_chained_contact_detonations_across_two_shots(self) -> None:
+        shots, detonations, kills, enemy_health, enemy_alive = self._run_scripted_mine_chained_detonations_scenario()
+
+        self.assertEqual(shots, 2)
+        self.assertEqual(detonations, 2)
+        self.assertEqual(kills, 0)
+        self.assertTrue(enemy_alive)
+        self.assertGreater(enemy_health, 0.0)
+        self.assertLess(enemy_health, 120.0)
+
+    def test_scripted_mine_multi_contact_prioritizes_nearest_contact_ordering(self) -> None:
+        los_endpoints, detonations = self._run_scripted_mine_nearest_contact_ordering_scenario()
+
+        self.assertGreaterEqual(detonations, 1)
+        self.assertTrue(los_endpoints)
+
+        first_end_x, first_end_y = los_endpoints[0]
+        self.assertAlmostEqual(first_end_x, 54.0)
+        self.assertAlmostEqual(first_end_y, 59.0)
 
     def test_scripted_c4_corner_obstruction_blocks_crate_damage(self) -> None:
         open_destroyed, open_detonations, open_shots = self._run_scripted_c4_crate_scenario(wall_tiles=set())

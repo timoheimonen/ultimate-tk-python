@@ -1258,6 +1258,7 @@ def _mine_contact_triggered(
         trigger_y = int(trigger_origin_y)
         return _enemy_at_point(enemies, x=trigger_x, y=trigger_y) is not None
 
+    trigger_candidates: list[tuple[float, float, float]] = []
     for enemy in enemies:
         if not enemy.alive:
             continue
@@ -1270,6 +1271,10 @@ def _mine_contact_triggered(
         distance = math.hypot(target_x - trigger_origin_x, target_y - trigger_origin_y)
         if distance > trigger_radius:
             continue
+
+        trigger_candidates.append((distance, target_x, target_y))
+
+    for distance, target_x, target_y in sorted(trigger_candidates, key=lambda candidate: candidate[0]):
 
         if level is not None and not _line_of_sight_clear(
             level,
