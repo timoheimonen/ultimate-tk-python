@@ -10,8 +10,9 @@ from ultimatetk.core.events import AppEvent
 from ultimatetk.core.context import GameContext
 from ultimatetk.core.events import EventType
 from ultimatetk.core.fixed_step import FixedStepClock
+from ultimatetk.core.input_script import parse_input_script
 from ultimatetk.core.paths import GamePaths
-from ultimatetk.core.platform import HeadlessPlatformBackend, PlatformBackend
+from ultimatetk.core.platform import HeadlessPlatformBackend, PlatformBackend, TerminalPlatformBackend
 from ultimatetk.core.scenes import SceneManager
 from ultimatetk.core.state import AppMode
 
@@ -35,9 +36,22 @@ class GameApplication:
 
         context = GameContext(config=config, paths=resolved_paths)
         scene_manager = SceneManager(BootScene(), context)
-        active_platform = platform or HeadlessPlatformBackend(
-            status_print_interval=config.status_print_interval,
-        )
+        input_schedule = parse_input_script(config.input_script)
+        if platform is not None:
+            active_platform = platform
+        elif config.platform == "headless":
+            active_platform = HeadlessPlatformBackend(
+                status_print_interval=config.status_print_interval,
+                input_schedule=input_schedule,
+            )
+        elif config.platform == "terminal":
+            active_platform = TerminalPlatformBackend(
+                status_print_interval=config.status_print_interval,
+                hold_frames=config.terminal_hold_frames,
+                input_schedule=input_schedule,
+            )
+        else:
+            raise ValueError(f"unsupported platform backend: {config.platform}")
         clock = FixedStepClock(
             target_tick_rate=config.target_tick_rate,
             max_frame_time_seconds=config.max_frame_time_seconds,

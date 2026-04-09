@@ -21,6 +21,10 @@ class RuntimeState:
     last_render_digest: int = 0
     last_render_width: int = 0
     last_render_height: int = 0
+    player_world_x: int = 0
+    player_world_y: int = 0
+    player_angle_degrees: int = 0
+    player_weapon_slot: int = 0
 
 
 @dataclass(slots=True)

@@ -132,9 +132,14 @@ python/
 - Section 2 implementation completed for binary format parsing in `python/src/ultimatetk/formats/`.
 - Section 3 rendering baseline implemented in `python/src/ultimatetk/rendering/` and integrated into `GameplayScene`.
 - Tile rendering, transparent/translucent sprite paths, and palette shadow/light table application are now active.
+- Section 4 implementation started in `python/src/ultimatetk/systems/player_control.py` and `GameplayScene`.
+- Legacy-style movement/rotation, wall collision checks, camera follow, and weapon slot switching are now scaffolded.
+- Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
+- Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
+- Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
 - Unit tests cover clock/scene flow plus EFP/FNT/LEV/palette/options format parsing.
-- Rendering unit tests and a real-data rendering integration check were added under `python/tests/`.
+- Rendering and phase-4 control unit tests were added under `python/tests/`.
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Gameplay simulation systems are still placeholders.
+- Combat/enemy/progression systems are still placeholders.

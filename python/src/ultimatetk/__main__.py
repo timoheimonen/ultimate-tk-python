@@ -41,6 +41,26 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Log runtime status every N render frames (0 disables)",
     )
     parser.add_argument(
+        "--platform",
+        choices=("headless", "terminal"),
+        default="headless",
+        help="Runtime platform backend",
+    )
+    parser.add_argument(
+        "--terminal-hold-frames",
+        type=int,
+        default=2,
+        help="Frames to keep terminal actions active without repeat",
+    )
+    parser.add_argument(
+        "--input-script",
+        default=None,
+        help=(
+            "Headless input script entries as '<frame>:<event>' separated by ';', "
+            "for example '5:+MOVE_FORWARD;20:-MOVE_FORWARD;25:+TURN_LEFT'"
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         help="Python logging level (DEBUG, INFO, WARNING, ERROR)",
@@ -59,6 +79,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_seconds=args.max_seconds,
         autostart_gameplay=args.autostart_gameplay,
         status_print_interval=args.status_print_interval,
+        platform=args.platform,
+        terminal_hold_frames=args.terminal_hold_frames,
+        input_script=args.input_script,
     )
     app = GameApplication.create(config)
     return app.run()

@@ -17,3 +17,6 @@ class RuntimeConfig:
     max_seconds: float | None = None
     autostart_gameplay: bool = False
     status_print_interval: int = 0
+    platform: str = "headless"
+    terminal_hold_frames: int = 2
+    input_script: str | None = None
