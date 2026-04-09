@@ -68,6 +68,7 @@ Implemented:
   - Retuned enemy explosive splash cover handling so live crates can now attenuate/block splash rays when they sit between blast impacts and the player during enemy missed-shot and projectile wall/expiry splash cases.
   - Retuned player mine/C4 blast obstruction micro-cases so live crates can attenuate/block splash ray coverage against nearby enemies/player in tight corridor lanes while preserving direct crate damage resolution for the target crate itself.
   - Retuned mine contact-trigger corner behavior so very-near partially covered enemies can still trigger armed mines (coverage- and distance-gated), while farther partial corner contacts remain blocked.
+  - Retuned shop/HUD visual treatment with state-aware shop cell styling (owned/full/no-cash tinting + corner state markers), active-row emphasis and state-colored selection status text, plus color-tuned HUD health/ammo/reload readouts.
   - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
   - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
   - Added additional scripted-obstruction parity hooks for mine/C4 micro-cases (diagonal graze and one-tile choke variants).
@@ -166,6 +167,7 @@ Verification:
   - Added enemy explosive crate-cover splash unit coverage for direct near-miss and projectile wall-impact cases.
   - Added player C4/mine tight-corridor crate-cover splash unit coverage.
   - Added mine trigger partial-corner near-versus-far unit coverage.
+  - Added scene-flow coverage for shop cell state classification and state-driven color mapping.
   - Added C4 remote-trigger ammo-conservation scene-flow coverage.
   - Added enemy-projectile dead-player guard unit coverage so in-flight projectiles no longer count/player-damage after death.
   - Added scene-flow coverage for C4 remote-trigger behavior and new explosive readiness runtime counters.

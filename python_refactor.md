@@ -173,6 +173,7 @@ python/
 - Continued remaining Phase-4 combat parity by adding crate-aware explosive splash cover handling for enemy missed-shot grenade splash and enemy projectile wall/expiry splash against player, with new unit coverage for direct and projectile crate-cover reduction cases.
 - Continued remaining Phase-4 mine/C4 obstruction micro-case tuning by adding crate-aware splash ray attenuation/blocking for player explosive damage against enemies/player in tight corridor lanes while preserving crate-target damage resolution, with dedicated C4/mine corridor cover unit coverage.
 - Continued remaining Phase-4 mine trigger tuning for tight corner lanes by allowing very-near partial-cover contact triggers (ray-coverage gated with distance ratio) while keeping farther partial-contact cases blocked; added dedicated near-versus-far corner trigger unit coverage.
+- Continued remaining Phase-4 HUD/shop fidelity polish with state-driven shop cell visuals (owned/full/no-cash marker tinting, active-row emphasis, and state-colored selection status text) plus HUD readout color tuning for health/ammo/reload glance readability; added scene-flow coverage for shop cell state/visual color mapping.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

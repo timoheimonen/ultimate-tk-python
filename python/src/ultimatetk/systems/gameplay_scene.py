@@ -103,6 +103,9 @@ class GameplayScene(BaseScene):
     _SHOP_SELECTED_COLOR = 96
     _SHOP_ICON_COLOR = 117
     _SHOP_ICON_SELECTED_COLOR = 126
+    _SHOP_LOCKED_CELL_COLOR = 6
+    _SHOP_UNAFFORDABLE_CELL_COLOR = 4
+    _SHOP_STATE_MARKER_SIZE = 2
     _SHOP_SUCCESS_COLOR = 112
     _SHOP_ERROR_COLOR = 28
     _HUD_PANEL_COLOR = 13
@@ -800,7 +803,7 @@ class GameplayScene(BaseScene):
             10,
             64,
             selection_state,
-            self._SHOP_MUTED_COLOR,
+            self._shop_selection_state_color(),
         )
 
         feedback_color = self._SHOP_TEXT_COLOR
@@ -831,26 +834,35 @@ class GameplayScene(BaseScene):
         for row in range(3):
             columns = shop_column_count_for_row(row)
             row_y = grid_y + (row * cell_pitch)
+            row_color = self._SHOP_VALUE_COLOR if row == self._shop_row else self._SHOP_TEXT_COLOR
 
             self._draw_shop_text(
                 pixels,
                 214,
                 row_y + 4,
                 row_labels[row],
-                self._SHOP_TEXT_COLOR,
+                row_color,
             )
 
             for column in range(columns):
                 cell_x = grid_x + (column * cell_pitch)
                 selected = row == self._shop_row and column == self._shop_column
                 selected_pulse = ((self._spot_phase // 15) % 2) == 0
-                locked = self._shop_cell_is_locked(row, column)
-                affordable = self._shop_cell_is_affordable(row, column)
-
-                fill_color = self._SHOP_SELECTED_COLOR if selected else self._SHOP_CELL_COLOR
-                border_color = self._SHOP_TEXT_COLOR
-                if selected:
-                    border_color = self._SHOP_VALUE_COLOR if selected_pulse else self._SHOP_BORDER_COLOR
+                cell_state = self._shop_cell_state(row, column)
+                (
+                    fill_color,
+                    border_color,
+                    icon_color,
+                    label_color,
+                    counter_color,
+                    marker_color,
+                ) = self._shop_cell_visual_colors(
+                    row,
+                    column,
+                    selected=selected,
+                    selected_pulse=selected_pulse,
+                    state=cell_state,
+                )
 
                 self._fill_rect(
                     pixels,
@@ -878,13 +890,18 @@ class GameplayScene(BaseScene):
                         self._SHOP_BORDER_COLOR,
                     )
 
+                marker_size = max(1, min(self._SHOP_STATE_MARKER_SIZE, self._SHOP_CELL_SIZE - 2))
+                self._fill_rect(
+                    pixels,
+                    cell_x + self._SHOP_CELL_SIZE - marker_size - 1,
+                    row_y + 1,
+                    marker_size,
+                    marker_size,
+                    marker_color,
+                )
+
                 icon_kind = self._shop_cell_icon_kind(row, column)
                 if icon_kind:
-                    icon_color = self._SHOP_ICON_SELECTED_COLOR if selected else self._SHOP_ICON_COLOR
-                    if locked:
-                        icon_color = self._SHOP_MUTED_COLOR
-                    elif not affordable:
-                        icon_color = self._SHOP_ERROR_COLOR if selected else self._SHOP_MUTED_COLOR
                     self._draw_shop_cell_icon(
                         pixels,
                         x=cell_x + 2,
@@ -896,11 +913,6 @@ class GameplayScene(BaseScene):
                 cell_label = self._fit_shop_cell_text(self._shop_cell_label_text(row, column), max_chars=2)
                 if cell_label:
                     label_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(cell_label) * 8)) // 2)
-                    label_color = self._SHOP_VALUE_COLOR if selected else self._SHOP_TEXT_COLOR
-                    if locked:
-                        label_color = self._SHOP_MUTED_COLOR
-                    elif not affordable:
-                        label_color = self._SHOP_ERROR_COLOR if selected else self._SHOP_MUTED_COLOR
                     self._draw_shop_text(
                         pixels,
                         label_x,
@@ -918,7 +930,7 @@ class GameplayScene(BaseScene):
                         counter_x,
                         row_y + 8,
                         counter_label,
-                        self._SHOP_VALUE_COLOR,
+                        counter_color,
                     )
 
     def _shop_selection_info(self) -> tuple[str, int, int, str]:
@@ -1388,6 +1400,72 @@ class GameplayScene(BaseScene):
         buy_cost = self._shop_cell_buy_cost(row, column)
         return buy_cost <= 0 or self._player.cash >= buy_cost
 
+    def _shop_selection_state_color(self) -> int:
+        state = self._shop_cell_state(self._shop_row, self._shop_column)
+        if state == "buy":
+            return self._SHOP_VALUE_COLOR
+        if state == "no_cash":
+            return self._SHOP_ERROR_COLOR
+        return self._SHOP_MUTED_COLOR
+
+    def _shop_cell_state(self, row: int, column: int) -> str:
+        if self._player is None:
+            return "locked"
+
+        if self._shop_cell_is_locked(row, column):
+            if row == SHOP_ROW_WEAPONS:
+                return "owned"
+            if row == SHOP_ROW_AMMO:
+                return "full"
+            if row == SHOP_ROW_OTHER and column == 0:
+                return "max"
+            if row == SHOP_ROW_OTHER and column == 1:
+                return "owned"
+            return "locked"
+
+        if not self._shop_cell_is_affordable(row, column):
+            return "no_cash"
+
+        return "buy"
+
+    def _shop_cell_visual_colors(
+        self,
+        row: int,
+        column: int,
+        *,
+        selected: bool,
+        selected_pulse: bool,
+        state: str | None = None,
+    ) -> tuple[int, int, int, int, int, int]:
+        cell_state = state or self._shop_cell_state(row, column)
+
+        fill_color = self._SHOP_SELECTED_COLOR if selected else self._SHOP_CELL_COLOR
+        border_color = self._SHOP_TEXT_COLOR
+        if selected:
+            border_color = self._SHOP_VALUE_COLOR if selected_pulse else self._SHOP_BORDER_COLOR
+
+        icon_color = self._SHOP_ICON_SELECTED_COLOR if selected else self._SHOP_ICON_COLOR
+        label_color = self._SHOP_VALUE_COLOR if selected else self._SHOP_TEXT_COLOR
+        counter_color = self._SHOP_VALUE_COLOR
+        marker_color = self._SHOP_SUCCESS_COLOR
+
+        if cell_state in ("owned", "full", "max", "locked"):
+            fill_color = self._SHOP_CELL_COLOR if selected else self._SHOP_LOCKED_CELL_COLOR
+            icon_color = self._SHOP_MUTED_COLOR
+            label_color = self._SHOP_MUTED_COLOR
+            counter_color = self._SHOP_MUTED_COLOR
+            marker_color = self._SHOP_SUCCESS_COLOR
+        elif cell_state == "no_cash":
+            fill_color = self._SHOP_CELL_COLOR if selected else self._SHOP_UNAFFORDABLE_CELL_COLOR
+            icon_color = self._SHOP_ERROR_COLOR if selected else self._SHOP_MUTED_COLOR
+            label_color = self._SHOP_ERROR_COLOR if selected else self._SHOP_MUTED_COLOR
+            counter_color = self._SHOP_MUTED_COLOR
+            marker_color = self._SHOP_ERROR_COLOR
+        elif selected and selected_pulse:
+            marker_color = self._SHOP_VALUE_COLOR
+
+        return fill_color, border_color, icon_color, label_color, counter_color, marker_color
+
     def _draw_gameplay_hud(self, pixels: bytearray) -> None:
         if self._player is None:
             return
@@ -1544,15 +1622,22 @@ class GameplayScene(BaseScene):
             f"W{weapon_slot:02d} {weapon_label}",
             self._HUD_VALUE_COLOR,
         )
+        hp_text = f"HP {int(max(0.0, self._player.health)):03d}/{int(max(0.0, health_capacity)):03d} "
+        am_text = f"AM {ammo_label}"
+        ammo_text_color = am_color if ammo_type >= 0 else self._HUD_TEXT_COLOR
         self._draw_shop_text(
             pixels,
             4,
             panel_y + 18,
-            (
-                f"HP {int(max(0.0, self._player.health)):03d}/{int(max(0.0, health_capacity)):03d} "
-                f"AM {ammo_label}"
-            ),
-            self._HUD_TEXT_COLOR,
+            hp_text,
+            hp_color,
+        )
+        self._draw_shop_text(
+            pixels,
+            4 + (len(hp_text) * 8),
+            panel_y + 18,
+            am_text,
+            ammo_text_color,
         )
 
         target_state = "ON" if self._player.target_system_enabled else "OFF"
@@ -1573,7 +1658,8 @@ class GameplayScene(BaseScene):
         hint_text = f"{hint_load}{hint_mine}{hint_c4}{hint_shop}"
         hint_x = max(4, SCREEN_WIDTH - ((len(hint_text) + 1) * 8))
         cursor_x = hint_x
-        self._draw_shop_text(pixels, cursor_x, panel_y + 18, hint_load, self._HUD_MUTED_COLOR)
+        hint_load_color = self._HUD_OK_COLOR if reload_ratio >= 1.0 else self._HUD_TEXT_COLOR
+        self._draw_shop_text(pixels, cursor_x, panel_y + 18, hint_load, hint_load_color)
         cursor_x += len(hint_load) * 8
 
         mine_hint_color = self._HUD_MUTED_COLOR if mines_active <= 0 else mine_meter_color

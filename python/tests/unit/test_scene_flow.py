@@ -17,7 +17,13 @@ from ultimatetk.core.events import AppEvent, InputAction
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.scenes import SceneManager
 from ultimatetk.systems.combat import CrateState, EnemyState
-from ultimatetk.systems.player_control import ShotEvent, grant_bullet_ammo
+from ultimatetk.systems.player_control import (
+    SHOP_ROW_AMMO,
+    SHOP_ROW_WEAPONS,
+    ShotEvent,
+    bullet_capacity_units_for_type,
+    grant_bullet_ammo,
+)
 
 
 class SceneFlowTests(unittest.TestCase):
@@ -263,6 +269,93 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.shop_last_units, 0)
         self.assertEqual(context.runtime.shop_last_cash_delta, 0)
         self.assertEqual(context.runtime.shop_last_reason, "NO CASH")
+
+    def test_gameplay_shop_cell_state_reports_owned_full_no_cash_and_buy(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.grant_weapon(1)
+        player.cash = 0
+        player.bullets[0] = 0
+        self.assertEqual(gameplay_scene._shop_cell_state(SHOP_ROW_WEAPONS, 0), "owned")
+        self.assertEqual(gameplay_scene._shop_cell_state(SHOP_ROW_AMMO, 0), "no_cash")
+
+        player.bullets[0] = bullet_capacity_units_for_type(0)
+        self.assertEqual(gameplay_scene._shop_cell_state(SHOP_ROW_AMMO, 0), "full")
+
+        player.bullets[0] = 0
+        player.cash = 9999
+        self.assertEqual(gameplay_scene._shop_cell_state(SHOP_ROW_AMMO, 0), "buy")
+
+    def test_gameplay_shop_cell_visual_colors_follow_cell_state(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.grant_weapon(1)
+        owned_colors = gameplay_scene._shop_cell_visual_colors(
+            SHOP_ROW_WEAPONS,
+            0,
+            selected=False,
+            selected_pulse=False,
+        )
+        self.assertEqual(owned_colors[2], gameplay_scene._SHOP_MUTED_COLOR)
+        self.assertEqual(owned_colors[3], gameplay_scene._SHOP_MUTED_COLOR)
+        self.assertEqual(owned_colors[5], gameplay_scene._SHOP_SUCCESS_COLOR)
+
+        player.cash = 0
+        player.bullets[0] = 0
+        gameplay_scene._shop_row = SHOP_ROW_AMMO
+        gameplay_scene._shop_column = 0
+        no_cash_colors = gameplay_scene._shop_cell_visual_colors(
+            SHOP_ROW_AMMO,
+            0,
+            selected=True,
+            selected_pulse=True,
+        )
+        self.assertEqual(no_cash_colors[2], gameplay_scene._SHOP_ERROR_COLOR)
+        self.assertEqual(no_cash_colors[3], gameplay_scene._SHOP_ERROR_COLOR)
+        self.assertEqual(no_cash_colors[5], gameplay_scene._SHOP_ERROR_COLOR)
+        self.assertEqual(gameplay_scene._shop_selection_state_color(), gameplay_scene._SHOP_ERROR_COLOR)
+
+        player.cash = 9999
+        buy_colors = gameplay_scene._shop_cell_visual_colors(
+            SHOP_ROW_AMMO,
+            0,
+            selected=True,
+            selected_pulse=True,
+        )
+        self.assertEqual(buy_colors[5], gameplay_scene._SHOP_VALUE_COLOR)
+        self.assertEqual(gameplay_scene._shop_selection_state_color(), gameplay_scene._SHOP_VALUE_COLOR)
 
     def test_gameplay_shop_overlay_changes_render_digest(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
