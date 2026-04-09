@@ -280,6 +280,8 @@ class EnemyShotResolution:
     impact_x: int
     impact_y: int
     damage: float
+    crate_hit: bool = False
+    crate_destroyed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -650,6 +652,7 @@ def update_enemy_behavior(
     player: PlayerState,
     *,
     enemy_projectiles: list[EnemyProjectile] | None = None,
+    crates: Sequence[CrateState] | None = None,
 ) -> EnemyBehaviorReport:
     shots_fired = 0
     hits_on_player = 0
@@ -690,6 +693,7 @@ def update_enemy_behavior(
             end_x=player.center_x,
             end_y=player.center_y,
             step=ENEMY_LINE_OF_SIGHT_TRACE_STEP,
+            crates=crates,
         ) and _enemy_within_vision_cone(
             enemy,
             player_angle=player_angle,
@@ -773,6 +777,7 @@ def update_enemy_behavior(
                         enemy=enemy,
                         player=player,
                         weapon_slot=weapon_slot,
+                        crates=crates,
                     )
                     hits_on_player += attack.hit_count
                     damage_to_player += attack.total_damage
@@ -809,6 +814,7 @@ def resolve_enemy_shot_against_player(
     enemy: EnemyState,
     player: PlayerState,
     weapon_slot: int,
+    crates: Sequence[CrateState] | None = None,
     angle: int | None = None,
     damage: float | None = None,
     max_distance: int | None = None,
@@ -828,6 +834,20 @@ def resolve_enemy_shot_against_player(
 
         if not _is_floor_pixel(level, x, y):
             return EnemyShotResolution(player_hit=False, impact_x=px, impact_y=py, damage=0.0)
+
+        if crates is not None:
+            crate = _crate_at_point(crates, x=x, y=y)
+            if crate is not None:
+                crate.hit_flash_ticks = CRATE_FLASH_TICKS
+                destroyed = crate.apply_damage(ray_damage)
+                return EnemyShotResolution(
+                    player_hit=False,
+                    impact_x=int(crate.center_x),
+                    impact_y=int(crate.center_y),
+                    damage=0.0,
+                    crate_hit=True,
+                    crate_destroyed=destroyed,
+                )
 
         if _player_at_point(player, x=x, y=y):
             return EnemyShotResolution(
@@ -849,6 +869,7 @@ def resolve_enemy_attack_against_player(
     enemy: EnemyState,
     player: PlayerState,
     weapon_slot: int,
+    crates: Sequence[CrateState] | None = None,
 ) -> EnemyAttackResult:
     pellet_count = max(1, weapon_pellet_count_for_slot(weapon_slot))
     spread = weapon_angle_spread_for_slot(weapon_slot)
@@ -868,6 +889,7 @@ def resolve_enemy_attack_against_player(
             enemy=enemy,
             player=player,
             weapon_slot=weapon_slot,
+            crates=crates,
             angle=shot_angle,
             damage=pellet_damage,
         )
@@ -1060,6 +1082,7 @@ def update_player_explosives(
                 enemies,
                 player,
                 level=level,
+                crates=crates,
             )
 
         if not should_detonate:
@@ -1198,6 +1221,7 @@ def _mine_contact_triggered(
     player: PlayerState,
     *,
     level: LevelData | None,
+    crates: Sequence[CrateState] | None,
 ) -> bool:
     del player
 
@@ -1222,6 +1246,7 @@ def _mine_contact_triggered(
             end_x=enemy.center_x,
             end_y=enemy.center_y,
             step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
+            crates=crates,
         ):
             continue
         return True
@@ -1674,6 +1699,7 @@ def _line_of_sight_clear(
     end_x: float,
     end_y: float,
     step: int = SHOT_TRACE_STEP,
+    crates: Sequence[CrateState] | None = None,
 ) -> bool:
     dx = end_x - start_x
     dy = end_y - start_y
@@ -1688,10 +1714,14 @@ def _line_of_sight_clear(
         y = int(start_y + (dy * ratio))
         if not _is_floor_pixel(level, x, y):
             return False
+        if crates is not None and _crate_at_point(crates, x=x, y=y) is not None:
+            return False
 
     end_px = int(end_x)
     end_py = int(end_y)
     if not _is_floor_pixel(level, end_px, end_py):
+        return False
+    if crates is not None and _crate_at_point(crates, x=end_px, y=end_py) is not None:
         return False
     return True
 

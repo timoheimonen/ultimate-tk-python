@@ -162,6 +162,10 @@ python/
 - Added legacy-style enemy patrol idle/burst cadence so no-LOS patrol movement starts only on low-probability rolls and runs in finite bursts (old `walk_cnt` style), with unit/integration coverage for idle versus burst-start paths.
 - Added patrol turn-lock parity so idle random retarget rolls wait until current heading rotation completes, with new unit/integration coverage for in-progress-turn target stability.
 - Retuned enemy LOS sampling cadence to legacy 5-pixel progression for vision checks (while preserving modern corner-graze endpoint checks and vision gating), with new unit/integration coverage for step usage and updated blocked corner direct-shot expectations.
+- Added crate-aware enemy cover/impact parity so live crates now block enemy LOS checks and absorb non-projectile enemy hitscan shots instead of letting traces pass through.
+- Added crate-aware mine proximity trigger parity so live crates can also block mine contact-trigger LOS checks (not just walls).
+- Added C4 activator follow-up parity in gameplay flow: firing C4 while a charge is already active now remote-triggers existing C4 charges instead of deploying another.
+- HUD/runtime explosive-readiness telemetry expanded with mine armed-count and C4 hot-count, and HUD overlay now renders dedicated readiness bars plus armed/hot status readouts.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

@@ -113,6 +113,7 @@ class GameplayScene(BaseScene):
     _HUD_MUTED_COLOR = 76
     _HUD_WARN_COLOR = 28
     _HUD_OK_COLOR = 112
+    _C4_HOT_FUSE_TICKS = 12
 
     def __init__(self) -> None:
         self._renderer: SoftwareRenderer | None = None
@@ -214,7 +215,9 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_projectiles_active = 0
         context.runtime.player_explosives_active = 0
         context.runtime.player_mines_active = 0
+        context.runtime.player_mines_armed = 0
         context.runtime.player_c4_active = 0
+        context.runtime.player_c4_hot = 0
         context.runtime.player_explosive_detonations_total = 0
         context.runtime.game_over_active = False
         context.runtime.game_over_ticks_remaining = 0
@@ -454,6 +457,7 @@ class GameplayScene(BaseScene):
                     self._enemies,
                     self._player,
                     enemy_projectiles=self._enemy_projectiles,
+                    crates=self._crates,
                 )
                 projectile_report = update_enemy_projectiles(
                     self._level,
@@ -1392,6 +1396,31 @@ class GameplayScene(BaseScene):
         am_color = self._HUD_OK_COLOR if ammo_ratio > 0.2 or ammo_type < 0 else self._HUD_WARN_COLOR
         load_color = self._HUD_OK_COLOR if reload_ratio >= 1.0 else self._HUD_TEXT_COLOR
 
+        mines_active = 0
+        mines_armed = 0
+        c4_active = 0
+        c4_hot = 0
+        for explosive in self._player_explosives:
+            if explosive.kind == "mine":
+                mines_active += 1
+                if explosive.arming_ticks <= 0:
+                    mines_armed += 1
+            elif explosive.kind == "c4":
+                c4_active += 1
+                if explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS:
+                    c4_hot += 1
+
+        mine_ready_ratio = 0.0
+        if mines_active > 0:
+            mine_ready_ratio = max(0.0, min(1.0, mines_armed / mines_active))
+
+        c4_hot_ratio = 0.0
+        if c4_active > 0:
+            c4_hot_ratio = max(0.0, min(1.0, c4_hot / c4_active))
+
+        mine_meter_color = self._HUD_OK_COLOR if mine_ready_ratio >= 1.0 else self._HUD_TEXT_COLOR
+        c4_meter_color = self._HUD_WARN_COLOR if c4_hot_ratio > 0.0 else self._HUD_TEXT_COLOR
+
         self._draw_meter(
             pixels,
             x=4,
@@ -1422,6 +1451,28 @@ class GameplayScene(BaseScene):
             height=4,
             ratio=reload_ratio,
             fill_color=load_color,
+            border_color=self._HUD_BORDER_COLOR,
+            background_color=self._HUD_CELL_COLOR,
+        )
+        self._draw_meter(
+            pixels,
+            x=216,
+            y=panel_y + 2,
+            width=48,
+            height=4,
+            ratio=mine_ready_ratio,
+            fill_color=mine_meter_color,
+            border_color=self._HUD_BORDER_COLOR,
+            background_color=self._HUD_CELL_COLOR,
+        )
+        self._draw_meter(
+            pixels,
+            x=268,
+            y=panel_y + 2,
+            width=48,
+            height=4,
+            ratio=c4_hot_ratio,
+            fill_color=c4_meter_color,
             border_color=self._HUD_BORDER_COLOR,
             background_color=self._HUD_CELL_COLOR,
         )
@@ -1460,8 +1511,8 @@ class GameplayScene(BaseScene):
         )
 
         hint_text = (
-            f"LD {int(reload_ratio * 100):03d}% M{sum(1 for e in self._player_explosives if e.kind == 'mine'):02d} "
-            f"C{sum(1 for e in self._player_explosives if e.kind == 'c4'):02d} R/ENT SHOP"
+            f"LD {int(reload_ratio * 100):03d}% M {mines_armed:02d}/{mines_active:02d} "
+            f"C4 {c4_hot:02d}/{c4_active:02d} R/ENT SHOP"
         )
         hint_x = max(4, SCREEN_WIDTH - ((len(hint_text) + 1) * 8))
         self._draw_shop_text(
@@ -1585,6 +1636,15 @@ class GameplayScene(BaseScene):
 
         for shot in consume_pending_shots(self._player):
             if is_player_explosive_weapon_slot(shot.weapon_slot):
+                if shot.weapon_slot == 9:
+                    armed_c4 = [explosive for explosive in self._player_explosives if explosive.kind == "c4"]
+                    if armed_c4:
+                        for explosive in armed_c4:
+                            explosive.fuse_ticks = 0
+                        self._player.shot_effect_x = int(armed_c4[0].x)
+                        self._player.shot_effect_y = int(armed_c4[0].y)
+                        continue
+
                 explosive = deploy_player_explosive_from_shot(shot)
                 if explosive is None:
                     continue
@@ -1785,7 +1845,9 @@ class GameplayScene(BaseScene):
             context.runtime.enemy_projectiles_active = 0
             context.runtime.player_explosives_active = 0
             context.runtime.player_mines_active = 0
+            context.runtime.player_mines_armed = 0
             context.runtime.player_c4_active = 0
+            context.runtime.player_c4_hot = 0
             context.runtime.player_explosive_detonations_total = 0
             context.runtime.game_over_active = False
             context.runtime.game_over_ticks_remaining = 0
@@ -1842,9 +1904,19 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
         context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
         mines_active = sum(1 for explosive in self._player_explosives if explosive.kind == "mine")
+        mines_armed = sum(
+            1 for explosive in self._player_explosives if explosive.kind == "mine" and explosive.arming_ticks <= 0
+        )
         c4_active = sum(1 for explosive in self._player_explosives if explosive.kind == "c4")
+        c4_hot = sum(
+            1
+            for explosive in self._player_explosives
+            if explosive.kind == "c4" and explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS
+        )
         context.runtime.player_mines_active = mines_active
+        context.runtime.player_mines_armed = mines_armed
         context.runtime.player_c4_active = c4_active
+        context.runtime.player_c4_hot = c4_hot
         context.runtime.player_explosives_active = mines_active + c4_active
         context.runtime.player_explosive_detonations_total = self._player_explosive_detonations
         context.runtime.game_over_active = self._game_over_active

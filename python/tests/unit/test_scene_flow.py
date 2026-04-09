@@ -386,7 +386,9 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(len(explosives), 1)
         self.assertEqual(context.runtime.player_explosives_active, 1)
         self.assertEqual(context.runtime.player_mines_active, 1)
+        self.assertEqual(context.runtime.player_mines_armed, 0)
         self.assertEqual(context.runtime.player_c4_active, 0)
+        self.assertEqual(context.runtime.player_c4_hot, 0)
         explosives[0].arming_ticks = 1
 
         manager.update(0.025)
@@ -394,11 +396,91 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(len(explosives), 0)
         self.assertEqual(context.runtime.player_explosives_active, 0)
         self.assertEqual(context.runtime.player_mines_active, 0)
+        self.assertEqual(context.runtime.player_mines_armed, 0)
         self.assertEqual(context.runtime.player_c4_active, 0)
+        self.assertEqual(context.runtime.player_c4_hot, 0)
         self.assertGreaterEqual(context.runtime.player_explosive_detonations_total, 1)
         self.assertFalse(enemy.alive)
         self.assertGreaterEqual(context.runtime.player_hits_total, 1)
         self.assertGreaterEqual(context.runtime.enemies_killed_by_player, 1)
+
+    def test_gameplay_c4_second_shot_remote_triggers_existing_charge(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if player is None or enemies is None or explosives is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=80.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+        )
+        enemies.append(enemy)
+
+        player.pending_shots.append(
+            ShotEvent(
+                origin_x=enemy.center_x,
+                origin_y=enemy.center_y,
+                angle=0,
+                max_distance=34,
+                weapon_slot=9,
+                impact_x=int(enemy.center_x),
+                impact_y=int(enemy.center_y),
+            ),
+        )
+
+        manager.update(0.025)
+        self.assertEqual(len(explosives), 1)
+        self.assertEqual(context.runtime.player_explosives_active, 1)
+        self.assertEqual(context.runtime.player_c4_active, 1)
+        self.assertEqual(context.runtime.player_c4_hot, 0)
+
+        explosives[0].fuse_ticks = 12
+        manager.update(0.025)
+        self.assertEqual(context.runtime.player_c4_active, 1)
+        self.assertEqual(context.runtime.player_c4_hot, 1)
+
+        player.pending_shots.append(
+            ShotEvent(
+                origin_x=enemy.center_x,
+                origin_y=enemy.center_y,
+                angle=0,
+                max_distance=34,
+                weapon_slot=9,
+                impact_x=int(enemy.center_x),
+                impact_y=int(enemy.center_y),
+            ),
+        )
+
+        manager.update(0.025)
+
+        self.assertEqual(len(explosives), 0)
+        self.assertEqual(context.runtime.player_explosives_active, 0)
+        self.assertEqual(context.runtime.player_c4_active, 0)
+        self.assertEqual(context.runtime.player_c4_hot, 0)
+        self.assertGreaterEqual(context.runtime.player_explosive_detonations_total, 1)
+        self.assertFalse(enemy.alive)
 
 
 if __name__ == "__main__":

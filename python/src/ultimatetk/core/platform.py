@@ -238,7 +238,7 @@ def _log_runtime_status(
     shop_reason = context.runtime.shop_last_reason if context.runtime.shop_last_reason else "-"
 
     context.logger.info(
-        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d cash=%d shield=%d target=%d shop=%d ssel=%d,%d stx=%s/%s ssucc=%d sunits=%d sdelta=%d sreason=%s hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d pex=%d pmin=%d pc4=%d pdet=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
+        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d cash=%d shield=%d target=%d shop=%d ssel=%d,%d stx=%s/%s ssucc=%d sunits=%d sdelta=%d sreason=%s hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d pex=%d pmin=%d parm=%d pc4=%d phot=%d pdet=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
         frame,
         context.runtime.mode.value,
         scene_name,
@@ -279,7 +279,9 @@ def _log_runtime_status(
         context.runtime.enemy_projectiles_active,
         context.runtime.player_explosives_active,
         context.runtime.player_mines_active,
+        context.runtime.player_mines_armed,
         context.runtime.player_c4_active,
+        context.runtime.player_c4_hot,
         context.runtime.player_explosive_detonations_total,
         context.runtime.game_over_active,
         context.runtime.game_over_ticks_remaining,

@@ -56,7 +56,10 @@ Implemented:
   - Added patrol turn-lock parity while idle: random patrol retarget rolls now apply only once enemies finish rotating to their current target heading, preventing mid-rotation retarget churn.
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
+  - Added crate-aware enemy cover/impact handling: enemy LOS checks now treat live crates as blockers, and non-projectile enemy hitscan traces impact/damage crates instead of piercing through them.
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
+  - Added crate-aware mine proximity trigger gating so live crates can block enemy contact-trigger LOS checks (matching wall obstruction behavior).
+  - Added C4 activator follow-up behavior in gameplay flow: firing the C4 slot while a C4 charge is already active now remote-triggers existing charges instead of placing another charge.
   - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
   - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
   - Added additional scripted-obstruction parity hooks for mine/C4 micro-cases (diagonal graze and one-tile choke variants).
@@ -85,7 +88,9 @@ Implemented:
   - HUD health readout now renders current/effective-capacity values so shield-based health capacity changes are visible during gameplay.
   - Shop overlay cell rendering now includes icon-like pixel glyphs with per-weapon/per-ammo identity (distinct silhouettes for each weapon slot and ammo type) plus highlighted selected-state icon color.
   - HUD layout/styling updated with multi-meter bars (health/ammo/reload), denser status readout, and explicit active mine/C4 counters.
+  - HUD explosive status polish now includes armed-vs-active mine counts and hot-vs-active C4 counts, with dedicated readiness meters for mine arming and near-fuse C4 state.
   - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
+  - HUD/runtime telemetry now also exposes mine armed-count and C4 hot-count snapshots for explosive readiness visibility.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
   - Touching a live crate now consumes it and applies crate-type reward effects.
@@ -144,6 +149,9 @@ Verification:
   - Added scripted player-shot corner-graze scenario asserting open-lane hits/kills versus blocked wall-graze no-hit behavior.
   - Added scripted enemy projectile corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
+  - Added enemy crate-cover LOS and enemy-hitscan-into-crate unit coverage.
+  - Added mine proximity-trigger crate-obstruction unit coverage.
+  - Added scene-flow coverage for C4 remote-trigger behavior and new explosive readiness runtime counters.
 
 Remaining work for Phase 4:
 

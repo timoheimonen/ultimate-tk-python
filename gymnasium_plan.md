@@ -68,6 +68,8 @@ Per-ray channels (in fixed order):
 8. `crate_present`
 9. `pickup_present`
 10. `projectile_present`
+11. `mine_dist`
+12. `mine_present`
 
 Per-ray encoding:
 - Distance channels normalized to `[0, 1]` using `min(distance, MAX_RAY_RANGE) / MAX_RAY_RANGE`.
@@ -75,7 +77,7 @@ Per-ray encoding:
 - If found: distance normalized value, presence mask = `1.0`.
 
 Ray feature count:
-- `64 * 10 = 640`
+- `64 * 12 = 768`
 
 Scalar context (append after ray features, normalized):
 - `health_norm`, `shield_norm`
