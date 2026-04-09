@@ -129,6 +129,8 @@ python/
 - Self-contained asset destination scaffold created at `python/game_data/`.
 - Section 1 implementation started and completed with a runnable runtime skeleton (`python/src/ultimatetk/core/`).
 - Fixed-step clock (40 FPS target) and scene/state boundaries are in place.
-- Unit tests added for clock behavior and scene flow.
+- Section 2 implementation completed for binary format parsing in `python/src/ultimatetk/formats/`.
+- Unit tests cover clock/scene flow plus EFP/FNT/LEV/palette/options format parsing.
+- Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Planning document created.
 - Gameplay content systems are still placeholders.
