@@ -295,6 +295,57 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.health, 100.0)
         self.assertTrue(crate.alive)
 
+    def test_collect_destroyed_energy_crate_grants_no_reward(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, health=70.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=2,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=0.0,
+            max_health=12.0,
+            alive=False,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 0)
+        self.assertEqual(report.energy_collected, 0.0)
+        self.assertEqual(player.health, 70.0)
+
+    def test_collect_and_destroy_outcomes_are_exclusive_for_single_crate(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=70.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=2,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=180,
+            max_distance=34,
+            weapon_slot=7,
+            impact_x=54,
+            impact_y=40,
+        )
+
+        collect_report = collect_crates_for_player([crate], player)
+        shot_result = resolve_shot_against_enemies(level, [], shot, crates=[crate])
+
+        self.assertEqual(collect_report.crates_collected, 1)
+        self.assertEqual(collect_report.energy_collected, 30.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertIsNone(shot_result.crate_id)
+        self.assertFalse(shot_result.crate_destroyed)
+        self.assertEqual(shot_result.damage, 0.0)
+
     def test_resolve_shot_applies_damage_when_enemy_hit(self) -> None:
         level = _build_level(height=12)
         enemy = EnemyState(enemy_id=0, type_index=0, x=40.0, y=80.0, health=18.0, max_health=18.0)

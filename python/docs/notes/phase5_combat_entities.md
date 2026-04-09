@@ -28,7 +28,7 @@ Current baseline already implemented:
    - Validate removal timing for spent projectiles/explosives so runtime counters and rendered state stay in sync.
    - Validate hit-flash and death state transitions for enemies/crates against expected single-trigger behavior.
 
-3. Crate interaction and reward consistency
+3. Crate interaction and reward consistency (completed)
    - Verify destruction-versus-collection exclusivity for crate outcomes.
    - Validate crate reward application and combat-side crate counters in mixed combat/pickup scenarios.
 
@@ -76,6 +76,21 @@ Current baseline already implemented:
   - dead-state gating is now explicit across direct and delayed enemy attack/projectile paths,
   - spent/invalid combat entities are removed before they can leak post-death side effects into runtime counters,
   - enemy/crate hit-flash and death transitions are covered by non-retrigger regression cases for both direct shot and C4 splash paths.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Started Workstream 3 crate interaction/reward consistency coverage:
+  - Added scene-flow mixed-outcome cases to validate destruction-versus-collection exclusivity at gameplay ordering boundaries:
+    - same-crate same-tick collect-versus-destroy precedence,
+    - full-health energy crate not collected and then destroyed in the same tick,
+    - mixed two-crate tick where one crate is collected and a second crate is destroyed with counters/rewards staying coherent.
+  - Added combat-level exclusivity/reward guards for destroyed crates and post-collection non-destruction checks.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Closed Workstream 3 after validating crate outcome exclusivity and mixed-scenario counter coherence:
+  - Added scripted headless runtime coverage (`test_scripted_mixed_crate_collect_and_destroy_updates_runtime_consistently`) where one crate is collected while another is destroyed in the same runtime window, verifying reward/counter consistency end-to-end.
+  - Confirmed single-crate exclusivity in both directions across unit+scene-flow paths (collect-precedes-destroy on eligible pickup crates, and full-health energy crates remain destroyable without accidental collection).
   - Verified with the full phase command set:
     - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`

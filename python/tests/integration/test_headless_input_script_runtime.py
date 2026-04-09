@@ -19,7 +19,7 @@ from ultimatetk.formats.lev import Block
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, WALL_BLOCK_TYPE
 from ultimatetk.systems import combat
 import ultimatetk.systems.gameplay_scene as gameplay_scene_module
-from ultimatetk.systems.player_control import grant_bullet_ammo
+from ultimatetk.systems.player_control import ShotEvent, grant_bullet_ammo
 
 
 class HeadlessInputScriptRuntimeTests(unittest.TestCase):
@@ -139,6 +139,117 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             app.context.runtime.shop_last_action,
             app.context.runtime.shop_last_category,
             app.context.runtime.shop_last_success,
+        )
+
+    def _run_scripted_crate_collect_destroy_mix_scenario(self) -> tuple[int, int, int, int, bool]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.25,
+            input_script="8:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 10):
+            for tile_x in range(1, 6):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.max_health = 100.0
+        player.health = 70.0
+        player.dead = False
+        player.weapons[1] = False
+
+        crates.append(
+            combat.CrateState(
+                crate_id=0,
+                type1=2,
+                type2=0,
+                x=player.x + 6.0,
+                y=player.y + 6.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+        crates.append(
+            combat.CrateState(
+                crate_id=1,
+                type1=0,
+                type2=0,
+                x=48.0,
+                y=84.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+        player.pending_shots.append(
+            ShotEvent(
+                origin_x=54.0,
+                origin_y=64.0,
+                angle=0,
+                max_distance=170,
+                weapon_slot=7,
+                impact_x=54,
+                impact_y=130,
+            ),
+        )
+
+        gameplay_scene._crates_collected_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._crates_destroyed_by_player = 0  # type: ignore[attr-defined]
+
+        exit_code = app.run()
+        self.assertEqual(exit_code, 0)
+        return (
+            app.context.runtime.crates_collected_by_player,
+            app.context.runtime.crates_destroyed_by_player,
+            app.context.runtime.crates_alive,
+            app.context.runtime.player_health,
+            player.weapons[1],
         )
 
     def _run_scripted_c4_crate_scenario(
@@ -2315,6 +2426,17 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(last_action, "sell")
         self.assertEqual(last_category, "shield")
         self.assertTrue(last_success)
+
+    def test_scripted_mixed_crate_collect_and_destroy_updates_runtime_consistently(self) -> None:
+        crates_collected, crates_destroyed, crates_alive, player_health, weapon_one_owned = (
+            self._run_scripted_crate_collect_destroy_mix_scenario()
+        )
+
+        self.assertEqual(crates_collected, 1)
+        self.assertEqual(crates_destroyed, 1)
+        self.assertEqual(crates_alive, 0)
+        self.assertEqual(player_health, 100)
+        self.assertFalse(weapon_one_owned)
 
     def test_scripted_mine_and_c4_update_explosive_runtime(self) -> None:
         paths = GamePaths.discover()

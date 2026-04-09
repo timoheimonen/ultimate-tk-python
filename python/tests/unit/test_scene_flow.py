@@ -265,6 +265,187 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.crates_collected_by_player, 1)
         self.assertEqual(context.runtime.crates_alive, 0)
 
+    def test_gameplay_collect_beats_same_tick_destroy_for_same_crate(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        if player is None or enemies is None or crates is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        crates.clear()
+        player.health = 70.0
+        crates.append(
+            CrateState(
+                crate_id=0,
+                type1=2,
+                type2=0,
+                x=player.x + 6.0,
+                y=player.y + 6.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+        player.pending_shots.append(
+            ShotEvent(
+                origin_x=player.center_x,
+                origin_y=player.center_y + 10.0,
+                angle=180,
+                max_distance=34,
+                weapon_slot=7,
+                impact_x=int(player.center_x),
+                impact_y=int(player.center_y - 24.0),
+            ),
+        )
+        gameplay_scene._crates_collected_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._crates_destroyed_by_player = 0  # type: ignore[attr-defined]
+
+        manager.update(0.025)
+
+        self.assertEqual(context.runtime.crates_collected_by_player, 1)
+        self.assertEqual(context.runtime.crates_destroyed_by_player, 0)
+        self.assertEqual(context.runtime.crates_alive, 0)
+        self.assertEqual(context.runtime.player_health, 100)
+
+    def test_gameplay_full_health_energy_crate_not_collected_then_destroyed(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        if player is None or enemies is None or crates is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        crates.clear()
+        player.health = 100.0
+        crates.append(
+            CrateState(
+                crate_id=0,
+                type1=2,
+                type2=0,
+                x=player.x + 6.0,
+                y=player.y + 6.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+        player.pending_shots.append(
+            ShotEvent(
+                origin_x=player.center_x,
+                origin_y=player.center_y + 10.0,
+                angle=180,
+                max_distance=34,
+                weapon_slot=7,
+                impact_x=int(player.center_x),
+                impact_y=int(player.center_y - 24.0),
+            ),
+        )
+        gameplay_scene._crates_collected_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._crates_destroyed_by_player = 0  # type: ignore[attr-defined]
+
+        manager.update(0.025)
+
+        self.assertEqual(context.runtime.crates_collected_by_player, 0)
+        self.assertEqual(context.runtime.crates_destroyed_by_player, 1)
+        self.assertEqual(context.runtime.crates_alive, 0)
+        self.assertEqual(context.runtime.player_health, 100)
+
+    def test_gameplay_mixed_crate_collect_and_destroy_counters_are_consistent(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        if player is None or enemies is None or crates is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        crates.clear()
+        player.health = 70.0
+        player.weapons[1] = False
+        crates.append(
+            CrateState(
+                crate_id=0,
+                type1=2,
+                type2=0,
+                x=player.x + 6.0,
+                y=player.y + 6.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+        crates.append(
+            CrateState(
+                crate_id=1,
+                type1=0,
+                type2=0,
+                x=48.0,
+                y=84.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+        player.pending_shots.append(
+            ShotEvent(
+                origin_x=54.0,
+                origin_y=64.0,
+                angle=0,
+                max_distance=170,
+                weapon_slot=7,
+                impact_x=54,
+                impact_y=130,
+            ),
+        )
+        gameplay_scene._crates_collected_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._crates_destroyed_by_player = 0  # type: ignore[attr-defined]
+
+        manager.update(0.025)
+
+        self.assertEqual(context.runtime.crates_collected_by_player, 1)
+        self.assertEqual(context.runtime.crates_destroyed_by_player, 1)
+        self.assertEqual(context.runtime.crates_alive, 0)
+        self.assertEqual(context.runtime.player_health, 100)
+        self.assertFalse(player.weapons[1])
+
     def test_gameplay_runtime_reports_current_weapon_ammo_snapshot(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(
