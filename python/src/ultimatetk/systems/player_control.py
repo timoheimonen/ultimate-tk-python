@@ -27,6 +27,9 @@ CAMERA_ACTION_DEAD_ZONE_X_BONUS = 1
 CAMERA_ACTION_DEAD_ZONE_Y_BONUS = 1
 CAMERA_CATCHUP_DIVISOR = 4
 CAMERA_MAX_STEP = 16
+CAMERA_STRAFE_TURN_DEAD_ZONE_X_REDUCTION = 2
+CAMERA_STRAFE_TURN_DEAD_ZONE_Y_REDUCTION = 1
+CAMERA_EDGE_RELEASE_DEAD_ZONE = 0
 DEFAULT_AIM_DISTANCE = 10.0
 FIRE_ANIMATION_TICKS = 3
 SHOT_EFFECT_TICKS = 3
@@ -273,6 +276,10 @@ class PlayerState:
     hits_taken_total: int = 0
     damage_taken_total: float = 0.0
     walking: bool = False
+    moving_forward: bool = False
+    moving_backward: bool = False
+    strafing: bool = False
+    turning: bool = False
     pending_shots: list[ShotEvent] = field(default_factory=list)
 
     @property
@@ -751,6 +758,10 @@ def apply_player_controls(
 
     if player.dead:
         player.walking = False
+        player.moving_forward = False
+        player.moving_backward = False
+        player.strafing = False
+        player.turning = False
         return
 
     active = set(held_actions)
@@ -758,10 +769,21 @@ def apply_player_controls(
     walked = False
 
     has_strafe_modifier = InputAction.STRAFE_MODIFIER in active
+    turning_left = InputAction.TURN_LEFT in active and not has_strafe_modifier
+    turning_right = InputAction.TURN_RIGHT in active and not has_strafe_modifier
+    strafe_left = (has_strafe_modifier and InputAction.TURN_LEFT in active) or InputAction.STRAFE_LEFT in active
+    strafe_right = (has_strafe_modifier and InputAction.TURN_RIGHT in active) or InputAction.STRAFE_RIGHT in active
+    moving_forward = InputAction.MOVE_FORWARD in active
+    moving_backward = InputAction.MOVE_BACKWARD in active
 
-    if InputAction.TURN_LEFT in active and not has_strafe_modifier:
+    player.turning = turning_left or turning_right
+    player.strafing = strafe_left or strafe_right
+    player.moving_forward = moving_forward
+    player.moving_backward = moving_backward
+
+    if turning_left:
         rotate_player(player, PLAYER_ROTATION_STEP_DEGREES)
-    if (has_strafe_modifier and InputAction.TURN_LEFT in active) or InputAction.STRAFE_LEFT in active:
+    if strafe_left:
         move_player_with_collision(
             player,
             level,
@@ -771,9 +793,9 @@ def apply_player_controls(
         speed_i = player.speed * 0.8
         walked = True
 
-    if InputAction.TURN_RIGHT in active and not has_strafe_modifier:
+    if turning_right:
         rotate_player(player, -PLAYER_ROTATION_STEP_DEGREES)
-    if (has_strafe_modifier and InputAction.TURN_RIGHT in active) or InputAction.STRAFE_RIGHT in active:
+    if strafe_right:
         move_player_with_collision(
             player,
             level,
@@ -783,10 +805,10 @@ def apply_player_controls(
         speed_i = player.speed * 0.8
         walked = True
 
-    if InputAction.MOVE_FORWARD in active:
+    if moving_forward:
         move_player_with_collision(player, level, angle=player.angle, speed=speed_i)
         walked = True
-    if InputAction.MOVE_BACKWARD in active:
+    if moving_backward:
         move_player_with_collision(
             player,
             level,
@@ -1041,8 +1063,10 @@ def follow_player_camera(
     angle_radians = math.radians(player.angle)
 
     look_distance = CAMERA_LOOK_AHEAD_DISTANCE
-    if player.walking:
+    if player.walking and player.moving_forward and not player.moving_backward:
         look_distance += CAMERA_WALK_LOOK_BOOST
+    elif player.walking and player.moving_backward and not player.moving_forward:
+        look_distance = max(0.0, look_distance - CAMERA_WALK_LOOK_BOOST)
 
     look_x = center_x + (look_distance * math.sin(angle_radians))
     look_y = center_y + (look_distance * math.cos(angle_radians))
@@ -1059,15 +1083,50 @@ def follow_player_camera(
         dead_zone_x += CAMERA_ACTION_DEAD_ZONE_X_BONUS
         dead_zone_y += CAMERA_ACTION_DEAD_ZONE_Y_BONUS
 
+    catchup_divisor_x = CAMERA_CATCHUP_DIVISOR
+    catchup_divisor_y = CAMERA_CATCHUP_DIVISOR
+
+    if action_active and not player.walking:
+        catchup_divisor_x = max(1, CAMERA_CATCHUP_DIVISOR - 1)
+        catchup_divisor_y = max(1, CAMERA_CATCHUP_DIVISOR - 1)
+
+    if player.walking and player.strafing and player.turning:
+        dead_zone_x = max(0, dead_zone_x - CAMERA_STRAFE_TURN_DEAD_ZONE_X_REDUCTION)
+        dead_zone_y = max(0, dead_zone_y - CAMERA_STRAFE_TURN_DEAD_ZONE_Y_REDUCTION)
+        catchup_divisor_x = max(1, catchup_divisor_x - 1)
+
+    dead_zone_x = _camera_edge_release_dead_zone(
+        current=camera_x,
+        target=target_camera_x,
+        max_camera=max_camera_x,
+        dead_zone=dead_zone_x,
+    )
+    dead_zone_y = _camera_edge_release_dead_zone(
+        current=camera_y,
+        target=target_camera_y,
+        max_camera=max_camera_y,
+        dead_zone=dead_zone_y,
+    )
+
     if abs(camera_x - target_camera_x) > half_width:
         camera_x = target_camera_x
     else:
-        camera_x = _approach_camera_axis(camera_x, target_camera_x, dead_zone=dead_zone_x)
+        camera_x = _approach_camera_axis(
+            camera_x,
+            target_camera_x,
+            dead_zone=dead_zone_x,
+            catchup_divisor=catchup_divisor_x,
+        )
 
     if abs(camera_y - target_camera_y) > half_height:
         camera_y = target_camera_y
     else:
-        camera_y = _approach_camera_axis(camera_y, target_camera_y, dead_zone=dead_zone_y)
+        camera_y = _approach_camera_axis(
+            camera_y,
+            target_camera_y,
+            dead_zone=dead_zone_y,
+            catchup_divisor=catchup_divisor_y,
+        )
 
     camera_x = _clamp(camera_x, 0, max_camera_x)
     camera_y = _clamp(camera_y, 0, max_camera_y)
@@ -1082,17 +1141,36 @@ def aim_point_from_player(player: PlayerState, distance: float = DEFAULT_AIM_DIS
     return int(x), int(y)
 
 
-def _approach_camera_axis(current: int, target: int, *, dead_zone: int) -> int:
+def _approach_camera_axis(
+    current: int,
+    target: int,
+    *,
+    dead_zone: int,
+    catchup_divisor: int = CAMERA_CATCHUP_DIVISOR,
+) -> int:
     delta = target - current
     abs_delta = abs(delta)
     if abs_delta <= max(0, dead_zone):
         return current
 
-    step = max(1, abs_delta // max(1, CAMERA_CATCHUP_DIVISOR))
+    step = max(1, abs_delta // max(1, catchup_divisor))
     step = min(step, CAMERA_MAX_STEP)
     if delta > 0:
         return current + step
     return current - step
+
+
+def _camera_edge_release_dead_zone(*, current: int, target: int, max_camera: int, dead_zone: int) -> int:
+    if dead_zone <= CAMERA_EDGE_RELEASE_DEAD_ZONE:
+        return dead_zone
+    if max_camera <= 0:
+        return dead_zone
+
+    if current <= 0 and target > 0:
+        return CAMERA_EDGE_RELEASE_DEAD_ZONE
+    if current >= max_camera and target < max_camera:
+        return CAMERA_EDGE_RELEASE_DEAD_ZONE
+    return dead_zone
 
 
 def _is_floor_triplet(

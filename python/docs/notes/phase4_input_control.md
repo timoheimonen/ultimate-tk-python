@@ -29,6 +29,8 @@ Implemented:
   - Camera response smoothing tuned with look-ahead dead-zones and minimum step catch-up so small look-offset deltas no longer stall.
   - Camera large-gap vertical catch-up now snaps at viewport half-height parity (matching horizontal threshold style) to reduce delayed re-centering after abrupt Y-offset jumps.
   - Camera dead-zone handling now treats idle shooting/firing as action-active (tighter dead-zones than fully idle) so turn/aim response while stationary is less sluggish.
+  - Retuned movement/camera response from side-by-side feel capture checks (turn-in-place firing, backward motion, and strafe-turn blends) by adding movement-intent-aware look-ahead and blend-aware dead-zone/catch-up handling.
+  - Retuned map-bound camera clamp/release behavior to avoid sticky edge drift: when re-entering open space from clamped bounds, edge-release dead-zone logic now allows immediate inward camera movement.
   - Added first-pass shop trading helpers with legacy-aligned buy/sell behavior for ammo, weapons, shield, and target system.
   - Added seeded shop sell-price generation matching legacy formulas and player-side shield/target state tracking.
   - Added shop selection/navigation helpers plus normalized buy/sell transaction event helpers for row/column-driven shop flow.
@@ -183,6 +185,8 @@ Verification:
   - Added player C4/mine tight-corridor crate-cover splash unit coverage.
   - Added mine trigger partial-corner near-versus-far unit coverage.
   - Added camera action-active idle dead-zone unit coverage (shoot-hold/fire-animation versus fully idle behavior).
+  - Added camera feel-capture unit coverage for turn-in-place firing catch-up cadence, backward-motion look-ahead damping, and strafe-turn blend dead-zone tightening.
+  - Added camera edge-release unit coverage for right/bottom map-bound clamp exit behavior (no sticky dead-zone hold when target re-enters open space).
   - Added scene-flow coverage for shop cell state classification and state-driven color mapping.
   - Added scene-flow coverage for full shop icon bitmap catalog/distinctness and fixed-width 2-character shop cell label/counter alignment.
   - Added scene-flow HUD warning-transition coverage asserting color-state transitions for low HP, low ammo, unarmed-vs-armed mines, and cool-vs-hot C4 indicators.
@@ -198,5 +202,4 @@ Finalized and locked (do not retune further unless a regression appears):
 
 Remaining work for Phase 4:
 
-- Run side-by-side movement/camera feel checks for turn-in-place firing, backward movement, and strafe-turn blends; tune response constants from those captures.
-- Retune camera edge behavior at map bounds (look-ahead clamp/release) to avoid sticky edge drift when re-entering open space.
+- None. Phase 4 input/control parity checklist is complete.

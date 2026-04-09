@@ -310,6 +310,134 @@ class PlayerControlTests(unittest.TestCase):
 
         self.assertEqual(next_camera_y, target_camera_y)
 
+    def test_follow_camera_turn_in_place_firing_catches_up_faster_than_idle(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        player.angle = 90
+        player.walking = False
+        player.turning = True
+
+        target_camera_x = int(player.center_x + 25.0) - 160
+        start_camera_x = target_camera_x - 14
+        start_camera_y = int(player.center_y) - 100
+
+        idle_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+
+        player.shoot_hold_count = 1
+        firing_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+
+        self.assertGreater(firing_camera_x, idle_camera_x)
+
+    def test_follow_camera_backward_motion_reduces_forward_look_pull(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        player.angle = 90
+        player.walking = True
+
+        start_camera_x = int(player.center_x) - 160
+        start_camera_y = int(player.center_y) - 100
+        max_camera_x = (level.level_x_size * 20) - 320
+        max_camera_y = (level.level_y_size * 20) - 200
+
+        player.moving_forward = True
+        player.moving_backward = False
+        forward_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=max_camera_x,
+            max_camera_y=max_camera_y,
+        )
+
+        player.moving_forward = False
+        player.moving_backward = True
+        backward_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=max_camera_x,
+            max_camera_y=max_camera_y,
+        )
+
+        self.assertGreater(forward_camera_x, start_camera_x)
+        self.assertGreater(backward_camera_x, start_camera_x)
+        self.assertLess(backward_camera_x, forward_camera_x)
+
+    def test_follow_camera_strafe_turn_blend_tightens_dead_zone(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        player.angle = 90
+        player.walking = True
+        player.strafing = True
+        player.turning = False
+
+        target_camera_x = int(player.center_x + 25.0) - 160
+        start_camera_x = target_camera_x - 6
+        start_camera_y = int(player.center_y) - 100
+        max_camera_x = (level.level_x_size * 20) - 320
+        max_camera_y = (level.level_y_size * 20) - 200
+
+        strafe_only_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=max_camera_x,
+            max_camera_y=max_camera_y,
+        )
+        self.assertEqual(strafe_only_camera_x, start_camera_x)
+
+        player.turning = True
+        strafe_turn_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=max_camera_x,
+            max_camera_y=max_camera_y,
+        )
+        self.assertGreater(strafe_turn_camera_x, start_camera_x)
+
+    def test_follow_camera_releases_from_map_edges_without_sticky_dead_zone(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        max_camera_x = (level.level_x_size * 20) - 320
+        max_camera_y = (level.level_y_size * 20) - 200
+
+        player.angle = 90
+        right_target_x = max_camera_x - 4
+        player.x = float((right_target_x + 160 - 25) - 14)
+        released_x, _ = follow_player_camera(
+            camera_x=max_camera_x,
+            camera_y=max_camera_y,
+            player=player,
+            max_camera_x=max_camera_x,
+            max_camera_y=max_camera_y,
+        )
+        self.assertLess(released_x, max_camera_x)
+
+        player.angle = 0
+        bottom_target_y = max_camera_y - 3
+        player.y = float((bottom_target_y + 100 - 25) - 14)
+        _, released_y = follow_player_camera(
+            camera_x=max_camera_x,
+            camera_y=max_camera_y,
+            player=player,
+            max_camera_x=max_camera_x,
+            max_camera_y=max_camera_y,
+        )
+        self.assertLess(released_y, max_camera_y)
+
     def test_diagonal_collision_slides_along_wall_when_forward_axis_blocked(self) -> None:
         level = _build_level(walls={(2, 3), (3, 3)})
         player = PlayerState(x=40.0, y=41.0)
