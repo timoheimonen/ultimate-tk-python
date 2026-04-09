@@ -187,6 +187,7 @@ PLAYER_EXPLOSIVE_SIDE_ONLY_DAMAGE_SCALE = 0.65
 PLAYER_EXPLOSIVE_RAY_TRACE_STEP = 2
 PLAYER_EXPLOSIVE_NARROW_LANE_CLEAR_RATIO = 0.72
 PLAYER_EXPLOSIVE_NARROW_LANE_DAMAGE_SCALE = 0.6
+PLAYER_SPLASH_EDGE_CONTACT_DAMAGE_SCALE = 0.6
 
 PLAYER_C4_FALLOFF_EXPONENT = 1.05
 PLAYER_MINE_FALLOFF_EXPONENT = 1.1
@@ -1235,7 +1236,12 @@ def _mine_contact_triggered(
         if not enemy.alive:
             continue
 
-        distance = math.hypot(enemy.center_x - explosive.x, enemy.center_y - explosive.y)
+        target_x, target_y = _closest_point_on_enemy_collision_bounds(
+            enemy,
+            x=explosive.x,
+            y=explosive.y,
+        )
+        distance = math.hypot(target_x - explosive.x, target_y - explosive.y)
         if distance > trigger_radius:
             continue
 
@@ -1243,14 +1249,38 @@ def _mine_contact_triggered(
             level,
             start_x=explosive.x,
             start_y=explosive.y,
-            end_x=enemy.center_x,
-            end_y=enemy.center_y,
+            end_x=target_x,
+            end_y=target_y,
             step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
             crates=crates,
         ):
             continue
         return True
     return False
+
+
+def _closest_point_on_enemy_collision_bounds(
+    enemy: EnemyState,
+    *,
+    x: float,
+    y: float,
+) -> tuple[float, float]:
+    left = enemy.x + ENEMY_COLLISION_INSET
+    right = enemy.x + ENEMY_SIZE - ENEMY_COLLISION_INSET
+    top = enemy.y + ENEMY_COLLISION_INSET
+    bottom = enemy.y + ENEMY_SIZE - ENEMY_COLLISION_INSET
+    return (
+        _clamp_float(x, left, right),
+        _clamp_float(y, top, bottom),
+    )
+
+
+def _clamp_float(value: float, low: float, high: float) -> float:
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
 
 
 def _player_explosive_damage(
@@ -1783,22 +1813,58 @@ def _explosive_splash_damage(
         max_damage=max_damage,
         radius=radius,
     )
+
+    target_x = player.center_x
+    target_y = player.center_y
+    damage_scale = 1.0
     if damage <= 0.0:
-        return 0.0
+        target_x, target_y = _closest_point_on_player_collision_bounds(
+            player,
+            x=float(impact_x),
+            y=float(impact_y),
+        )
+        damage = _radial_damage(
+            target_x=target_x,
+            target_y=target_y,
+            impact_x=float(impact_x),
+            impact_y=float(impact_y),
+            max_damage=max_damage,
+            radius=radius,
+        )
+        if damage <= 0.0:
+            return 0.0
+        damage_scale = PLAYER_SPLASH_EDGE_CONTACT_DAMAGE_SCALE
+
     if level is None:
-        return damage
+        return damage * damage_scale
 
     ray_coverage = _explosive_ray_coverage(
         level,
         blast_x=float(impact_x),
         blast_y=float(impact_y),
-        target_x=player.center_x,
-        target_y=player.center_y,
+        target_x=target_x,
+        target_y=target_y,
         radius=radius,
     )
     if ray_coverage <= 0.0:
         return 0.0
-    return damage * ray_coverage
+    return damage * ray_coverage * damage_scale
+
+
+def _closest_point_on_player_collision_bounds(
+    player: PlayerState,
+    *,
+    x: float,
+    y: float,
+) -> tuple[float, float]:
+    left = player.x + ENEMY_COLLISION_INSET
+    right = player.x + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET
+    top = player.y + ENEMY_COLLISION_INSET
+    bottom = player.y + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET
+    return (
+        _clamp_float(x, left, right),
+        _clamp_float(y, top, bottom),
+    )
 
 
 def _advance_enemy_projectile(

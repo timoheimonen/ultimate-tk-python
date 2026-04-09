@@ -961,61 +961,65 @@ def move_player_with_collision(
 ) -> None:
     angle_radians = math.radians(angle % 360)
 
-    new_x = player.x + (speed * math.sin(angle_radians))
-    new_y = player.y + (speed * math.cos(angle_radians))
+    move_x = speed * math.sin(angle_radians)
+    move_y = speed * math.cos(angle_radians)
 
-    rnx = int(new_x)
-    rny = int(new_y)
     edge = PLAYER_COLLISION_EDGE
     center_inset = PLAYER_COLLISION_CENTER_INSET
 
-    if new_y < player.y:
-        if _is_floor_triplet(
-            level,
-            x1=rnx + 14 - center_inset,
-            y1=rny + edge,
-            x2=rnx + 14 + center_inset,
-            y2=rny + edge,
-            x3=rnx + 14,
-            y3=rny + edge,
-        ):
-            player.y = new_y
+    if move_y != 0.0:
+        new_y = player.y + move_y
+        rny = int(new_y)
+        rnx = int(player.x)
+        if new_y < player.y:
+            if _is_floor_triplet(
+                level,
+                x1=rnx + 14 - center_inset,
+                y1=rny + edge,
+                x2=rnx + 14 + center_inset,
+                y2=rny + edge,
+                x3=rnx + 14,
+                y3=rny + edge,
+            ):
+                player.y = new_y
+        if new_y > player.y:
+            if _is_floor_triplet(
+                level,
+                x1=rnx + 14 - center_inset,
+                y1=rny + 28 - edge,
+                x2=rnx + 14 + center_inset,
+                y2=rny + 28 - edge,
+                x3=rnx + 14,
+                y3=rny + 28 - edge,
+            ):
+                player.y = new_y
 
-    if new_y > player.y:
-        if _is_floor_triplet(
-            level,
-            x1=rnx + 14 - center_inset,
-            y1=rny + 28 - edge,
-            x2=rnx + 14 + center_inset,
-            y2=rny + 28 - edge,
-            x3=rnx + 14,
-            y3=rny + 28 - edge,
-        ):
-            player.y = new_y
-
-    if new_x < player.x:
-        if _is_floor_triplet(
-            level,
-            x1=rnx + edge,
-            y1=rny + 14 - center_inset,
-            x2=rnx + edge,
-            y2=rny + 14 + center_inset,
-            x3=rnx + edge,
-            y3=rny + 14,
-        ):
-            player.x = new_x
-
-    if new_x > player.x:
-        if _is_floor_triplet(
-            level,
-            x1=rnx + 28 - edge,
-            y1=rny + 14 - center_inset,
-            x2=rnx + 28 - edge,
-            y2=rny + 14 + center_inset,
-            x3=rnx + 28 - edge,
-            y3=rny + 14,
-        ):
-            player.x = new_x
+    if move_x != 0.0:
+        new_x = player.x + move_x
+        rnx = int(new_x)
+        rny = int(player.y)
+        if new_x < player.x:
+            if _is_floor_triplet(
+                level,
+                x1=rnx + edge,
+                y1=rny + 14 - center_inset,
+                x2=rnx + edge,
+                y2=rny + 14 + center_inset,
+                x3=rnx + edge,
+                y3=rny + 14,
+            ):
+                player.x = new_x
+        if new_x > player.x:
+            if _is_floor_triplet(
+                level,
+                x1=rnx + 28 - edge,
+                y1=rny + 14 - center_inset,
+                x2=rnx + 28 - edge,
+                y2=rny + 14 + center_inset,
+                x3=rnx + 28 - edge,
+                y3=rny + 14,
+            ):
+                player.x = new_x
 
 
 def follow_player_camera(
@@ -1046,7 +1050,7 @@ def follow_player_camera(
     else:
         camera_x = _approach_camera_axis(camera_x, target_camera_x, dead_zone=CAMERA_DEAD_ZONE_X)
 
-    if abs(camera_y - target_camera_y) > 120:
+    if abs(camera_y - target_camera_y) > half_height:
         camera_y = target_camera_y
     else:
         camera_y = _approach_camera_axis(camera_y, target_camera_y, dead_zone=CAMERA_DEAD_ZONE_Y)

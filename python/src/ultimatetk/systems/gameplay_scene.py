@@ -1510,18 +1510,25 @@ class GameplayScene(BaseScene):
             self._HUD_VALUE_COLOR,
         )
 
-        hint_text = (
-            f"LD {int(reload_ratio * 100):03d}% M {mines_armed:02d}/{mines_active:02d} "
-            f"C4 {c4_hot:02d}/{c4_active:02d} R/ENT SHOP"
-        )
+        hint_load = f"LD {int(reload_ratio * 100):03d}% "
+        hint_mine = f"M {mines_armed:02d}/{mines_active:02d} "
+        hint_c4 = f"C4 {c4_hot:02d}/{c4_active:02d} "
+        hint_shop = "R/ENT SHOP"
+        hint_text = f"{hint_load}{hint_mine}{hint_c4}{hint_shop}"
         hint_x = max(4, SCREEN_WIDTH - ((len(hint_text) + 1) * 8))
-        self._draw_shop_text(
-            pixels,
-            hint_x,
-            panel_y + 18,
-            hint_text,
-            self._HUD_MUTED_COLOR,
-        )
+        cursor_x = hint_x
+        self._draw_shop_text(pixels, cursor_x, panel_y + 18, hint_load, self._HUD_MUTED_COLOR)
+        cursor_x += len(hint_load) * 8
+
+        mine_hint_color = self._HUD_MUTED_COLOR if mines_active <= 0 else mine_meter_color
+        self._draw_shop_text(pixels, cursor_x, panel_y + 18, hint_mine, mine_hint_color)
+        cursor_x += len(hint_mine) * 8
+
+        c4_hint_color = self._HUD_MUTED_COLOR if c4_active <= 0 else c4_meter_color
+        self._draw_shop_text(pixels, cursor_x, panel_y + 18, hint_c4, c4_hint_color)
+        cursor_x += len(hint_c4) * 8
+
+        self._draw_shop_text(pixels, cursor_x, panel_y + 18, hint_shop, self._HUD_MUTED_COLOR)
 
     def _draw_meter(
         self,

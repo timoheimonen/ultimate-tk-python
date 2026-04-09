@@ -166,6 +166,8 @@ python/
 - Added crate-aware mine proximity trigger parity so live crates can also block mine contact-trigger LOS checks (not just walls).
 - Added C4 activator follow-up parity in gameplay flow: firing C4 while a charge is already active now remote-triggers existing C4 charges instead of deploying another.
 - HUD/runtime explosive-readiness telemetry expanded with mine armed-count and C4 hot-count, and HUD overlay now renders dedicated readiness bars plus armed/hot status readouts.
+- Retuned mine proximity trigger contact math to use nearest enemy collision-bounds points (instead of center-only distance/LOS), improving tight edge-contact trigger parity; HUD hint/readout now color-codes mine/C4 readiness values for quicker in-combat parsing.
+- Retuned movement/camera/combat micro-parity: diagonal collision now resolves per-axis with current orthogonal probes for cleaner wall-slide behavior, camera vertical large-gap snap now uses viewport half-height parity, and explosive splash adds scaled player-collision-edge fallback when center-only splash misses.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

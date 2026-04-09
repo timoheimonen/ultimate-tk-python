@@ -21,11 +21,13 @@ Implemented:
   - Legacy movement behavior for forward/backward, strafe modifier, and dedicated strafe keys.
   - Wall collision checks based on floor-vs-wall level blocks.
   - Refined collision probe checks (triple-point edge probes) for less edge-graze clipping and improved corner stability.
+  - Retuned axis collision resolution so diagonal moves re-evaluate probes per-axis (using current orthogonal position), reducing corner stickiness and improving wall-slide behavior when one axis is blocked.
   - Weapon slot cycling and direct slot selection.
   - Initial shoot/reload cadence based on legacy weapon loading times.
   - Simple shot tracing to wall impact points for first combat plumbing.
   - Camera follow behavior adapted from legacy `Player::move_scr`.
   - Camera response smoothing tuned with look-ahead dead-zones and minimum step catch-up so small look-offset deltas no longer stall.
+  - Camera large-gap vertical catch-up now snaps at viewport half-height parity (matching horizontal threshold style) to reduce delayed re-centering after abrupt Y-offset jumps.
   - Added first-pass shop trading helpers with legacy-aligned buy/sell behavior for ammo, weapons, shield, and target system.
   - Added seeded shop sell-price generation matching legacy formulas and player-side shield/target state tracking.
   - Added shop selection/navigation helpers plus normalized buy/sell transaction event helpers for row/column-driven shop flow.
@@ -58,8 +60,10 @@ Implemented:
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
   - Added crate-aware enemy cover/impact handling: enemy LOS checks now treat live crates as blockers, and non-projectile enemy hitscan traces impact/damage crates instead of piercing through them.
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
+  - Retuned mine proximity-trigger contact geometry so trigger checks use nearest enemy collision-bounds points (not only enemy centers), improving edge-contact trigger parity.
   - Added crate-aware mine proximity trigger gating so live crates can block enemy contact-trigger LOS checks (matching wall obstruction behavior).
   - Added C4 activator follow-up behavior in gameplay flow: firing the C4 slot while a C4 charge is already active now remote-triggers existing charges instead of placing another charge.
+  - Retuned enemy explosive splash-to-player edge handling with collision-bounds fallback: if player-center splash miss occurs but the collision box edge is inside blast radius, apply scaled edge-contact splash damage instead of full center miss.
   - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
   - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
   - Added additional scripted-obstruction parity hooks for mine/C4 micro-cases (diagonal graze and one-tile choke variants).
@@ -89,6 +93,7 @@ Implemented:
   - Shop overlay cell rendering now includes icon-like pixel glyphs with per-weapon/per-ammo identity (distinct silhouettes for each weapon slot and ammo type) plus highlighted selected-state icon color.
   - HUD layout/styling updated with multi-meter bars (health/ammo/reload), denser status readout, and explicit active mine/C4 counters.
   - HUD explosive status polish now includes armed-vs-active mine counts and hot-vs-active C4 counts, with dedicated readiness meters for mine arming and near-fuse C4 state.
+  - HUD hint/readout polish now color-codes explosive readiness segments (mine and C4 status values) for faster glance parsing while preserving compact legacy-style text layout.
   - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
   - HUD/runtime telemetry now also exposes mine armed-count and C4 hot-count snapshots for explosive readiness visibility.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
@@ -151,6 +156,8 @@ Verification:
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
   - Added enemy crate-cover LOS and enemy-hitscan-into-crate unit coverage.
   - Added mine proximity-trigger crate-obstruction unit coverage.
+  - Added mine proximity-trigger edge-contact coverage for enemy collision-bounds trigger checks.
+  - Added projectile splash edge-contact coverage for player collision-bounds fallback handling.
   - Added scene-flow coverage for C4 remote-trigger behavior and new explosive readiness runtime counters.
 
 Remaining work for Phase 4:

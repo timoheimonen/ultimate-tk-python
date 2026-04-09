@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 import unittest
@@ -1347,6 +1348,33 @@ class CombatSystemTests(unittest.TestCase):
         self.assertLess(total_damage, 20.0)
         self.assertLess(player.health, 100.0)
 
+    def test_projectile_splash_hits_player_collision_edge_not_only_center(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=67.0,
+                y=54.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=1,
+                radius=0,
+                splash_radius=10,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player)
+
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertGreater(report.damage_to_player, 0.0)
+        self.assertLess(report.damage_to_player, 20.0)
+        self.assertEqual(len(projectiles), 0)
+        self.assertLess(player.health, 100.0)
+
     def test_grenade_projectile_near_miss_is_fully_blocked_by_wall_fan(self) -> None:
         level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3), (2, 4)})
@@ -1828,6 +1856,47 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.enemies_killed, 1)
         self.assertEqual(len(explosives), 0)
         self.assertFalse(enemy.alive)
+
+    def test_player_mine_trigger_uses_enemy_collision_bounds_not_only_center(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=60.0,
+            y=50.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=54,
+            impact_y=98,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+
+        self.assertGreater(math.hypot(enemy.center_x - explosive.x, enemy.center_y - explosive.y), 14.0)
+        explosive.arming_ticks = 1
+        explosive.fuse_ticks = 5
+        explosive.trigger_radius = 14
+
+        explosives = [explosive]
+        report = update_player_explosives(
+            explosives,
+            [enemy],
+            player,
+            level=level,
+        )
+
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(len(explosives), 0)
 
     def test_player_mine_proximity_trigger_respects_wall_obstruction(self) -> None:
         open_level = _build_level(height=12)

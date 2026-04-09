@@ -43,6 +43,7 @@ from ultimatetk.systems.player_control import (
     follow_player_camera,
     generate_shop_sell_prices,
     grant_bullet_ammo,
+    move_player_with_collision,
     move_shop_selection,
     player_health_capacity,
     sell_selected_shop_item,
@@ -220,6 +221,32 @@ class PlayerControlTests(unittest.TestCase):
             max_camera_y=(level.level_y_size * 20) - 200,
         )
         self.assertGreater(next_camera_x, start_camera_x)
+
+    def test_follow_camera_large_vertical_gap_snaps_to_target(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        player.angle = 0
+
+        target_camera_y = int(player.center_y + 25.0) - 100
+        start_camera_y = target_camera_y - 110
+        _, next_camera_y = follow_player_camera(
+            camera_x=int(player.center_x) - 160,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+
+        self.assertEqual(next_camera_y, target_camera_y)
+
+    def test_diagonal_collision_slides_along_wall_when_forward_axis_blocked(self) -> None:
+        level = _build_level(walls={(2, 3), (3, 3)})
+        player = PlayerState(x=40.0, y=41.0)
+
+        move_player_with_collision(player, level, angle=45, speed=2.0)
+
+        self.assertGreater(player.x, 40.0)
+        self.assertAlmostEqual(player.y, 41.0)
 
     def test_aim_point_tracks_player_angle(self) -> None:
         level = _build_level()
