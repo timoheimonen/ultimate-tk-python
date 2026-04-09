@@ -26,11 +26,15 @@ from ultimatetk.systems.player_control import (
     apply_player_controls,
     bullet_ammo_capacities_snapshot,
     bullet_ammo_pools_snapshot,
+    bullet_shop_cost_for_type,
+    bullet_shop_units_for_type,
+    buy_bullet_ammo_from_shop,
     consume_pending_shots,
     current_weapon_ammo_snapshot,
     cycle_weapon_slot,
     follow_player_camera,
     grant_bullet_ammo,
+    sell_bullet_ammo_to_shop,
     select_weapon_slot_if_owned,
     spawn_player_from_level,
 )
@@ -312,6 +316,47 @@ class PlayerControlTests(unittest.TestCase):
             bullet_ammo_pools_snapshot(player),
             (300, 0, 7, 150, 0, 100, 99, 3000, 100),
         )
+
+    def test_shop_buy_uses_legacy_cost_and_mul(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=20)
+
+        gained = buy_bullet_ammo_from_shop(player, 7)
+
+        self.assertEqual(bullet_shop_cost_for_type(7), 6)
+        self.assertEqual(bullet_shop_units_for_type(7), 10)
+        self.assertEqual(gained, 10)
+        self.assertEqual(player.bullets[7], 10)
+        self.assertEqual(player.cash, 14)
+
+    def test_shop_buy_fails_without_cash_or_capacity(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=2)
+
+        gained = buy_bullet_ammo_from_shop(player, 0)
+        self.assertEqual(gained, 0)
+        self.assertEqual(player.bullets[0], 0)
+        self.assertEqual(player.cash, 2)
+
+        player.cash = 20
+        player.bullets[0] = 300
+        gained = buy_bullet_ammo_from_shop(player, 0)
+        self.assertEqual(gained, 0)
+        self.assertEqual(player.bullets[0], 300)
+        self.assertEqual(player.cash, 20)
+
+    def test_shop_sell_grants_cash_and_handles_partial_stack(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=0)
+        player.bullets[0] = 1
+
+        sold = sell_bullet_ammo_to_shop(player, 0)
+        self.assertEqual(sold, 1)
+        self.assertEqual(player.bullets[0], 0)
+        self.assertEqual(player.cash, 3)
+
+        player.bullets[7] = 6
+        sold = sell_bullet_ammo_to_shop(player, 7)
+        self.assertEqual(sold, 6)
+        self.assertEqual(player.bullets[7], 0)
+        self.assertEqual(player.cash, 9)
 
 
 if __name__ == "__main__":

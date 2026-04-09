@@ -84,6 +84,30 @@ BULLET_TYPE_MAX_UNITS: tuple[int, ...] = (
     100,
 )
 
+BULLET_TYPE_SHOP_COSTS: tuple[int, ...] = (
+    3,
+    5,
+    6,
+    70,
+    100,
+    200,
+    150,
+    6,
+    150,
+)
+
+BULLET_TYPE_SHOP_UNITS_PER_PURCHASE: tuple[int, ...] = (
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    10,
+    1,
+)
+
 
 def _default_weapon_slots() -> list[bool]:
     slots = [False] * PLAYER_WEAPON_SLOTS
@@ -103,6 +127,7 @@ class PlayerState:
     speed: float = PLAYER_BASE_SPEED
     max_health: float = PLAYER_MAX_HEALTH
     health: float = PLAYER_MAX_HEALTH
+    cash: int = 0
     dead: bool = False
     current_weapon: int = 0
     weapons: list[bool] = field(default_factory=_default_weapon_slots)
@@ -169,6 +194,18 @@ def bullet_capacity_units_for_type(bullet_type_index: int) -> int:
     return BULLET_TYPE_MAX_UNITS[0]
 
 
+def bullet_shop_cost_for_type(bullet_type_index: int) -> int:
+    if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_COSTS):
+        return BULLET_TYPE_SHOP_COSTS[bullet_type_index]
+    return BULLET_TYPE_SHOP_COSTS[0]
+
+
+def bullet_shop_units_for_type(bullet_type_index: int) -> int:
+    if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_UNITS_PER_PURCHASE):
+        return BULLET_TYPE_SHOP_UNITS_PER_PURCHASE[bullet_type_index]
+    return BULLET_TYPE_SHOP_UNITS_PER_PURCHASE[0]
+
+
 def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) -> int:
     if amount <= 0:
         return 0
@@ -183,6 +220,38 @@ def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) 
 
     player.bullets[bullet_type_index] = current + gained
     return gained
+
+
+def buy_bullet_ammo_from_shop(player: PlayerState, bullet_type_index: int) -> int:
+    if bullet_type_index < 0 or bullet_type_index >= len(player.bullets):
+        return 0
+
+    cost = max(0, bullet_shop_cost_for_type(bullet_type_index))
+    if player.cash < cost:
+        return 0
+
+    amount = max(0, bullet_shop_units_for_type(bullet_type_index))
+    gained = grant_bullet_ammo(player, bullet_type_index, amount)
+    if gained <= 0:
+        return 0
+
+    player.cash -= cost
+    return gained
+
+
+def sell_bullet_ammo_to_shop(player: PlayerState, bullet_type_index: int) -> int:
+    if bullet_type_index < 0 or bullet_type_index >= len(player.bullets):
+        return 0
+
+    current = max(0, player.bullets[bullet_type_index])
+    if current <= 0:
+        return 0
+
+    amount = max(1, bullet_shop_units_for_type(bullet_type_index))
+    sold = min(current, amount)
+    player.bullets[bullet_type_index] = current - sold
+    player.cash += max(0, bullet_shop_cost_for_type(bullet_type_index))
+    return sold
 
 
 def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:

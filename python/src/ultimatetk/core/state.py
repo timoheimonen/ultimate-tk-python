@@ -34,6 +34,7 @@ class RuntimeState:
     player_load_count: int = 0
     player_fire_ticks: int = 0
     player_shots_fired_total: int = 0
+    player_cash: int = 0
     player_health: int = 0
     player_dead: bool = False
     player_hits_total: int = 0

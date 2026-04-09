@@ -109,6 +109,7 @@ class GameplayScene(BaseScene):
         context.runtime.player_load_count = 0
         context.runtime.player_fire_ticks = 0
         context.runtime.player_shots_fired_total = 0
+        context.runtime.player_cash = 0
         context.runtime.player_health = 0
         context.runtime.player_dead = False
         context.runtime.player_hits_total = 0
@@ -585,6 +586,7 @@ class GameplayScene(BaseScene):
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
             context.runtime.player_shots_fired_total = 0
+            context.runtime.player_cash = 0
             context.runtime.player_health = 0
             context.runtime.player_dead = False
             context.runtime.player_hits_total = 0
@@ -619,6 +621,7 @@ class GameplayScene(BaseScene):
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
         context.runtime.player_shots_fired_total = self._player.shots_fired_total
+        context.runtime.player_cash = self._player.cash
         context.runtime.player_health = int(self._player.health)
         context.runtime.player_dead = self._player.dead
         context.runtime.player_hits_total = self._enemy_hits_by_player

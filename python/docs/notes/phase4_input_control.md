@@ -24,6 +24,7 @@ Implemented:
   - Initial shoot/reload cadence based on legacy weapon loading times.
   - Simple shot tracing to wall impact points for first combat plumbing.
   - Camera follow behavior adapted from legacy `Player::move_scr`.
+  - Added first-pass shop ammo trading helpers with legacy-aligned per-type cost/multiplier tables and player cash tracking.
 - Combat scaffolding in `python/src/ultimatetk/systems/combat.py`:
   - Deterministic enemy spawn from level enemy counts.
   - Hitscan-style shot resolution against walls and enemy hitboxes.
@@ -45,7 +46,7 @@ Implemented:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.
   - Camera follows the player and aiming direction.
-  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, enemy counters, and crate counters.
+  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, cash, hits, enemy counters, and crate counters.
   - Runtime metadata now also includes current-weapon ammo snapshot fields plus full per-type ammo pool/capacity snapshots for HUD/shop parity scaffolding.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
@@ -77,5 +78,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
-- Extend HUD/shop parity from telemetry scaffolding into ammo purchasing/selling behavior.
+- Extend HUD/shop parity from first-pass ammo trading helpers into full shop flow (weapon/shield/target purchases and sell-price variation).
 - Continue parity tuning for collision feel and camera response.
