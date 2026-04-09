@@ -28,10 +28,13 @@ from ultimatetk.systems.combat import (
     advance_enemy_effects,
     alive_enemy_count,
     collect_crates_for_player,
+    deploy_player_explosive_from_shot,
+    is_player_explosive_weapon_slot,
     resolve_enemy_attack_against_player,
     resolve_shot_against_enemies,
     spawn_crates_for_level,
     spawn_enemies_for_level,
+    update_player_explosives,
     update_enemy_behavior,
     update_enemy_projectiles,
 )
@@ -780,6 +783,130 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(total_hits, 1)
         self.assertAlmostEqual(total_damage, 0.4)
         self.assertAlmostEqual(player.health, 99.6)
+
+    def test_player_explosive_slot_detection_and_deploy_defaults(self) -> None:
+        c4_shot = ShotEvent(
+            origin_x=60.0,
+            origin_y=60.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=60,
+            impact_y=94,
+        )
+        mine_shot = ShotEvent(
+            origin_x=80.0,
+            origin_y=80.0,
+            angle=180,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=80,
+            impact_y=46,
+        )
+
+        self.assertTrue(is_player_explosive_weapon_slot(9))
+        self.assertTrue(is_player_explosive_weapon_slot(11))
+        self.assertFalse(is_player_explosive_weapon_slot(1))
+
+        c4 = deploy_player_explosive_from_shot(c4_shot)
+        mine = deploy_player_explosive_from_shot(mine_shot)
+        self.assertIsNotNone(c4)
+        self.assertIsNotNone(mine)
+
+        assert c4 is not None
+        assert mine is not None
+        self.assertEqual(c4.kind, "c4")
+        self.assertEqual(c4.fuse_ticks, 100)
+        self.assertEqual(c4.arming_ticks, 0)
+        self.assertEqual(c4.radius, 80)
+
+        self.assertEqual(mine.kind, "mine")
+        self.assertEqual(mine.fuse_ticks, 2000)
+        self.assertEqual(mine.arming_ticks, 26)
+        self.assertEqual(mine.radius, 20)
+
+    def test_player_c4_fuse_explosion_damages_enemy_and_crate(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=84.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+        explosive.fuse_ticks = 1
+
+        explosives = [explosive]
+        report = update_player_explosives(explosives, [enemy], player, crates=[crate])
+
+        self.assertEqual(report.detonations, 1)
+        self.assertGreaterEqual(report.enemies_hit, 1)
+        self.assertGreaterEqual(report.enemies_killed, 1)
+        self.assertGreaterEqual(report.crates_hit, 1)
+        self.assertGreaterEqual(report.crates_destroyed, 1)
+        self.assertEqual(len(explosives), 0)
+        self.assertFalse(enemy.alive)
+        self.assertFalse(crate.alive)
+
+    def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=80.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=enemy.center_x,
+            origin_y=enemy.center_y,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=int(enemy.center_x),
+            impact_y=int(enemy.center_y),
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+
+        explosives = [explosive]
+        for _ in range(25):
+            report = update_player_explosives(explosives, [enemy], player)
+            self.assertEqual(report.detonations, 0)
+            self.assertEqual(len(explosives), 1)
+
+        report = update_player_explosives(explosives, [enemy], player)
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(report.enemies_hit, 1)
+        self.assertEqual(report.enemies_killed, 1)
+        self.assertEqual(len(explosives), 0)
+        self.assertFalse(enemy.alive)
 
     def test_enemy_behavior_does_not_shoot_through_walls(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})

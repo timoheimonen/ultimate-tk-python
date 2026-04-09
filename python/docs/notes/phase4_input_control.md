@@ -34,6 +34,7 @@ Implemented:
   - Added weapon-specific enemy pellet volleys (shotgun/auto-shotgun spread) for more legacy-like fire behavior.
   - Added explosive near-miss splash damage for grenade-class enemy shots and low tick-damage handling for flamethrower shots.
   - Added enemy projectile entities with travel-time simulation, wall impact handling, splash falloff, and per-frame projectile updates.
+  - Added first-pass player explosive entities for mine/C4 weapons (deploy from player shots, mine arming delay/contact trigger, fuse expiry, and radial detonation damage against enemies/crates/player).
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
@@ -84,6 +85,7 @@ Verification:
 
 Remaining work for Phase 4:
 
-- Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
+- Extend combat behavior with richer projectile/explosive parity details and additional enemy behavior tuning.
+- Continue mine/C4 parity refinement (detonation feel, wall interaction, and blast-model tuning versus legacy explosive rays).
 - Continue refining visual shop/HUD parity toward legacy presentation (icon-like cell glyphs, color/layout polish, and HUD styling/detail parity).
 - Continue parity tuning for collision feel and camera response.

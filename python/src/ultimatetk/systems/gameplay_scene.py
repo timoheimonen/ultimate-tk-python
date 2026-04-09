@@ -24,14 +24,18 @@ from ultimatetk.systems.combat import (
     CrateState,
     EnemyProjectile,
     EnemyState,
+    PlayerExplosive,
     advance_crate_effects,
     advance_enemy_effects,
     alive_crate_count,
     alive_enemy_count,
     collect_crates_for_player,
+    deploy_player_explosive_from_shot,
+    is_player_explosive_weapon_slot,
     resolve_shot_against_enemies,
     spawn_crates_for_level,
     spawn_enemies_for_level,
+    update_player_explosives,
     update_enemy_behavior,
     update_enemy_projectiles,
 )
@@ -80,6 +84,9 @@ class GameplayScene(BaseScene):
     _GAME_OVER_RETURN_TICKS = 80
     _PROJECTILE_MARKER_PIXELS = bytes((252, 252, 252, 252))
     _PROJECTILE_MARKER_SIZE = 2
+    _PLAYER_EXPLOSIVE_MARKER_SIZE = 3
+    _PLAYER_C4_MARKER_PIXELS = bytes((28,)) * (_PLAYER_EXPLOSIVE_MARKER_SIZE * _PLAYER_EXPLOSIVE_MARKER_SIZE)
+    _PLAYER_MINE_MARKER_PIXELS = bytes((112,)) * (_PLAYER_EXPLOSIVE_MARKER_SIZE * _PLAYER_EXPLOSIVE_MARKER_SIZE)
     _CRATE_FRAME_SIZE = CRATE_SIZE
     _SHOP_GRID_ORIGIN_X = 8
     _SHOP_GRID_ORIGIN_Y = 132
@@ -142,6 +149,7 @@ class GameplayScene(BaseScene):
         self._enemies: list[EnemyState] = []
         self._crates: list[CrateState] = []
         self._enemy_projectiles: list[EnemyProjectile] = []
+        self._player_explosives: list[PlayerExplosive] = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._crates_destroyed_by_player = 0
@@ -228,6 +236,7 @@ class GameplayScene(BaseScene):
         self._enemies = []
         self._crates = []
         self._enemy_projectiles = []
+        self._player_explosives = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._crates_destroyed_by_player = 0
@@ -350,6 +359,7 @@ class GameplayScene(BaseScene):
         self._enemies.clear()
         self._crates.clear()
         self._enemy_projectiles.clear()
+        self._player_explosives.clear()
         self._crates_destroyed_by_player = 0
         self._crates_collected_by_player = 0
 
@@ -415,6 +425,16 @@ class GameplayScene(BaseScene):
                 collected = collect_crates_for_player(self._crates, self._player)
                 self._crates_collected_by_player += collected.crates_collected
                 self._resolve_pending_player_shots()
+
+                explosive_report = update_player_explosives(
+                    self._player_explosives,
+                    self._enemies,
+                    self._player,
+                    crates=self._crates,
+                )
+                self._enemy_hits_by_player += explosive_report.enemies_hit
+                self._enemies_killed_by_player += explosive_report.enemies_killed
+                self._crates_destroyed_by_player += explosive_report.crates_destroyed
 
                 report = update_enemy_behavior(
                     self._level,
@@ -546,6 +566,24 @@ class GameplayScene(BaseScene):
                     pixels=self._PROJECTILE_MARKER_PIXELS,
                     anchor_x=self._PROJECTILE_MARKER_SIZE // 2,
                     anchor_y=self._PROJECTILE_MARKER_SIZE // 2,
+                    translucent=False,
+                ),
+            )
+
+        for explosive in self._player_explosives:
+            marker_pixels = self._PLAYER_MINE_MARKER_PIXELS
+            if explosive.kind == "c4":
+                marker_pixels = self._PLAYER_C4_MARKER_PIXELS
+
+            sprites.append(
+                WorldSprite(
+                    world_x=int(explosive.x),
+                    world_y=int(explosive.y),
+                    width=self._PLAYER_EXPLOSIVE_MARKER_SIZE,
+                    height=self._PLAYER_EXPLOSIVE_MARKER_SIZE,
+                    pixels=marker_pixels,
+                    anchor_x=self._PLAYER_EXPLOSIVE_MARKER_SIZE // 2,
+                    anchor_y=self._PLAYER_EXPLOSIVE_MARKER_SIZE // 2,
                     translucent=False,
                 ),
             )
@@ -1178,6 +1216,16 @@ class GameplayScene(BaseScene):
             return
 
         for shot in consume_pending_shots(self._player):
+            if is_player_explosive_weapon_slot(shot.weapon_slot):
+                explosive = deploy_player_explosive_from_shot(shot)
+                if explosive is None:
+                    continue
+
+                self._player_explosives.append(explosive)
+                self._player.shot_effect_x = int(explosive.x)
+                self._player.shot_effect_y = int(explosive.y)
+                continue
+
             result = resolve_shot_against_enemies(
                 self._level,
                 self._enemies,
@@ -1301,6 +1349,7 @@ class GameplayScene(BaseScene):
         self._shop_sell_requested = False
         self._shop_toggle_requested = False
         self._enemy_projectiles.clear()
+        self._player_explosives.clear()
         context.runtime.mode = AppMode.GAME_OVER
         context.logger.info(
             "Player died, entering game-over flow (%d ticks)",

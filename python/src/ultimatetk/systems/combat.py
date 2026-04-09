@@ -154,6 +154,17 @@ WEAPON_PROJECTILE_RADIUS: tuple[int, ...] = (
     0,
 )
 
+PLAYER_WEAPON_C4_SLOT = 9
+PLAYER_WEAPON_MINE_SLOT = 11
+
+PLAYER_C4_FUSE_TICKS = 100
+PLAYER_MINE_FUSE_TICKS = 2000
+PLAYER_MINE_SLEEP_TICKS = 25
+
+PLAYER_C4_EXPLOSION_RADIUS = 80
+PLAYER_MINE_EXPLOSION_RADIUS = 20
+PLAYER_EXPLOSIVE_BASE_DAMAGE = 30.0
+
 
 @dataclass(slots=True)
 class EnemyState:
@@ -268,6 +279,29 @@ class EnemyProjectile:
     remaining_ticks: int
     radius: int
     splash_radius: int = 0
+
+
+@dataclass(slots=True)
+class PlayerExplosive:
+    kind: str
+    x: float
+    y: float
+    angle: int
+    fuse_ticks: int
+    arming_ticks: int
+    radius: int
+    damage: float
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerExplosiveReport:
+    detonations: int = 0
+    enemies_hit: int = 0
+    enemies_killed: int = 0
+    crates_hit: int = 0
+    crates_destroyed: int = 0
+    player_hit: bool = False
+    damage_to_player: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -860,6 +894,214 @@ def update_enemy_projectiles(
         crates_hit=crates_hit,
         crates_destroyed=crates_destroyed,
     )
+
+
+def is_player_explosive_weapon_slot(weapon_slot: int) -> bool:
+    return weapon_slot in (PLAYER_WEAPON_C4_SLOT, PLAYER_WEAPON_MINE_SLOT)
+
+
+def deploy_player_explosive_from_shot(shot: ShotEvent) -> PlayerExplosive | None:
+    if shot.weapon_slot == PLAYER_WEAPON_C4_SLOT:
+        return PlayerExplosive(
+            kind="c4",
+            x=shot.origin_x,
+            y=shot.origin_y,
+            angle=shot.angle,
+            fuse_ticks=PLAYER_C4_FUSE_TICKS,
+            arming_ticks=0,
+            radius=PLAYER_C4_EXPLOSION_RADIUS,
+            damage=PLAYER_EXPLOSIVE_BASE_DAMAGE,
+        )
+
+    if shot.weapon_slot == PLAYER_WEAPON_MINE_SLOT:
+        return PlayerExplosive(
+            kind="mine",
+            x=shot.origin_x,
+            y=shot.origin_y,
+            angle=shot.angle,
+            fuse_ticks=PLAYER_MINE_FUSE_TICKS,
+            arming_ticks=PLAYER_MINE_SLEEP_TICKS + 1,
+            radius=PLAYER_MINE_EXPLOSION_RADIUS,
+            damage=PLAYER_EXPLOSIVE_BASE_DAMAGE,
+        )
+
+    return None
+
+
+def update_player_explosives(
+    explosives: list[PlayerExplosive],
+    enemies: Sequence[EnemyState],
+    player: PlayerState,
+    *,
+    crates: Sequence[CrateState] | None = None,
+) -> PlayerExplosiveReport:
+    if not explosives:
+        return PlayerExplosiveReport()
+
+    active: list[PlayerExplosive] = []
+    detonations = 0
+    enemies_hit = 0
+    enemies_killed = 0
+    crates_hit = 0
+    crates_destroyed = 0
+    player_hit = False
+    damage_to_player = 0.0
+
+    for explosive in explosives:
+        if explosive.arming_ticks > 0:
+            explosive.arming_ticks -= 1
+        explosive.fuse_ticks -= 1
+
+        should_detonate = explosive.fuse_ticks <= 0
+        if not should_detonate and explosive.kind == "mine" and explosive.arming_ticks <= 0:
+            trigger_x = int(explosive.x)
+            trigger_y = int(explosive.y)
+            should_detonate = _enemy_at_point(enemies, x=trigger_x, y=trigger_y) is not None
+            if not should_detonate:
+                should_detonate = _player_at_point(player, x=trigger_x, y=trigger_y)
+
+        if not should_detonate:
+            active.append(explosive)
+            continue
+
+        detonations += 1
+        detonation = _detonate_player_explosive(
+            explosive,
+            enemies,
+            player,
+            crates=crates,
+        )
+        enemies_hit += detonation.enemies_hit
+        enemies_killed += detonation.enemies_killed
+        crates_hit += detonation.crates_hit
+        crates_destroyed += detonation.crates_destroyed
+        if detonation.player_damage > 0:
+            player_hit = True
+            damage_to_player += detonation.player_damage
+
+    explosives[:] = active
+    return PlayerExplosiveReport(
+        detonations=detonations,
+        enemies_hit=enemies_hit,
+        enemies_killed=enemies_killed,
+        crates_hit=crates_hit,
+        crates_destroyed=crates_destroyed,
+        player_hit=player_hit,
+        damage_to_player=damage_to_player,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _PlayerExplosiveDetonation:
+    enemies_hit: int = 0
+    enemies_killed: int = 0
+    crates_hit: int = 0
+    crates_destroyed: int = 0
+    player_damage: float = 0.0
+
+
+def _detonate_player_explosive(
+    explosive: PlayerExplosive,
+    enemies: Sequence[EnemyState],
+    player: PlayerState,
+    *,
+    crates: Sequence[CrateState] | None = None,
+) -> _PlayerExplosiveDetonation:
+    blast_x, blast_y = _player_explosive_blast_center(explosive)
+
+    enemies_hit = 0
+    enemies_killed = 0
+    for enemy in enemies:
+        if not enemy.alive:
+            continue
+
+        damage = _radial_damage(
+            target_x=enemy.center_x,
+            target_y=enemy.center_y,
+            impact_x=blast_x,
+            impact_y=blast_y,
+            max_damage=explosive.damage,
+            radius=explosive.radius,
+        )
+        if damage <= 0:
+            continue
+
+        enemy.hit_flash_ticks = ENEMY_FLASH_TICKS
+        enemies_hit += 1
+        if enemy.apply_damage(damage):
+            enemies_killed += 1
+
+    crates_hit = 0
+    crates_destroyed = 0
+    if crates is not None:
+        for crate in crates:
+            if not crate.alive:
+                continue
+
+            damage = _radial_damage(
+                target_x=crate.center_x,
+                target_y=crate.center_y,
+                impact_x=blast_x,
+                impact_y=blast_y,
+                max_damage=explosive.damage,
+                radius=explosive.radius,
+            )
+            if damage <= 0:
+                continue
+
+            crate.hit_flash_ticks = CRATE_FLASH_TICKS
+            crates_hit += 1
+            if crate.apply_damage(damage):
+                crates_destroyed += 1
+
+    player_damage = _radial_damage(
+        target_x=player.center_x,
+        target_y=player.center_y,
+        impact_x=blast_x,
+        impact_y=blast_y,
+        max_damage=explosive.damage,
+        radius=explosive.radius,
+    )
+    if player_damage > 0:
+        apply_player_damage(player, player_damage)
+
+    return _PlayerExplosiveDetonation(
+        enemies_hit=enemies_hit,
+        enemies_killed=enemies_killed,
+        crates_hit=crates_hit,
+        crates_destroyed=crates_destroyed,
+        player_damage=player_damage,
+    )
+
+
+def _player_explosive_blast_center(explosive: PlayerExplosive) -> tuple[float, float]:
+    angle_radians = math.radians(explosive.angle % 360)
+    return (
+        explosive.x - (5.0 * math.sin(angle_radians)),
+        explosive.y - (5.0 * math.cos(angle_radians)),
+    )
+
+
+def _radial_damage(
+    *,
+    target_x: float,
+    target_y: float,
+    impact_x: float,
+    impact_y: float,
+    max_damage: float,
+    radius: int,
+) -> float:
+    if radius <= 0 or max_damage <= 0:
+        return 0.0
+
+    distance = math.hypot(target_x - impact_x, target_y - impact_y)
+    if distance >= radius:
+        return 0.0
+
+    falloff = 1.0 - (distance / radius)
+    if falloff <= 0:
+        return 0.0
+    return max_damage * falloff
 
 
 def _can_enemy_fire(
