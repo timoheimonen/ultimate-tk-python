@@ -36,7 +36,7 @@ Current baseline already implemented:
    - Verify ammo consumption/refund rules across normal fire, trigger-only follow-ups, and empty-weapon fallback paths.
    - Verify runtime telemetry invariants (shots/hits/damage/explosive counts) for monotonic and state-consistent updates.
 
-5. Regression expansion and lock criteria (in progress)
+5. Regression expansion and lock criteria (completed)
    - Add unit micro-cases for any uncovered combat/entity ordering boundaries.
    - Add scripted headless (`--input-script`) runtime scenarios for parity-sensitive transitions.
    - Keep Phase 4 finalized bundles locked unless a regression is proven.
@@ -141,6 +141,12 @@ Current baseline already implemented:
   - Verified with the full phase command set:
     - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Closed Workstream 5 after final regression lock sweep and phase criteria verification:
+  - Re-ran targeted lock micro-cases for Phase 4 invariants: mine nearest-collision trigger ordering, HUD warning/readiness tint transitions, camera dead-zone/edge-release parity, and C4 trigger-only + dead-player projectile telemetry gating.
+  - Re-ran the full phase verification command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+  - All Phase 5 workstreams are now completed with passing unit/integration coverage, and this phase is ready for handoff to Phase 6.
 
 ## Verification plan
 
