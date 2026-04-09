@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
 from ultimatetk.core.boot_scene import BootScene
 from ultimatetk.core.config import RuntimeConfig
 from ultimatetk.core.context import GameContext
+from ultimatetk.core.events import AppEvent, InputAction
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.scenes import SceneManager
 from ultimatetk.systems.combat import CrateState
@@ -161,6 +162,104 @@ class SceneFlowTests(unittest.TestCase):
             context.runtime.player_ammo_pools,
             (37, 0, 0, 0, 0, 0, 0, 3000, 0),
         )
+
+    def test_gameplay_shop_toggle_buy_and_sell_updates_runtime(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.cash = 500
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.TOGGLE_SHOP),))
+        manager.update(0.025)
+        self.assertTrue(context.runtime.shop_active)
+        self.assertEqual(context.runtime.shop_selection_row, 0)
+        self.assertEqual(context.runtime.shop_selection_column, 0)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertTrue(player.weapons[1])
+        self.assertEqual(context.runtime.player_cash, 100)
+        self.assertEqual(context.runtime.shop_last_action, "buy")
+        self.assertEqual(context.runtime.shop_last_category, "weapon")
+        self.assertTrue(context.runtime.shop_last_success)
+        self.assertEqual(context.runtime.shop_last_cash_delta, -400)
+
+        sell_price = gameplay_scene._shop_sell_prices.weapon_slots[0]
+        manager.handle_events((AppEvent.action_pressed(InputAction.NEXT_WEAPON),))
+        manager.update(0.025)
+        self.assertFalse(player.weapons[1])
+        self.assertEqual(context.runtime.player_cash, 100 + sell_price)
+        self.assertEqual(context.runtime.shop_last_action, "sell")
+        self.assertEqual(context.runtime.shop_last_category, "weapon")
+        self.assertTrue(context.runtime.shop_last_success)
+        self.assertEqual(context.runtime.shop_last_cash_delta, sell_price)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.TOGGLE_SHOP),))
+        manager.update(0.025)
+        self.assertFalse(context.runtime.shop_active)
+
+    def test_gameplay_shop_navigation_clamps_and_reports_failed_buy(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.TOGGLE_SHOP),))
+        manager.update(0.025)
+        self.assertTrue(context.runtime.shop_active)
+
+        for _ in range(20):
+            manager.handle_events((AppEvent.action_pressed(InputAction.TURN_RIGHT),))
+            manager.update(0.025)
+        self.assertEqual(context.runtime.shop_selection_row, 0)
+        self.assertEqual(context.runtime.shop_selection_column, 10)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.MOVE_BACKWARD),))
+        manager.update(0.025)
+        self.assertEqual(context.runtime.shop_selection_row, 1)
+        self.assertEqual(context.runtime.shop_selection_column, 8)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.MOVE_BACKWARD),))
+        manager.update(0.025)
+        self.assertEqual(context.runtime.shop_selection_row, 2)
+        self.assertEqual(context.runtime.shop_selection_column, 1)
+
+        player.cash = 0
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertEqual(context.runtime.shop_last_action, "buy")
+        self.assertEqual(context.runtime.shop_last_category, "target")
+        self.assertFalse(context.runtime.shop_last_success)
+        self.assertEqual(context.runtime.shop_last_units, 0)
+        self.assertEqual(context.runtime.shop_last_cash_delta, 0)
 
 
 if __name__ == "__main__":

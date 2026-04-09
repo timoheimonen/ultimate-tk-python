@@ -117,7 +117,8 @@ class TerminalPlatformBackend:
 
         context.logger.info(
             "Terminal controls: WASD/arrows move-turn, Q/E strafe, TAB next weapon, "
-            "` 1-0 - select weapon, SPACE shoot, ESC quits",
+            "` 1-0 - select weapon, SPACE shoot, R/ENTER toggle shop "
+            "(W/S rows, A/D cols, SPACE buy, TAB sell), ESC quits",
         )
 
     def poll_events(self) -> Sequence[AppEvent]:
@@ -232,9 +233,11 @@ def _log_runtime_status(
 
     ammo_pools = context.runtime.player_ammo_pools
     ammo_pools_text = ",".join(str(units) for units in ammo_pools) if ammo_pools else "-"
+    shop_action = context.runtime.shop_last_action if context.runtime.shop_last_action else "-"
+    shop_category = context.runtime.shop_last_category if context.runtime.shop_last_category else "-"
 
     context.logger.info(
-        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d cash=%d shield=%d target=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
+        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d cash=%d shield=%d target=%d shop=%d ssel=%d,%d stx=%s/%s ssucc=%d sunits=%d sdelta=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
         frame,
         context.runtime.mode.value,
         scene_name,
@@ -258,6 +261,14 @@ def _log_runtime_status(
         context.runtime.player_cash,
         context.runtime.player_shield,
         context.runtime.player_target_system_enabled,
+        context.runtime.shop_active,
+        context.runtime.shop_selection_row,
+        context.runtime.shop_selection_column,
+        shop_action,
+        shop_category,
+        context.runtime.shop_last_success,
+        context.runtime.shop_last_units,
+        context.runtime.shop_last_cash_delta,
         context.runtime.player_health,
         context.runtime.player_dead,
         context.runtime.enemy_hits_total,

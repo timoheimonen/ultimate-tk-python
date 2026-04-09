@@ -12,6 +12,7 @@ _ACTION_ALIASES: dict[str, str] = {
     "LSTRAFE": "STRAFE_LEFT",
     "RSTRAFE": "STRAFE_RIGHT",
     "NEXT": "NEXT_WEAPON",
+    "SHOP": "TOGGLE_SHOP",
 }
 
 

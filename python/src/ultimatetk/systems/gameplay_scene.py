@@ -37,13 +37,20 @@ from ultimatetk.systems.combat import (
 from ultimatetk.systems.player_control import (
     PLAYER_CENTER_OFFSET,
     PlayerState,
+    ShopSellPriceTable,
+    ShopTransactionEvent,
     aim_point_from_player,
     apply_player_controls,
     bullet_ammo_capacities_snapshot,
     bullet_ammo_pools_snapshot,
-    current_weapon_ammo_snapshot,
+    buy_selected_shop_item,
+    clamp_shop_selection,
     consume_pending_shots,
+    current_weapon_ammo_snapshot,
     follow_player_camera,
+    generate_shop_sell_prices,
+    move_shop_selection,
+    sell_selected_shop_item,
     spawn_player_from_level,
 )
 
@@ -70,6 +77,20 @@ class GameplayScene(BaseScene):
         self._held_actions: set[InputAction] = set()
         self._cycle_weapon_requested = False
         self._pending_weapon_slot: int | None = None
+        self._shop_active = False
+        self._shop_row = 0
+        self._shop_column = 0
+        self._shop_sell_prices = ShopSellPriceTable(
+            weapon_slots=(),
+            shield_base=0,
+            target_system=0,
+        )
+        self._shop_nav_row_delta = 0
+        self._shop_nav_column_delta = 0
+        self._shop_buy_requested = False
+        self._shop_sell_requested = False
+        self._shop_toggle_requested = False
+        self._shop_last_transaction: ShopTransactionEvent | None = None
 
         self._static_sprites: tuple[WorldSprite, ...] = ()
         self._target_pixels: bytes | None = None
@@ -112,6 +133,14 @@ class GameplayScene(BaseScene):
         context.runtime.player_cash = 0
         context.runtime.player_shield = 0
         context.runtime.player_target_system_enabled = False
+        context.runtime.shop_active = False
+        context.runtime.shop_selection_row = 0
+        context.runtime.shop_selection_column = 0
+        context.runtime.shop_last_action = ""
+        context.runtime.shop_last_category = ""
+        context.runtime.shop_last_success = False
+        context.runtime.shop_last_units = 0
+        context.runtime.shop_last_cash_delta = 0
         context.runtime.player_health = 0
         context.runtime.player_dead = False
         context.runtime.player_hits_total = 0
@@ -134,6 +163,20 @@ class GameplayScene(BaseScene):
         self._held_actions.clear()
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
+        self._shop_active = False
+        self._shop_row = 0
+        self._shop_column = 0
+        self._shop_sell_prices = ShopSellPriceTable(
+            weapon_slots=(),
+            shield_base=0,
+            target_system=0,
+        )
+        self._shop_nav_row_delta = 0
+        self._shop_nav_column_delta = 0
+        self._shop_buy_requested = False
+        self._shop_sell_requested = False
+        self._shop_toggle_requested = False
+        self._shop_last_transaction = None
         self._target_pixels = None
         self._target_width = 0
         self._target_height = 0
@@ -194,6 +237,9 @@ class GameplayScene(BaseScene):
 
         self._level = level
         self._player = spawn_player_from_level(level)
+        sell_seed = (context.session.episode_index * 1000) + context.session.level_index
+        self._shop_sell_prices = generate_shop_sell_prices(random_seed=sell_seed)
+        self._shop_row, self._shop_column = clamp_shop_selection(0, 0)
 
         options = repo.try_load_options()
         if options is not None:
@@ -232,7 +278,7 @@ class GameplayScene(BaseScene):
 
         self._publish_player_runtime_state(context)
         context.logger.info(
-            "Gameplay phase-4 controls ready: %s/%s dark=%s lights=%s shadows=%s enemies=%d crates=%d",
+            "Gameplay phase-4 controls ready: %s/%s dark=%s lights=%s shadows=%s enemies=%d crates=%d shop_seed=%d",
             episode,
             level_name,
             self._render_flags.dark_mode,
@@ -240,6 +286,7 @@ class GameplayScene(BaseScene):
             self._render_flags.shadows,
             len(self._enemies),
             len(self._crates),
+            sell_seed,
         )
 
     def on_exit(self, context: GameContext) -> None:
@@ -247,6 +294,13 @@ class GameplayScene(BaseScene):
         self._held_actions.clear()
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
+        self._shop_active = False
+        self._shop_nav_row_delta = 0
+        self._shop_nav_column_delta = 0
+        self._shop_buy_requested = False
+        self._shop_sell_requested = False
+        self._shop_toggle_requested = False
+        self._shop_last_transaction = None
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
         self._enemies.clear()
@@ -262,6 +316,14 @@ class GameplayScene(BaseScene):
 
         for event in events:
             if event.type == EventType.ACTION_PRESSED and event.action is not None:
+                if event.action == InputAction.TOGGLE_SHOP:
+                    self._shop_toggle_requested = True
+                    continue
+
+                if self._shop_active:
+                    self._queue_shop_action(event.action)
+                    continue
+
                 if event.action == InputAction.NEXT_WEAPON:
                     self._cycle_weapon_requested = True
                 else:
@@ -269,11 +331,15 @@ class GameplayScene(BaseScene):
                 continue
 
             if event.type == EventType.ACTION_RELEASED and event.action is not None:
-                if event.action != InputAction.NEXT_WEAPON:
+                if self._shop_active:
+                    continue
+                if event.action not in (InputAction.NEXT_WEAPON, InputAction.TOGGLE_SHOP):
                     self._held_actions.discard(event.action)
                 continue
 
             if event.type == EventType.WEAPON_SELECT and event.weapon_slot is not None:
+                if self._shop_active:
+                    continue
                 self._pending_weapon_slot = event.weapon_slot
 
         return None
@@ -289,43 +355,54 @@ class GameplayScene(BaseScene):
         elif not self._game_over_active:
             context.runtime.mode = AppMode.GAMEPLAY
 
-            apply_player_controls(
-                self._player,
-                self._level,
-                self._held_actions,
-                cycle_weapon=self._cycle_weapon_requested,
-                select_weapon_slot=self._pending_weapon_slot,
-            )
-            collected = collect_crates_for_player(self._crates, self._player)
-            self._crates_collected_by_player += collected.crates_collected
-            self._resolve_pending_player_shots()
+            if self._shop_toggle_requested:
+                self._toggle_shop(context)
 
-            report = update_enemy_behavior(
-                self._level,
-                self._enemies,
-                self._player,
-                enemy_projectiles=self._enemy_projectiles,
-            )
-            projectile_report = update_enemy_projectiles(
-                self._level,
-                self._enemy_projectiles,
-                self._player,
-                crates=self._crates,
-            )
-            self._enemy_shots_fired += report.shots_fired
-            self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
-            self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
-            advance_enemy_effects(self._enemies)
-            advance_crate_effects(self._crates)
+            if self._shop_active:
+                self._update_shop_state(context)
+            else:
+                apply_player_controls(
+                    self._player,
+                    self._level,
+                    self._held_actions,
+                    cycle_weapon=self._cycle_weapon_requested,
+                    select_weapon_slot=self._pending_weapon_slot,
+                )
+                collected = collect_crates_for_player(self._crates, self._player)
+                self._crates_collected_by_player += collected.crates_collected
+                self._resolve_pending_player_shots()
 
-            if self._player.dead:
-                self._activate_game_over(context)
-                transition = self._update_game_over_flow(context)
+                report = update_enemy_behavior(
+                    self._level,
+                    self._enemies,
+                    self._player,
+                    enemy_projectiles=self._enemy_projectiles,
+                )
+                projectile_report = update_enemy_projectiles(
+                    self._level,
+                    self._enemy_projectiles,
+                    self._player,
+                    crates=self._crates,
+                )
+                self._enemy_shots_fired += report.shots_fired
+                self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
+                self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
+                advance_enemy_effects(self._enemies)
+                advance_crate_effects(self._crates)
+
+                if self._player.dead:
+                    self._activate_game_over(context)
+                    transition = self._update_game_over_flow(context)
         else:
             context.runtime.mode = AppMode.GAME_OVER
 
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
+        self._shop_toggle_requested = False
+        self._shop_nav_row_delta = 0
+        self._shop_nav_column_delta = 0
+        self._shop_buy_requested = False
+        self._shop_sell_requested = False
 
         self._spot_phase = (self._spot_phase + 2) % 360
         self._camera_x, self._camera_y = follow_player_camera(
@@ -541,15 +618,111 @@ class GameplayScene(BaseScene):
             if result.crate_destroyed:
                 self._crates_destroyed_by_player += 1
 
+    def _queue_shop_action(self, action: InputAction) -> None:
+        if action == InputAction.MOVE_FORWARD:
+            self._shop_nav_row_delta -= 1
+            return
+        if action == InputAction.MOVE_BACKWARD:
+            self._shop_nav_row_delta += 1
+            return
+        if action in (InputAction.TURN_LEFT, InputAction.STRAFE_LEFT):
+            self._shop_nav_column_delta -= 1
+            return
+        if action in (InputAction.TURN_RIGHT, InputAction.STRAFE_RIGHT):
+            self._shop_nav_column_delta += 1
+            return
+        if action == InputAction.SHOOT:
+            self._shop_buy_requested = True
+            return
+        if action == InputAction.NEXT_WEAPON:
+            self._shop_sell_requested = True
+
+    def _toggle_shop(self, context: GameContext) -> None:
+        if self._game_over_active:
+            return
+
+        if self._shop_active:
+            self._shop_active = False
+            self._shop_nav_row_delta = 0
+            self._shop_nav_column_delta = 0
+            self._shop_buy_requested = False
+            self._shop_sell_requested = False
+            context.logger.info("Shop closed")
+            return
+
+        if not self._shop_sell_prices.weapon_slots:
+            sell_seed = (context.session.episode_index * 1000) + context.session.level_index
+            self._shop_sell_prices = generate_shop_sell_prices(random_seed=sell_seed)
+
+        self._shop_active = True
+        self._held_actions.clear()
+        self._cycle_weapon_requested = False
+        self._pending_weapon_slot = None
+        self._shop_nav_row_delta = 0
+        self._shop_nav_column_delta = 0
+        self._shop_buy_requested = False
+        self._shop_sell_requested = False
+        self._shop_row, self._shop_column = clamp_shop_selection(self._shop_row, self._shop_column)
+        context.logger.info("Shop opened row=%d col=%d", self._shop_row, self._shop_column)
+
+    def _update_shop_state(self, context: GameContext) -> None:
+        if self._player is None:
+            return
+
+        self._shop_row, self._shop_column = move_shop_selection(
+            self._shop_row,
+            self._shop_column,
+            row_delta=self._shop_nav_row_delta,
+            column_delta=self._shop_nav_column_delta,
+        )
+
+        if self._shop_buy_requested:
+            event = buy_selected_shop_item(self._player, self._shop_row, self._shop_column)
+            self._shop_last_transaction = event
+            self._log_shop_transaction(context, event)
+
+        if self._shop_sell_requested:
+            event = sell_selected_shop_item(
+                self._player,
+                self._shop_row,
+                self._shop_column,
+                self._shop_sell_prices,
+            )
+            self._shop_last_transaction = event
+            self._log_shop_transaction(context, event)
+
+    def _log_shop_transaction(self, context: GameContext, event: ShopTransactionEvent) -> None:
+        if self._player is None:
+            return
+
+        result = "ok" if event.success else "blocked"
+        context.logger.info(
+            "Shop %s %s row=%d col=%d units=%d cash_delta=%d cash=%d result=%s",
+            event.action,
+            event.category,
+            event.row,
+            event.column,
+            event.units,
+            event.cash_delta,
+            self._player.cash,
+            result,
+        )
+
     def _activate_game_over(self, context: GameContext) -> None:
         if self._game_over_active:
             return
 
         self._game_over_active = True
         self._game_over_ticks_remaining = self._GAME_OVER_RETURN_TICKS
+        self._shop_active = False
         self._held_actions.clear()
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
+        self._shop_nav_row_delta = 0
+        self._shop_nav_column_delta = 0
+        self._shop_buy_requested = False
+        self._shop_sell_requested = False
+        self._shop_toggle_requested = False
         self._enemy_projectiles.clear()
         context.runtime.mode = AppMode.GAME_OVER
         context.logger.info(
@@ -591,6 +764,14 @@ class GameplayScene(BaseScene):
             context.runtime.player_cash = 0
             context.runtime.player_shield = 0
             context.runtime.player_target_system_enabled = False
+            context.runtime.shop_active = False
+            context.runtime.shop_selection_row = 0
+            context.runtime.shop_selection_column = 0
+            context.runtime.shop_last_action = ""
+            context.runtime.shop_last_category = ""
+            context.runtime.shop_last_success = False
+            context.runtime.shop_last_units = 0
+            context.runtime.shop_last_cash_delta = 0
             context.runtime.player_health = 0
             context.runtime.player_dead = False
             context.runtime.player_hits_total = 0
@@ -628,6 +809,21 @@ class GameplayScene(BaseScene):
         context.runtime.player_cash = self._player.cash
         context.runtime.player_shield = self._player.shield
         context.runtime.player_target_system_enabled = self._player.target_system_enabled
+        context.runtime.shop_active = self._shop_active
+        context.runtime.shop_selection_row = self._shop_row
+        context.runtime.shop_selection_column = self._shop_column
+        if self._shop_last_transaction is None:
+            context.runtime.shop_last_action = ""
+            context.runtime.shop_last_category = ""
+            context.runtime.shop_last_success = False
+            context.runtime.shop_last_units = 0
+            context.runtime.shop_last_cash_delta = 0
+        else:
+            context.runtime.shop_last_action = self._shop_last_transaction.action
+            context.runtime.shop_last_category = self._shop_last_transaction.category
+            context.runtime.shop_last_success = self._shop_last_transaction.success
+            context.runtime.shop_last_units = self._shop_last_transaction.units
+            context.runtime.shop_last_cash_delta = self._shop_last_transaction.cash_delta
         context.runtime.player_health = int(self._player.health)
         context.runtime.player_dead = self._player.dead
         context.runtime.player_hits_total = self._enemy_hits_by_player

@@ -26,6 +26,7 @@ Implemented:
   - Camera follow behavior adapted from legacy `Player::move_scr`.
   - Added first-pass shop trading helpers with legacy-aligned buy/sell behavior for ammo, weapons, shield, and target system.
   - Added seeded shop sell-price generation matching legacy formulas and player-side shield/target state tracking.
+  - Added shop selection/navigation helpers plus normalized buy/sell transaction event helpers for row/column-driven shop flow.
 - Combat scaffolding in `python/src/ultimatetk/systems/combat.py`:
   - Deterministic enemy spawn from level enemy counts.
   - Hitscan-style shot resolution against walls and enemy hitboxes.
@@ -49,6 +50,9 @@ Implemented:
   - Camera follows the player and aiming direction.
   - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, cash, shield level, target-system flag, hits, enemy counters, and crate counters.
   - Runtime metadata now also includes current-weapon ammo snapshot fields plus full per-type ammo pool/capacity snapshots for HUD/shop parity scaffolding.
+  - Added first-pass in-game shop mode toggled via input action, with row/column selection movement and buy/sell transaction handling wired into shop helpers.
+  - Added deterministic per-level sell-price table generation hook on gameplay scene enter.
+  - Runtime metadata now includes shop-active flag, shop selection row/column, and latest transaction outcome fields.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
   - Touching a live crate now consumes it and applies crate-type reward effects.
@@ -79,5 +83,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
-- Integrate shop helpers into actual UI/shop scene flow and level lifecycle hooks.
+- Build visual shop UI/HUD presentation parity (price panels, ownership/ammo counters, and feedback text) on top of the current interactive shop flow plumbing.
 - Continue parity tuning for collision feel and camera response.

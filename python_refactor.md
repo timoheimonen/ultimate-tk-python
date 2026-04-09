@@ -146,7 +146,7 @@ python/
 - Added first-pass crate pickup/reward flow (player overlap collection, weapon unlock crates, bullet-pack crates, and energy restore crates).
 - Added first-pass player ammo economy parity hooks (weapon ammo gating/consumption, bullet-crate ammo grants with per-type capacity caps, and empty-weapon fallback to fist).
 - Runtime telemetry now exposes ammo telemetry snapshots for HUD/shop parity work (current-weapon ammo type/units/cap plus full per-type ammo pools and capacities).
-- Added first-pass shop trading helpers with legacy-aligned price tables (ammo, weapons, shield, and target system), seeded sell-price generation, and runtime cash/shield/target telemetry plumbing.
+- Added first-pass shop trading parity for ammo/weapons/shield/target, seeded sell-price generation, and in-scene shop flow plumbing (toggle, row/column selection, buy/sell transaction events, and runtime shop telemetry).
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
@@ -155,4 +155,4 @@ python/
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Combat/entity/progression systems are still in progress (advanced projectile edge cases, HUD/shop ammo parity, UI/progression flow).
+- Combat/entity/progression systems are still in progress (advanced projectile edge cases, visual HUD/shop parity, and broader UI/progression flow).

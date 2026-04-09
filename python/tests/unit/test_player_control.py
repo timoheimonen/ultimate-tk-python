@@ -29,22 +29,27 @@ from ultimatetk.systems.player_control import (
     bullet_ammo_pools_snapshot,
     bullet_shop_cost_for_type,
     bullet_shop_units_for_type,
+    buy_selected_shop_item,
     buy_shield_from_shop,
     buy_target_system_from_shop,
     buy_bullet_ammo_from_shop,
     buy_weapon_from_shop,
+    clamp_shop_selection,
     consume_pending_shots,
     current_weapon_ammo_snapshot,
     cycle_weapon_slot,
     follow_player_camera,
     generate_shop_sell_prices,
     grant_bullet_ammo,
+    move_shop_selection,
+    sell_selected_shop_item,
     sell_shield_to_shop,
     sell_target_system_to_shop,
     sell_bullet_ammo_to_shop,
     sell_weapon_to_shop,
     select_weapon_slot_if_owned,
     shield_shop_buy_cost_for_level,
+    shop_column_count_for_row,
     spawn_player_from_level,
     weapon_sell_price_for_slot,
     weapon_shop_cost_for_slot,
@@ -474,6 +479,76 @@ class PlayerControlTests(unittest.TestCase):
         self.assertFalse(player.target_system_enabled)
         self.assertEqual(player.cash, 222)
         self.assertFalse(sell_target_system_to_shop(player, sell_prices))
+
+    def test_shop_selection_clamps_by_row_column_counts(self) -> None:
+        self.assertEqual(shop_column_count_for_row(0), 11)
+        self.assertEqual(shop_column_count_for_row(1), 9)
+        self.assertEqual(shop_column_count_for_row(2), 2)
+
+        self.assertEqual(clamp_shop_selection(-5, -2), (0, 0))
+        self.assertEqual(clamp_shop_selection(0, 99), (0, 10))
+        self.assertEqual(clamp_shop_selection(1, 99), (1, 8))
+        self.assertEqual(clamp_shop_selection(2, 99), (2, 1))
+        self.assertEqual(clamp_shop_selection(99, 99), (2, 1))
+
+    def test_move_shop_selection_clamps_when_switching_rows(self) -> None:
+        row, column = move_shop_selection(1, 8, row_delta=1)
+        self.assertEqual((row, column), (2, 1))
+
+        row, column = move_shop_selection(row, column, row_delta=-2, column_delta=50)
+        self.assertEqual((row, column), (0, 10))
+
+    def test_buy_selected_shop_item_returns_transaction_metadata(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=500)
+
+        event = buy_selected_shop_item(player, 0, 0)
+        self.assertEqual(event.action, "buy")
+        self.assertEqual(event.category, "weapon")
+        self.assertTrue(event.success)
+        self.assertEqual(event.units, 1)
+        self.assertEqual(event.cash_delta, -400)
+        self.assertTrue(player.weapons[1])
+        self.assertEqual(player.cash, 100)
+
+        event = buy_selected_shop_item(player, 1, 7)
+        self.assertEqual(event.category, "ammo")
+        self.assertTrue(event.success)
+        self.assertEqual(event.units, 10)
+        self.assertEqual(event.cash_delta, -6)
+        self.assertEqual(player.bullets[7], 10)
+
+    def test_sell_selected_shop_item_returns_transaction_metadata(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, cash=0, shield=2, target_system_enabled=True)
+        player.grant_weapon(2)
+        player.bullets[0] = 1
+        sell_prices = ShopSellPriceTable(
+            weapon_slots=(5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+            shield_base=100,
+            target_system=50,
+        )
+
+        event = sell_selected_shop_item(player, 0, 1, sell_prices)
+        self.assertEqual(event.action, "sell")
+        self.assertEqual(event.category, "weapon")
+        self.assertTrue(event.success)
+        self.assertEqual(event.cash_delta, 6)
+        self.assertFalse(player.weapons[2])
+
+        event = sell_selected_shop_item(player, 1, 0, sell_prices)
+        self.assertEqual(event.category, "ammo")
+        self.assertTrue(event.success)
+        self.assertEqual(event.units, 1)
+        self.assertEqual(event.cash_delta, 3)
+
+        event = sell_selected_shop_item(player, 2, 0, sell_prices)
+        self.assertEqual(event.category, "shield")
+        self.assertTrue(event.success)
+        self.assertEqual(event.cash_delta, 107)
+
+        event = sell_selected_shop_item(player, 2, 1, sell_prices)
+        self.assertEqual(event.category, "target")
+        self.assertTrue(event.success)
+        self.assertEqual(event.cash_delta, 50)
 
 
 if __name__ == "__main__":

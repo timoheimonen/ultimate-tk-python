@@ -50,6 +50,17 @@ class ShopSellPriceTable:
     target_system: int
 
 
+@dataclass(frozen=True, slots=True)
+class ShopTransactionEvent:
+    action: str
+    category: str
+    row: int
+    column: int
+    success: bool
+    units: int
+    cash_delta: int
+
+
 WEAPON_PROFILES: tuple[WeaponProfile, ...] = (
     WeaponProfile(loading_time=10, is_gun=False),
     WeaponProfile(loading_time=10, is_gun=True),
@@ -99,6 +110,15 @@ SHOP_SHIELD_BASE_COST = 160
 SHOP_SHIELD_LEVEL_COST_STEP = 15
 SHOP_SHIELD_MAX_LEVEL = 30
 SHOP_TARGET_SYSTEM_COST = 500
+
+SHOP_ROW_WEAPONS = 0
+SHOP_ROW_AMMO = 1
+SHOP_ROW_OTHER = 2
+SHOP_ROW_COLUMN_COUNTS: tuple[int, ...] = (
+    DIFF_WEAPONS,
+    DIFF_BULLETS,
+    2,
+)
 
 BULLET_TYPE_MAX_UNITS: tuple[int, ...] = (
     300,
@@ -240,6 +260,33 @@ def bullet_shop_units_for_type(bullet_type_index: int) -> int:
     if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_UNITS_PER_PURCHASE):
         return BULLET_TYPE_SHOP_UNITS_PER_PURCHASE[bullet_type_index]
     return BULLET_TYPE_SHOP_UNITS_PER_PURCHASE[0]
+
+
+def shop_column_count_for_row(row: int) -> int:
+    if 0 <= row < len(SHOP_ROW_COLUMN_COUNTS):
+        return SHOP_ROW_COLUMN_COUNTS[row]
+    return SHOP_ROW_COLUMN_COUNTS[SHOP_ROW_WEAPONS]
+
+
+def clamp_shop_selection(row: int, column: int) -> tuple[int, int]:
+    max_row = len(SHOP_ROW_COLUMN_COUNTS) - 1
+    clamped_row = min(max(0, row), max_row)
+    max_column = max(1, shop_column_count_for_row(clamped_row))
+    clamped_column = min(max(0, column), max_column - 1)
+    return clamped_row, clamped_column
+
+
+def move_shop_selection(
+    row: int,
+    column: int,
+    *,
+    row_delta: int = 0,
+    column_delta: int = 0,
+) -> tuple[int, int]:
+    return clamp_shop_selection(
+        row + row_delta,
+        column + column_delta,
+    )
 
 
 def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) -> int:
@@ -397,6 +444,75 @@ def sell_target_system_to_shop(player: PlayerState, sell_prices: ShopSellPriceTa
     player.target_system_enabled = False
     player.cash += max(0, sell_prices.target_system)
     return True
+
+
+def buy_selected_shop_item(player: PlayerState, row: int, column: int) -> ShopTransactionEvent:
+    row, column = clamp_shop_selection(row, column)
+    cash_before = player.cash
+
+    if row == SHOP_ROW_WEAPONS:
+        success = buy_weapon_from_shop(player, column + 1)
+        units = 1 if success else 0
+        category = "weapon"
+    elif row == SHOP_ROW_AMMO:
+        units = buy_bullet_ammo_from_shop(player, column)
+        success = units > 0
+        category = "ammo"
+    elif column == 0:
+        success = buy_shield_from_shop(player)
+        units = 1 if success else 0
+        category = "shield"
+    else:
+        success = buy_target_system_from_shop(player)
+        units = 1 if success else 0
+        category = "target"
+
+    return ShopTransactionEvent(
+        action="buy",
+        category=category,
+        row=row,
+        column=column,
+        success=success,
+        units=units,
+        cash_delta=player.cash - cash_before,
+    )
+
+
+def sell_selected_shop_item(
+    player: PlayerState,
+    row: int,
+    column: int,
+    sell_prices: ShopSellPriceTable,
+) -> ShopTransactionEvent:
+    row, column = clamp_shop_selection(row, column)
+    cash_before = player.cash
+
+    if row == SHOP_ROW_WEAPONS:
+        success = sell_weapon_to_shop(player, column + 1, sell_prices)
+        units = 1 if success else 0
+        category = "weapon"
+    elif row == SHOP_ROW_AMMO:
+        units = sell_bullet_ammo_to_shop(player, column)
+        success = units > 0
+        category = "ammo"
+    elif column == 0:
+        success = sell_shield_to_shop(player, sell_prices)
+        units = 1 if success else 0
+        category = "shield"
+    else:
+        success = sell_target_system_to_shop(player, sell_prices)
+        units = 1 if success else 0
+        category = "target"
+
+    return ShopTransactionEvent(
+        action="sell",
+        category=category,
+        row=row,
+        column=column,
+        success=success,
+        units=units,
+        cash_delta=player.cash - cash_before,
+    )
 
 
 def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:

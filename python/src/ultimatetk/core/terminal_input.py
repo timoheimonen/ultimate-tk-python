@@ -38,6 +38,9 @@ DEFAULT_TOKEN_TO_ACTION: dict[str, InputAction] = {
     "Z": InputAction.STRAFE_MODIFIER,
     " ": InputAction.SHOOT,
     TOKEN_TAB: InputAction.NEXT_WEAPON,
+    "r": InputAction.TOGGLE_SHOP,
+    "R": InputAction.TOGGLE_SHOP,
+    TOKEN_ENTER: InputAction.TOGGLE_SHOP,
 }
 TOKEN_TO_ACTION = DEFAULT_TOKEN_TO_ACTION
 

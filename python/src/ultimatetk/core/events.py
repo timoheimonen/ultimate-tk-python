@@ -21,6 +21,7 @@ class InputAction(str, Enum):
     STRAFE_LEFT = "strafe_left"
     STRAFE_RIGHT = "strafe_right"
     NEXT_WEAPON = "next_weapon"
+    TOGGLE_SHOP = "toggle_shop"
 
 
 @dataclass(frozen=True, slots=True)

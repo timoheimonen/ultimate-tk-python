@@ -34,11 +34,12 @@ class InputScriptTests(unittest.TestCase):
         self.assertEqual(schedule[12][0].weapon_slot, 3)
 
     def test_parse_alias_names(self) -> None:
-        schedule = parse_input_script("1:+up;2:+left;3:+strafe;4:+next")
+        schedule = parse_input_script("1:+up;2:+left;3:+strafe;4:+next;5:+shop")
         self.assertEqual(schedule[1][0].action, InputAction.MOVE_FORWARD)
         self.assertEqual(schedule[2][0].action, InputAction.TURN_LEFT)
         self.assertEqual(schedule[3][0].action, InputAction.STRAFE_MODIFIER)
         self.assertEqual(schedule[4][0].action, InputAction.NEXT_WEAPON)
+        self.assertEqual(schedule[5][0].action, InputAction.TOGGLE_SHOP)
 
     def test_parse_quit_token(self) -> None:
         schedule = parse_input_script("10:quit")

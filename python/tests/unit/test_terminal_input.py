@@ -75,6 +75,12 @@ class TerminalInputMapperTests(unittest.TestCase):
         self.assertEqual(events[0].weapon_slot, 3)
         self.assertEqual(events[1].type, EventType.QUIT)
 
+    def test_shop_toggle_token_maps_to_action(self) -> None:
+        mapper = TerminalInputMapper()
+        events = mapper.events_for_tokens(("r",), frame=0)
+        self.assertEqual(events[0].type, EventType.ACTION_PRESSED)
+        self.assertEqual(events[0].action, InputAction.TOGGLE_SHOP)
+
 
 class TerminalLegacyBindingTests(unittest.TestCase):
     def test_build_bindings_from_legacy_keys_with_fallback(self) -> None:
