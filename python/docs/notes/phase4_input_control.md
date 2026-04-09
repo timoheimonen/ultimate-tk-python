@@ -38,6 +38,7 @@ Implemented:
   - Added wall-aware mine/C4 blast gating with lateral ray fan checks so explosive damage is blocked by map walls.
   - Added partial-cover blast weighting (center-ray biased) so mine/C4 damage scales by unobstructed ray coverage instead of binary blocked/unblocked behavior.
   - Refined corner/corridor obstruction behavior by tracing rays from the blast origin with distance-scaled lateral spread and extra side-only leakage damping when center rays are blocked.
+  - Tightened explosive ray tracing for corner-edge cases by using finer ray-step sampling and endpoint floor checks, reducing tile-edge grazing leakage.
   - Enemy grenade/projectile splash damage now uses the same wall-aware blast coverage model, including partial versus fully blocked obstruction behavior.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.

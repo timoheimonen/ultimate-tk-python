@@ -724,7 +724,7 @@ class CombatSystemTests(unittest.TestCase):
     def test_grenade_projectile_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})
-        player = PlayerState(x=36.0, y=64.0)
+        player = PlayerState(x=40.0, y=68.0)
         enemy = EnemyState(
             enemy_id=0,
             type_index=4,
@@ -758,7 +758,7 @@ class CombatSystemTests(unittest.TestCase):
     def test_grenade_projectile_near_miss_is_fully_blocked_by_wall_fan(self) -> None:
         level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3), (2, 4)})
-        player = PlayerState(x=36.0, y=64.0)
+        player = PlayerState(x=40.0, y=68.0)
         enemy = EnemyState(
             enemy_id=0,
             type_index=4,
@@ -1097,6 +1097,67 @@ class CombatSystemTests(unittest.TestCase):
         center_damage = 18.0 - center_enemy.health
         side_damage = 18.0 - side_enemy.health
         self.assertGreater(side_damage, center_damage)
+
+    def test_player_c4_diagonal_corner_graze_is_heavily_damped(self) -> None:
+        open_level = _build_level(height=12)
+        diagonal_corner_level = _build_level(height=12, walls={(3, 5)})
+        player = PlayerState(x=0.0, y=0.0)
+        shot = ShotEvent(
+            origin_x=88.0,
+            origin_y=117.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=88,
+            impact_y=151,
+        )
+
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=34.0,
+            y=50.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        enemy_graze = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=34.0,
+            y=50.0,
+            health=18.0,
+            max_health=18.0,
+        )
+
+        explosive_open = deploy_player_explosive_from_shot(shot)
+        explosive_graze = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive_open)
+        self.assertIsNotNone(explosive_graze)
+        assert explosive_open is not None
+        assert explosive_graze is not None
+        explosive_open.fuse_ticks = 1
+        explosive_graze.fuse_ticks = 1
+
+        open_report = update_player_explosives(
+            [explosive_open],
+            [enemy_open],
+            player,
+            level=open_level,
+        )
+        graze_report = update_player_explosives(
+            [explosive_graze],
+            [enemy_graze],
+            player,
+            level=diagonal_corner_level,
+        )
+
+        self.assertEqual(open_report.enemies_hit, 1)
+        self.assertEqual(graze_report.enemies_hit, 1)
+        open_damage = 18.0 - enemy_open.health
+        graze_damage = 18.0 - enemy_graze.health
+        self.assertGreater(open_damage, 0.0)
+        self.assertGreater(graze_damage, 0.0)
+        self.assertLess(graze_damage, open_damage * 0.2)
 
     def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
         player = PlayerState(x=0.0, y=0.0)

@@ -169,6 +169,7 @@ PLAYER_EXPLOSIVE_RAY_WEIGHTS: tuple[float, ...] = (0.4, 0.2, 0.2, 0.1, 0.1)
 PLAYER_EXPLOSIVE_MIN_SPREAD_SCALE = 0.35
 PLAYER_EXPLOSIVE_SIDE_ONLY_DISTANCE_RATIO = 0.5
 PLAYER_EXPLOSIVE_SIDE_ONLY_DAMAGE_SCALE = 0.65
+PLAYER_EXPLOSIVE_RAY_TRACE_STEP = 2
 
 
 @dataclass(slots=True)
@@ -1180,6 +1181,7 @@ def _explosive_ray_coverage(
             start_y=ray_start_y,
             end_x=ray_end_x,
             end_y=ray_end_y,
+            step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
         ):
             clear_weight += weight
             if abs(lateral) < 0.5:
@@ -1400,6 +1402,7 @@ def _line_of_sight_clear(
     start_y: float,
     end_x: float,
     end_y: float,
+    step: int = SHOT_TRACE_STEP,
 ) -> bool:
     dx = end_x - start_x
     dy = end_y - start_y
@@ -1407,12 +1410,18 @@ def _line_of_sight_clear(
     if distance <= 0:
         return True
 
-    for traveled in range(0, distance + 1, max(1, SHOT_TRACE_STEP)):
+    trace_step = max(1, step)
+    for traveled in range(0, distance + 1, trace_step):
         ratio = traveled / distance
         x = int(start_x + (dx * ratio))
         y = int(start_y + (dy * ratio))
         if not _is_floor_pixel(level, x, y):
             return False
+
+    end_px = int(end_x)
+    end_py = int(end_y)
+    if not _is_floor_pixel(level, end_px, end_py):
+        return False
     return True
 
 
