@@ -1111,33 +1111,39 @@ def _player_explosive_damage(
         return 0.0
     if level is None:
         return damage
-    if _explosive_rays_reach_target(
+    ray_coverage = _explosive_ray_coverage(
         level,
         blast_x=impact_x,
         blast_y=impact_y,
         target_x=target_x,
         target_y=target_y,
-    ):
-        return damage
-    return 0.0
+    )
+    if ray_coverage <= 0.0:
+        return 0.0
+    return damage * ray_coverage
 
 
-def _explosive_rays_reach_target(
+def _explosive_ray_coverage(
     level: LevelData,
     *,
     blast_x: float,
     blast_y: float,
     target_x: float,
     target_y: float,
-) -> bool:
+) -> float:
     dx = target_x - blast_x
     dy = target_y - blast_y
     distance = math.hypot(dx, dy)
     if distance <= 0.0:
-        return True
+        return 1.0
 
     normal_x = -dy / distance
     normal_y = dx / distance
+
+    clear_rays = 0
+    total_rays = len(PLAYER_EXPLOSIVE_RAY_OFFSETS)
+    if total_rays <= 0:
+        return 0.0
 
     for lateral in PLAYER_EXPLOSIVE_RAY_OFFSETS:
         ray_start_x = blast_x + (normal_x * lateral)
@@ -1151,8 +1157,9 @@ def _explosive_rays_reach_target(
             end_x=ray_end_x,
             end_y=ray_end_y,
         ):
-            return True
-    return False
+            clear_rays += 1
+
+    return clear_rays / total_rays
 
 
 def _radial_damage(

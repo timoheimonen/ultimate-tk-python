@@ -918,6 +918,69 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(enemy.health, 18.0)
         self.assertTrue(enemy.alive)
 
+    def test_player_c4_explosion_partial_cover_reduces_damage(self) -> None:
+        open_level = _build_level(height=12)
+        partial_cover_level = _build_level(height=12, walls={(2, 5)})
+        player = PlayerState(x=40.0, y=40.0)
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        enemy_partial = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+        )
+
+        explosive_open = deploy_player_explosive_from_shot(shot)
+        explosive_partial = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive_open)
+        self.assertIsNotNone(explosive_partial)
+        assert explosive_open is not None
+        assert explosive_partial is not None
+        explosive_open.fuse_ticks = 1
+        explosive_partial.fuse_ticks = 1
+
+        open_report = update_player_explosives(
+            [explosive_open],
+            [enemy_open],
+            player,
+            level=open_level,
+        )
+        partial_report = update_player_explosives(
+            [explosive_partial],
+            [enemy_partial],
+            player,
+            level=partial_cover_level,
+        )
+
+        self.assertEqual(open_report.enemies_hit, 1)
+        self.assertEqual(partial_report.enemies_hit, 1)
+
+        open_damage = 18.0 - enemy_open.health
+        partial_damage = 18.0 - enemy_partial.health
+        self.assertGreater(open_damage, 0.0)
+        self.assertGreater(partial_damage, 0.0)
+        self.assertLess(partial_damage, open_damage)
+        self.assertTrue(enemy_partial.alive)
+
     def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
         player = PlayerState(x=0.0, y=0.0)
         enemy = EnemyState(
