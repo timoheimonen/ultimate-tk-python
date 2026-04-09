@@ -90,6 +90,7 @@ Verification:
   - `python/tests/integration/test_headless_input_script_runtime.py`
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
   - Added scripted C4 corner-obstruction scenario asserting open-lane crate destruction versus blocked-corner survival.
+  - Added scripted C4 side-wall leakage scenario asserting damped partial crate damage for side-only obstruction and zero damage for fully blocked lanes.
   - Added scripted mine corridor obstruction scenario (enemy-triggered mine detonation with open-lane versus blocked-lane crate/enemy outcomes).
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
 
