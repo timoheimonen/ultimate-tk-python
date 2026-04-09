@@ -821,8 +821,13 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             old = blocks[index]
             blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
 
-        for tile_y in range(0, 6):
-            for tile_x in range(0, 6):
+        max_world_x = max(enemy_x, player_x)
+        max_world_y = max(enemy_y, player_y)
+        max_tile_x = min(level.level_x_size - 1, max(5, int(max_world_x // 20) + 2))
+        max_tile_y = min(level.level_y_size - 1, max(5, int(max_world_y // 20) + 2))
+
+        for tile_y in range(0, max_tile_y + 1):
+            for tile_x in range(0, max_tile_x + 1):
                 set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
@@ -1293,6 +1298,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             enemy_x=40.0,
             enemy_y=80.0,
             enemy_angle=0,
+            enemy_walk_ticks=120,
+            enemy_load_count=10,
+            player_x=40.0,
+            player_y=40.0,
+        )
+
+        self.assertEqual(shots, 0)
+        self.assertEqual(hits, 0)
+        self.assertEqual(damage, 0.0)
+
+    def test_scripted_enemy_vision_distance_blocks_far_detection(self) -> None:
+        shots, hits, damage = self._run_scripted_enemy_los_corner_graze_scenario(
+            wall_tiles=set(),
+            enemy_type_index=0,
+            enemy_x=40.0,
+            enemy_y=260.0,
+            enemy_angle=180,
             enemy_walk_ticks=120,
             enemy_load_count=10,
             player_x=40.0,

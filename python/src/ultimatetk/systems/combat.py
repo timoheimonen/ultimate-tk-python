@@ -33,6 +33,7 @@ ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO = 0.5
 ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE = 32.0
 ENEMY_LOST_SIGHT_CHASE_TICKS_MAX = 120
 ENEMY_VISION_HALF_ANGLE_DEGREES = 90
+ENEMY_VISION_MAX_DISTANCE_PIXELS = 160.0
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -675,6 +676,7 @@ def update_enemy_behavior(
         weapon_slot = enemy_weapon_for_type(enemy.type_index)
         player_angle = _angle_to_point(enemy.center_x, enemy.center_y, player.center_x, player.center_y)
         saw_player_last_tick = enemy.sees_player
+        distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)
 
         enemy.sees_player = _line_of_sight_clear(
             level,
@@ -686,9 +688,8 @@ def update_enemy_behavior(
         ) and _enemy_within_vision_cone(
             enemy,
             player_angle=player_angle,
-        )
+        ) and distance_to_player <= ENEMY_VISION_MAX_DISTANCE_PIXELS
 
-        distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)
         if enemy.sees_player:
             enemy.target_angle = player_angle
         elif saw_player_last_tick:

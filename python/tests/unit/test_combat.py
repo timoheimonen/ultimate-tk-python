@@ -494,6 +494,30 @@ class CombatSystemTests(unittest.TestCase):
         self.assertFalse(enemy.sees_player)
         self.assertEqual(player.health, 100.0)
 
+    def test_enemy_behavior_does_not_detect_player_beyond_vision_distance(self) -> None:
+        level = _build_level(height=20)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=260.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            walk_ticks=120,
+            load_count=10,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertFalse(enemy.sees_player)
+        self.assertEqual(player.health, 100.0)
+
     def test_enemy_shoot_counter_tracks_attack_window_and_los_break(self) -> None:
         open_level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})
