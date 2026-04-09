@@ -28,9 +28,11 @@ Implemented:
   - Deterministic enemy spawn from level enemy counts.
   - Hitscan-style shot resolution against walls and enemy hitboxes.
   - Weapon-slot damage table for first pass damage application.
+  - Added weapon-specific enemy pellet volleys (shotgun/auto-shotgun spread) for more legacy-like fire behavior.
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
+  - Enemy firing now stops once the player is dead.
 - Gameplay integration in `python/src/ultimatetk/systems/gameplay_scene.py`:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.

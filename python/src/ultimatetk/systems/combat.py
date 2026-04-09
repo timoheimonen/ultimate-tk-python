@@ -59,6 +59,36 @@ WEAPON_RANGE: tuple[int, ...] = (
     34,
 )
 
+WEAPON_PELLET_COUNT: tuple[int, ...] = (
+    1,
+    1,
+    6,
+    1,
+    1,
+    1,
+    1,
+    1,
+    6,
+    1,
+    1,
+    1,
+)
+
+WEAPON_ANGLE_SPREAD: tuple[int, ...] = (
+    1,
+    1,
+    20,
+    1,
+    1,
+    1,
+    1,
+    1,
+    20,
+    1,
+    1,
+    1,
+)
+
 
 @dataclass(slots=True)
 class EnemyState:
@@ -72,6 +102,7 @@ class EnemyState:
     target_angle: int = 0
     walk_ticks: int = 0
     load_count: int = 0
+    shoot_count: int = 0
     sees_player: bool = False
     alive: bool = True
     hit_flash_ticks: int = 0
@@ -119,6 +150,12 @@ class EnemyBehaviorReport:
     damage_to_player: float = 0.0
 
 
+@dataclass(frozen=True, slots=True)
+class EnemyAttackResult:
+    hit_count: int = 0
+    total_damage: float = 0.0
+
+
 def enemy_health_for_type(type_index: int) -> float:
     if 0 <= type_index < len(ENEMY_HEALTH):
         return ENEMY_HEALTH[type_index]
@@ -135,6 +172,18 @@ def weapon_range_for_slot(weapon_slot: int) -> int:
     if 0 <= weapon_slot < len(WEAPON_RANGE):
         return WEAPON_RANGE[weapon_slot]
     return WEAPON_RANGE[0]
+
+
+def weapon_pellet_count_for_slot(weapon_slot: int) -> int:
+    if 0 <= weapon_slot < len(WEAPON_PELLET_COUNT):
+        return WEAPON_PELLET_COUNT[weapon_slot]
+    return WEAPON_PELLET_COUNT[0]
+
+
+def weapon_angle_spread_for_slot(weapon_slot: int) -> int:
+    if 0 <= weapon_slot < len(WEAPON_ANGLE_SPREAD):
+        return WEAPON_ANGLE_SPREAD[weapon_slot]
+    return WEAPON_ANGLE_SPREAD[0]
 
 
 def enemy_weapon_for_type(type_index: int) -> int:
@@ -268,6 +317,17 @@ def update_enemy_behavior(
             enemy.sees_player = False
             continue
 
+        if player.dead:
+            enemy.sees_player = False
+            _advance_enemy_patrol(
+                enemy,
+                level,
+                enemies=enemies,
+                player=player,
+            )
+            _advance_enemy_reload(enemy, weapon_slot=enemy_weapon_for_type(enemy.type_index))
+            continue
+
         weapon_slot = enemy_weapon_for_type(enemy.type_index)
         player_angle = _angle_to_point(enemy.center_x, enemy.center_y, player.center_x, player.center_y)
         enemy.target_angle = player_angle
@@ -300,16 +360,15 @@ def update_enemy_behavior(
             if _can_enemy_fire(enemy, weapon_slot=weapon_slot, distance_to_player=distance_to_player):
                 shots_fired += 1
                 enemy.load_count = 0
-                resolution = resolve_enemy_shot_against_player(
+                enemy.shoot_count += 1
+                attack = resolve_enemy_attack_against_player(
                     level,
                     enemy=enemy,
                     player=player,
                     weapon_slot=weapon_slot,
                 )
-                if resolution.player_hit:
-                    apply_player_damage(player, resolution.damage)
-                    hits_on_player += 1
-                    damage_to_player += resolution.damage
+                hits_on_player += attack.hit_count
+                damage_to_player += attack.total_damage
         else:
             _advance_enemy_patrol(
                 enemy,
@@ -333,17 +392,20 @@ def resolve_enemy_shot_against_player(
     enemy: EnemyState,
     player: PlayerState,
     weapon_slot: int,
+    angle: int | None = None,
+    damage: float | None = None,
+    max_distance: int | None = None,
 ) -> EnemyShotResolution:
-    angle_radians = math.radians(enemy.angle % 360)
-    damage = weapon_damage_for_slot(weapon_slot)
-    max_distance = weapon_range_for_slot(weapon_slot)
+    angle_radians = math.radians((enemy.angle if angle is None else angle) % 360)
+    ray_damage = weapon_damage_for_slot(weapon_slot) if damage is None else max(0.0, damage)
+    trace_distance = weapon_range_for_slot(weapon_slot) if max_distance is None else max(0, max_distance)
 
     origin_x = enemy.center_x + (10.0 * math.sin(angle_radians))
     origin_y = enemy.center_y + (10.0 * math.cos(angle_radians))
 
     px = int(origin_x)
     py = int(origin_y)
-    for distance in range(0, max_distance + 1, max(1, SHOT_TRACE_STEP)):
+    for distance in range(0, trace_distance + 1, max(1, SHOT_TRACE_STEP)):
         x = int(origin_x + (distance * math.sin(angle_radians)))
         y = int(origin_y + (distance * math.cos(angle_radians)))
 
@@ -355,13 +417,53 @@ def resolve_enemy_shot_against_player(
                 player_hit=True,
                 impact_x=int(player.center_x),
                 impact_y=int(player.center_y),
-                damage=damage,
+                damage=ray_damage,
             )
 
         px = x
         py = y
 
     return EnemyShotResolution(player_hit=False, impact_x=px, impact_y=py, damage=0.0)
+
+
+def resolve_enemy_attack_against_player(
+    level: LevelData,
+    *,
+    enemy: EnemyState,
+    player: PlayerState,
+    weapon_slot: int,
+) -> EnemyAttackResult:
+    pellet_count = max(1, weapon_pellet_count_for_slot(weapon_slot))
+    spread = weapon_angle_spread_for_slot(weapon_slot)
+    pellet_damage = weapon_damage_for_slot(weapon_slot) / pellet_count
+
+    hit_count = 0
+    total_damage = 0.0
+    for pellet_index in range(pellet_count):
+        shot_angle = _enemy_shot_angle(
+            enemy,
+            weapon_slot=weapon_slot,
+            spread=spread,
+            pellet_index=pellet_index,
+        )
+        shot = resolve_enemy_shot_against_player(
+            level,
+            enemy=enemy,
+            player=player,
+            weapon_slot=weapon_slot,
+            angle=shot_angle,
+            damage=pellet_damage,
+        )
+        if not shot.player_hit:
+            continue
+
+        hit_count += 1
+        total_damage += shot.damage
+        apply_player_damage(player, shot.damage)
+        if player.dead:
+            break
+
+    return EnemyAttackResult(hit_count=hit_count, total_damage=total_damage)
 
 
 def _can_enemy_fire(
@@ -581,6 +683,26 @@ def _rotate_towards_angle(current: int, target: int, *, step: int) -> int:
 
 def _angular_distance(first: int, second: int) -> int:
     return abs(((second - first + 540) % 360) - 180)
+
+
+def _enemy_shot_angle(
+    enemy: EnemyState,
+    *,
+    weapon_slot: int,
+    spread: int,
+    pellet_index: int,
+) -> int:
+    if spread <= 1:
+        return enemy.angle
+
+    seed = (
+        enemy.enemy_id * 97
+        + enemy.shoot_count * 53
+        + weapon_slot * 17
+        + pellet_index * 31
+    )
+    offset = (seed % spread) - (spread // 2)
+    return (enemy.angle + offset) % 360
 
 
 def _player_at_point(

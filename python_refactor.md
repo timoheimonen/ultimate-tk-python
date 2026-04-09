@@ -138,6 +138,7 @@ python/
 - Added first-pass enemy spawning, hit resolution, and enemy kill bookkeeping in gameplay simulation.
 - Added first-pass enemy behavior loop with line-of-sight aiming, rotation, movement, and reload-gated enemy shooting.
 - Combat loop is now bi-directional: enemies can damage the player, and runtime telemetry tracks player health plus enemy shot/hit totals.
+- Added weapon-specific enemy pellet volleys for shotgun-style enemies and gated enemy fire once the player is dead.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

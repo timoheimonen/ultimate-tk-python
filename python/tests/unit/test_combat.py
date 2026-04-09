@@ -196,6 +196,54 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.hits_taken_total, 1)
         self.assertGreater(player.hit_flash_ticks, 0)
 
+    def test_enemy_shotgun_attack_can_hit_with_multiple_pellets(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=1,
+            x=40.0,
+            y=80.0,
+            health=28.0,
+            max_health=28.0,
+            angle=180,
+            target_angle=180,
+            load_count=17,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 1)
+        self.assertEqual(report.hits_on_player, 6)
+        self.assertEqual(report.damage_to_player, 18.0)
+        self.assertEqual(player.health, 82.0)
+
+    def test_dead_player_no_longer_receives_enemy_fire(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=4.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+
+        first = update_enemy_behavior(level, [enemy], player)
+        self.assertEqual(first.shots_fired, 1)
+        self.assertEqual(first.hits_on_player, 1)
+        self.assertTrue(player.dead)
+
+        enemy.load_count = 10
+        second = update_enemy_behavior(level, [enemy], player)
+        self.assertEqual(second.shots_fired, 0)
+        self.assertEqual(second.hits_on_player, 0)
+        self.assertEqual(second.damage_to_player, 0.0)
+
     def test_enemy_behavior_does_not_shoot_through_walls(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
         player = PlayerState(x=40.0, y=40.0)
