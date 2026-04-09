@@ -981,6 +981,65 @@ class CombatSystemTests(unittest.TestCase):
         self.assertLess(partial_damage, open_damage)
         self.assertTrue(enemy_partial.alive)
 
+    def test_player_c4_center_obstruction_reduces_more_than_side_obstruction(self) -> None:
+        center_block_level = _build_level(height=12, walls={(2, 5)})
+        side_block_level = _build_level(height=12, walls={(3, 5)})
+        player = PlayerState(x=40.0, y=40.0)
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        center_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        side_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+        )
+
+        center_explosive = deploy_player_explosive_from_shot(shot)
+        side_explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(center_explosive)
+        self.assertIsNotNone(side_explosive)
+        assert center_explosive is not None
+        assert side_explosive is not None
+        center_explosive.fuse_ticks = 1
+        side_explosive.fuse_ticks = 1
+
+        center_report = update_player_explosives(
+            [center_explosive],
+            [center_enemy],
+            player,
+            level=center_block_level,
+        )
+        side_report = update_player_explosives(
+            [side_explosive],
+            [side_enemy],
+            player,
+            level=side_block_level,
+        )
+
+        self.assertEqual(center_report.enemies_hit, 1)
+        self.assertEqual(side_report.enemies_hit, 1)
+        center_damage = 18.0 - center_enemy.health
+        side_damage = 18.0 - side_enemy.health
+        self.assertGreater(side_damage, center_damage)
+
     def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
         player = PlayerState(x=0.0, y=0.0)
         enemy = EnemyState(

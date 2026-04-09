@@ -36,7 +36,7 @@ Implemented:
   - Added enemy projectile entities with travel-time simulation, wall impact handling, splash falloff, and per-frame projectile updates.
   - Added first-pass player explosive entities for mine/C4 weapons (deploy from player shots, mine arming delay/contact trigger, fuse expiry, and radial detonation damage against enemies/crates/player).
   - Added wall-aware mine/C4 blast gating with lateral ray fan checks so explosive damage is blocked by map walls.
-  - Added partial-cover blast weighting so mine/C4 damage scales by unobstructed ray coverage instead of binary blocked/unblocked behavior.
+  - Added partial-cover blast weighting (center-ray biased) so mine/C4 damage scales by unobstructed ray coverage instead of binary blocked/unblocked behavior.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
@@ -90,6 +90,6 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details and additional enemy behavior tuning.
-- Continue mine/C4 parity refinement (detonation feel and blast-model tuning versus legacy explosive rays, including more nuanced obstruction edge cases and ray-shape weighting).
+- Continue mine/C4 parity refinement (detonation feel and blast-model tuning versus legacy explosive rays, including more nuanced obstruction edge cases).
 - Continue refining visual shop/HUD parity toward legacy presentation (icon-like cell glyphs, color/layout polish, and HUD styling/detail parity).
 - Continue parity tuning for collision feel and camera response.

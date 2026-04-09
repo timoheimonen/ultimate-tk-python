@@ -165,6 +165,7 @@ PLAYER_C4_EXPLOSION_RADIUS = 80
 PLAYER_MINE_EXPLOSION_RADIUS = 20
 PLAYER_EXPLOSIVE_BASE_DAMAGE = 30.0
 PLAYER_EXPLOSIVE_RAY_OFFSETS: tuple[float, ...] = (0.0, -6.0, 6.0, -12.0, 12.0)
+PLAYER_EXPLOSIVE_RAY_WEIGHTS: tuple[float, ...] = (0.4, 0.2, 0.2, 0.1, 0.1)
 
 
 @dataclass(slots=True)
@@ -1140,12 +1141,19 @@ def _explosive_ray_coverage(
     normal_x = -dy / distance
     normal_y = dx / distance
 
-    clear_rays = 0
-    total_rays = len(PLAYER_EXPLOSIVE_RAY_OFFSETS)
-    if total_rays <= 0:
+    total_weight = sum(weight for weight in PLAYER_EXPLOSIVE_RAY_WEIGHTS if weight > 0.0)
+    if total_weight <= 0.0:
         return 0.0
 
-    for lateral in PLAYER_EXPLOSIVE_RAY_OFFSETS:
+    if len(PLAYER_EXPLOSIVE_RAY_OFFSETS) != len(PLAYER_EXPLOSIVE_RAY_WEIGHTS):
+        return 0.0
+
+    clear_weight = 0.0
+
+    for lateral, weight in zip(PLAYER_EXPLOSIVE_RAY_OFFSETS, PLAYER_EXPLOSIVE_RAY_WEIGHTS):
+        if weight <= 0.0:
+            continue
+
         ray_start_x = blast_x + (normal_x * lateral)
         ray_start_y = blast_y + (normal_y * lateral)
         ray_end_x = target_x + (normal_x * lateral)
@@ -1157,9 +1165,9 @@ def _explosive_ray_coverage(
             end_x=ray_end_x,
             end_y=ray_end_y,
         ):
-            clear_rays += 1
+            clear_weight += weight
 
-    return clear_rays / total_rays
+    return clear_weight / total_weight
 
 
 def _radial_damage(
