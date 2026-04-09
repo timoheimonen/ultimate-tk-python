@@ -25,6 +25,7 @@ ENEMY_ROTATION_STEP_DEGREES = 9
 ENEMY_ALIGNMENT_TOLERANCE_DEGREES = 9
 ENEMY_LINE_OF_SIGHT_TRACE_STEP = 2
 ENEMY_SHOT_TRACE_STEP = 2
+ENEMY_PROJECTILE_TRACE_STEP = 2
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -1510,7 +1511,10 @@ def _advance_enemy_projectile(
     *,
     crates: Sequence[CrateState] | None = None,
 ) -> EnemyProjectileAdvance:
-    sub_steps = max(1, int(math.ceil(projectile.speed / SHOT_TRACE_STEP)))
+    trace_step = ENEMY_PROJECTILE_TRACE_STEP
+    if projectile.splash_radius > 0:
+        trace_step = SHOT_TRACE_STEP
+    sub_steps = max(1, int(math.ceil(projectile.speed / max(1, trace_step))))
     step_speed = projectile.speed / sub_steps
 
     for _ in range(sub_steps):

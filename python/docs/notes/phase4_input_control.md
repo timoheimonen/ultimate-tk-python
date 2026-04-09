@@ -42,6 +42,7 @@ Implemented:
   - Enemy grenade/projectile splash damage now uses the same wall-aware blast coverage model, including partial versus fully blocked obstruction behavior.
   - Tightened enemy line-of-sight corner-edge handling by using finer LOS trace sampling, preventing wall-graze peek shots.
   - Tightened enemy direct-shot trace sampling to reduce wall-graze pellet leakage in hitscan/non-projectile enemy fire.
+  - Tightened enemy projectile sub-step sampling to reduce corner-graze wall leakage in travel-time projectile hits.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
@@ -90,6 +91,7 @@ Verification:
   - `python/tests/unit/test_scene_flow.py`
   - Added enemy corner-graze LOS coverage so enemies stop firing through wall-edge peeks.
   - Added enemy shotgun corner-graze coverage so wall-edge obstruction reduces leaked pellet hits.
+  - Added enemy projectile corner-graze coverage so wall-edge obstruction blocks leaked travel-time projectile hits.
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
@@ -99,6 +101,7 @@ Verification:
   - Added scripted enemy grenade obstruction scenario asserting partial-damage lane behavior versus fully blocked lane behavior.
   - Added scripted enemy LOS corner-graze scenario asserting open-lane enemy fire versus blocked wall-edge no-fire behavior.
   - Added scripted enemy direct-shot corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
+  - Added scripted enemy projectile corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
 
 Remaining work for Phase 4:

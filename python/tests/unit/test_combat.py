@@ -540,6 +540,74 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.health, 100.0)
         self.assertEqual(len(projectiles), 0)
 
+    def test_enemy_projectile_corner_graze_is_blocked(self) -> None:
+        open_level = _build_level(width=10, height=10)
+        blocked_level = _build_level(width=10, height=10, walls={(1, 1)})
+
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=0.0,
+            y=0.0,
+            health=18.0,
+            max_health=18.0,
+            angle=0,
+            target_angle=0,
+            load_count=10,
+        )
+        enemy_blocked = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=0.0,
+            y=0.0,
+            health=18.0,
+            max_health=18.0,
+            angle=0,
+            target_angle=0,
+            load_count=10,
+        )
+        player_open = PlayerState(x=8.0, y=38.0)
+        player_blocked = PlayerState(x=8.0, y=38.0)
+        open_projectiles: list = []
+        blocked_projectiles: list = []
+
+        open_fire = update_enemy_behavior(open_level, [enemy_open], player_open, enemy_projectiles=open_projectiles)
+        blocked_fire = update_enemy_behavior(
+            blocked_level,
+            [enemy_blocked],
+            player_blocked,
+            enemy_projectiles=blocked_projectiles,
+        )
+
+        self.assertEqual(open_fire.shots_fired, 1)
+        self.assertEqual(blocked_fire.shots_fired, 1)
+        self.assertEqual(open_fire.projectiles_spawned, 1)
+        self.assertEqual(blocked_fire.projectiles_spawned, 1)
+
+        open_hits = 0
+        open_damage = 0.0
+        for _ in range(12):
+            if not open_projectiles:
+                break
+            report = update_enemy_projectiles(open_level, open_projectiles, player_open)
+            open_hits += report.hits_on_player
+            open_damage += report.damage_to_player
+
+        blocked_hits = 0
+        blocked_damage = 0.0
+        for _ in range(12):
+            if not blocked_projectiles:
+                break
+            report = update_enemy_projectiles(blocked_level, blocked_projectiles, player_blocked)
+            blocked_hits += report.hits_on_player
+            blocked_damage += report.damage_to_player
+
+        self.assertEqual(open_hits, 1)
+        self.assertEqual(open_damage, 5.0)
+        self.assertEqual(blocked_hits, 0)
+        self.assertEqual(blocked_damage, 0.0)
+        self.assertEqual(player_blocked.health, 100.0)
+
     def test_enemy_projectile_hits_crate_before_player(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)

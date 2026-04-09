@@ -772,6 +772,36 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked_hits, 0)
         self.assertEqual(blocked_damage, 0.0)
 
+    def test_scripted_enemy_projectile_corner_graze_open_vs_blocked(self) -> None:
+        open_shots, open_hits, open_damage = self._run_scripted_enemy_los_corner_graze_scenario(
+            wall_tiles=set(),
+            enemy_type_index=0,
+            enemy_x=0.0,
+            enemy_y=0.0,
+            enemy_angle=0,
+            enemy_load_count=10,
+            player_x=8.0,
+            player_y=38.0,
+        )
+        blocked_shots, blocked_hits, blocked_damage = self._run_scripted_enemy_los_corner_graze_scenario(
+            wall_tiles={(1, 1)},
+            enemy_type_index=0,
+            enemy_x=0.0,
+            enemy_y=0.0,
+            enemy_angle=0,
+            enemy_load_count=10,
+            player_x=8.0,
+            player_y=38.0,
+        )
+
+        self.assertGreaterEqual(open_shots, 1)
+        self.assertGreaterEqual(open_hits, 1)
+        self.assertGreater(open_damage, 0.0)
+
+        self.assertGreaterEqual(blocked_shots, 1)
+        self.assertEqual(blocked_hits, 0)
+        self.assertEqual(blocked_damage, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
