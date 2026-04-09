@@ -36,7 +36,7 @@ Implemented:
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
   - Added first-pass player ammo economy for non-fist weapons: ammo-gated firing, one-round consumption per shot, and empty-weapon fallback to fist.
   - Bullet crate rewards now apply to player ammo pools with legacy-like per-type caps.
-  - Added current-weapon ammo snapshot helper (ammo type/index, units, and cap) for runtime telemetry.
+  - Added ammo snapshot helpers for runtime telemetry: current-weapon ammo (type/index, units, cap) and full per-type ammo pools/capacities.
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
@@ -46,7 +46,7 @@ Implemented:
   - Player state is updated each simulation tick from held actions.
   - Camera follows the player and aiming direction.
   - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, enemy counters, and crate counters.
-  - Runtime metadata now also includes current-weapon ammo snapshot fields for HUD/shop parity scaffolding.
+  - Runtime metadata now also includes current-weapon ammo snapshot fields plus full per-type ammo pool/capacity snapshots for HUD/shop parity scaffolding.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
   - Touching a live crate now consumes it and applies crate-type reward effects.
@@ -77,5 +77,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
-- Extend HUD/shop parity beyond current-weapon ammo telemetry to full ammo pools and ammo purchasing/selling behavior.
+- Extend HUD/shop parity from telemetry scaffolding into ammo purchasing/selling behavior.
 - Continue parity tuning for collision feel and camera response.

@@ -39,6 +39,8 @@ from ultimatetk.systems.player_control import (
     PlayerState,
     aim_point_from_player,
     apply_player_controls,
+    bullet_ammo_capacities_snapshot,
+    bullet_ammo_pools_snapshot,
     current_weapon_ammo_snapshot,
     consume_pending_shots,
     follow_player_camera,
@@ -101,6 +103,9 @@ class GameplayScene(BaseScene):
         context.runtime.player_current_ammo_type_index = -1
         context.runtime.player_current_ammo_units = 0
         context.runtime.player_current_ammo_capacity = 0
+        ammo_capacities = bullet_ammo_capacities_snapshot()
+        context.runtime.player_ammo_pools = tuple(0 for _ in ammo_capacities)
+        context.runtime.player_ammo_capacities = ammo_capacities
         context.runtime.player_load_count = 0
         context.runtime.player_fire_ticks = 0
         context.runtime.player_shots_fired_total = 0
@@ -574,6 +579,9 @@ class GameplayScene(BaseScene):
             context.runtime.player_current_ammo_type_index = -1
             context.runtime.player_current_ammo_units = 0
             context.runtime.player_current_ammo_capacity = 0
+            ammo_capacities = bullet_ammo_capacities_snapshot()
+            context.runtime.player_ammo_pools = tuple(0 for _ in ammo_capacities)
+            context.runtime.player_ammo_capacities = ammo_capacities
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
             context.runtime.player_shots_fired_total = 0
@@ -606,6 +614,8 @@ class GameplayScene(BaseScene):
             context.runtime.player_current_ammo_units,
             context.runtime.player_current_ammo_capacity,
         ) = current_weapon_ammo_snapshot(self._player)
+        context.runtime.player_ammo_pools = bullet_ammo_pools_snapshot(self._player)
+        context.runtime.player_ammo_capacities = bullet_ammo_capacities_snapshot()
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
         context.runtime.player_shots_fired_total = self._player.shots_fired_total

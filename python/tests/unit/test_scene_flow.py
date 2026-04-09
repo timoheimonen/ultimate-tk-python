@@ -130,17 +130,31 @@ class SceneFlowTests(unittest.TestCase):
         player.current_weapon = 1
         gained = grant_bullet_ammo(player, 0, 37)
         self.assertEqual(gained, 37)
+        gained = grant_bullet_ammo(player, 7, 4000)
+        self.assertEqual(gained, 3000)
 
         manager.update(0.025)
         self.assertEqual(context.runtime.player_current_ammo_type_index, 0)
         self.assertEqual(context.runtime.player_current_ammo_units, 37)
         self.assertEqual(context.runtime.player_current_ammo_capacity, 300)
+        self.assertEqual(
+            context.runtime.player_ammo_pools,
+            (37, 0, 0, 0, 0, 0, 0, 3000, 0),
+        )
+        self.assertEqual(
+            context.runtime.player_ammo_capacities,
+            (300, 300, 300, 150, 125, 100, 100, 3000, 100),
+        )
 
         player.current_weapon = 0
         manager.update(0.025)
         self.assertEqual(context.runtime.player_current_ammo_type_index, -1)
         self.assertEqual(context.runtime.player_current_ammo_units, 0)
         self.assertEqual(context.runtime.player_current_ammo_capacity, 0)
+        self.assertEqual(
+            context.runtime.player_ammo_pools,
+            (37, 0, 0, 0, 0, 0, 0, 3000, 0),
+        )
 
 
 if __name__ == "__main__":

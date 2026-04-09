@@ -197,6 +197,19 @@ def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:
     return bullet_type, current, capacity
 
 
+def bullet_ammo_capacities_snapshot() -> tuple[int, ...]:
+    return tuple(bullet_capacity_units_for_type(index) for index in range(DIFF_BULLETS))
+
+
+def bullet_ammo_pools_snapshot(player: PlayerState) -> tuple[int, ...]:
+    pools: list[int] = []
+    for index in range(DIFF_BULLETS):
+        capacity = bullet_capacity_units_for_type(index)
+        units = player.bullets[index] if index < len(player.bullets) else 0
+        pools.append(max(0, min(units, capacity)))
+    return tuple(pools)
+
+
 def current_weapon_has_ammo(player: PlayerState) -> bool:
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:

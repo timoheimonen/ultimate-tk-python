@@ -230,8 +230,11 @@ def _log_runtime_status(
     if frame % status_print_interval != 0:
         return
 
+    ammo_pools = context.runtime.player_ammo_pools
+    ammo_pools_text = ",".join(str(units) for units in ammo_pools) if ammo_pools else "-"
+
     context.logger.info(
-        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d load=%d fire=%d shots=%d hits=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
+        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d ammo=%d/%d atype=%d apools=%s load=%d fire=%d shots=%d hits=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d crates=%d/%d ckill=%d cget=%d",
         frame,
         context.runtime.mode.value,
         scene_name,
@@ -247,6 +250,7 @@ def _log_runtime_status(
         context.runtime.player_current_ammo_units,
         context.runtime.player_current_ammo_capacity,
         context.runtime.player_current_ammo_type_index,
+        ammo_pools_text,
         context.runtime.player_load_count,
         context.runtime.player_fire_ticks,
         context.runtime.player_shots_fired_total,

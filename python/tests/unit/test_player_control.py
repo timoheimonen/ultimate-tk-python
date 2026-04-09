@@ -24,6 +24,8 @@ from ultimatetk.systems.player_control import (
     PlayerState,
     aim_point_from_player,
     apply_player_controls,
+    bullet_ammo_capacities_snapshot,
+    bullet_ammo_pools_snapshot,
     consume_pending_shots,
     current_weapon_ammo_snapshot,
     cycle_weapon_slot,
@@ -295,6 +297,21 @@ class PlayerControlTests(unittest.TestCase):
         self.assertEqual(ammo_type, 0)
         self.assertEqual(ammo_units, 300)
         self.assertEqual(ammo_capacity, 300)
+
+    def test_bullet_ammo_capacities_snapshot_matches_legacy_caps(self) -> None:
+        self.assertEqual(
+            bullet_ammo_capacities_snapshot(),
+            (300, 300, 300, 150, 125, 100, 100, 3000, 100),
+        )
+
+    def test_bullet_ammo_pools_snapshot_clamps_values(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        player.bullets = [350, -4, 7, 160, 0, 100, 99, 4500, 120]
+
+        self.assertEqual(
+            bullet_ammo_pools_snapshot(player),
+            (300, 0, 7, 150, 0, 100, 99, 3000, 100),
+        )
 
 
 if __name__ == "__main__":
