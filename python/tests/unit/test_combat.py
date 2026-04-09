@@ -208,7 +208,28 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.crates_collected, 1)
         self.assertEqual(report.bullet_packs_collected, 1)
         self.assertEqual(report.bullets_collected, 50)
+        self.assertEqual(player.bullets[0], 50)
         self.assertFalse(crate.alive)
+
+    def test_collect_bullet_crate_at_capacity_keeps_crate(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        player.bullets[0] = 300
+        crate = CrateState(
+            crate_id=0,
+            type1=1,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 0)
+        self.assertEqual(report.bullets_collected, 0)
+        self.assertEqual(player.bullets[0], 300)
+        self.assertTrue(crate.alive)
 
     def test_collect_energy_crate_restores_health_with_cap(self) -> None:
         player = PlayerState(x=40.0, y=40.0, health=70.0)

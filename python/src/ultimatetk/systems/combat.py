@@ -12,6 +12,7 @@ from ultimatetk.systems.player_control import (
     PlayerState,
     ShotEvent,
     apply_player_damage,
+    grant_bullet_ammo,
     weapon_profile_for_slot,
 )
 
@@ -1316,10 +1317,18 @@ def _apply_crate_reward(player: PlayerState, crate: CrateState) -> CrateCollectR
         )
 
     if crate.type1 == 1:
+        bullets_gained = grant_bullet_ammo(
+            player,
+            crate.type2,
+            crate_bullet_pack_amount_for_type(crate.type2),
+        )
+        if bullets_gained <= 0:
+            return CrateCollectReport()
+
         return CrateCollectReport(
             crates_collected=1,
             bullet_packs_collected=1,
-            bullets_collected=crate_bullet_pack_amount_for_type(crate.type2),
+            bullets_collected=bullets_gained,
         )
 
     if crate.type1 == 2:

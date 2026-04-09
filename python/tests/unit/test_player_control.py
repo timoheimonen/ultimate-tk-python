@@ -26,6 +26,7 @@ from ultimatetk.systems.player_control import (
     consume_pending_shots,
     cycle_weapon_slot,
     follow_player_camera,
+    grant_bullet_ammo,
     select_weapon_slot_if_owned,
     spawn_player_from_level,
 )
@@ -242,6 +243,35 @@ class PlayerControlTests(unittest.TestCase):
         apply_player_controls(player, level, (), select_weapon_slot=5)
         self.assertEqual(player.current_weapon, 5)
         self.assertEqual(player.load_count, 1)
+
+    def test_empty_weapon_switches_back_to_fist_when_shooting(self) -> None:
+        level = _build_level(height=12)
+        player = spawn_player_from_level(level)
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        player.load_count = 10
+
+        apply_player_controls(player, level, {InputAction.SHOOT})
+
+        self.assertEqual(player.current_weapon, 0)
+        self.assertEqual(player.shots_fired_total, 0)
+        self.assertEqual(len(consume_pending_shots(player)), 0)
+
+    def test_weapon_with_ammo_consumes_one_round_per_shot(self) -> None:
+        level = _build_level(height=12)
+        player = spawn_player_from_level(level)
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        player.load_count = 10
+        gained = grant_bullet_ammo(player, 0, 2)
+        self.assertEqual(gained, 2)
+
+        apply_player_controls(player, level, {InputAction.SHOOT})
+
+        self.assertEqual(player.current_weapon, 1)
+        self.assertEqual(player.shots_fired_total, 1)
+        self.assertEqual(player.bullets[0], 1)
+        self.assertEqual(len(consume_pending_shots(player)), 1)
 
 
 if __name__ == "__main__":

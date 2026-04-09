@@ -5,7 +5,7 @@ import math
 from typing import Iterable
 
 from ultimatetk.core.events import InputAction
-from ultimatetk.formats.lev import LevelData
+from ultimatetk.formats.lev import DIFF_BULLETS, LevelData
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
 
 
@@ -57,11 +57,42 @@ WEAPON_PROFILES: tuple[WeaponProfile, ...] = (
     WeaponProfile(loading_time=20, is_gun=False),
 )
 
+WEAPON_BULLET_TYPE: tuple[int, ...] = (
+    0,
+    1,
+    3,
+    1,
+    2,
+    5,
+    4,
+    6,
+    3,
+    7,
+    8,
+    9,
+)
+
+BULLET_TYPE_MAX_UNITS: tuple[int, ...] = (
+    300,
+    300,
+    300,
+    150,
+    125,
+    100,
+    100,
+    3000,
+    100,
+)
+
 
 def _default_weapon_slots() -> list[bool]:
     slots = [False] * PLAYER_WEAPON_SLOTS
     slots[0] = True
     return slots
+
+
+def _default_bullet_amounts() -> list[int]:
+    return [0] * DIFF_BULLETS
 
 
 @dataclass(slots=True)
@@ -75,6 +106,7 @@ class PlayerState:
     dead: bool = False
     current_weapon: int = 0
     weapons: list[bool] = field(default_factory=_default_weapon_slots)
+    bullets: list[int] = field(default_factory=_default_bullet_amounts)
     load_count: int = 0
     shoot_hold_count: int = 0
     fire_animation_ticks: int = 0
@@ -121,6 +153,58 @@ def weapon_profile_for_slot(weapon_slot: int) -> WeaponProfile:
     if 0 <= weapon_slot < len(WEAPON_PROFILES):
         return WEAPON_PROFILES[weapon_slot]
     return WEAPON_PROFILES[0]
+
+
+def weapon_bullet_type_index_for_slot(weapon_slot: int) -> int | None:
+    if 0 <= weapon_slot < len(WEAPON_BULLET_TYPE):
+        bullet_type = WEAPON_BULLET_TYPE[weapon_slot]
+        if bullet_type > 0:
+            return bullet_type - 1
+    return None
+
+
+def bullet_capacity_units_for_type(bullet_type_index: int) -> int:
+    if 0 <= bullet_type_index < len(BULLET_TYPE_MAX_UNITS):
+        return BULLET_TYPE_MAX_UNITS[bullet_type_index]
+    return BULLET_TYPE_MAX_UNITS[0]
+
+
+def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) -> int:
+    if amount <= 0:
+        return 0
+    if bullet_type_index < 0 or bullet_type_index >= len(player.bullets):
+        return 0
+
+    capacity = bullet_capacity_units_for_type(bullet_type_index)
+    current = max(0, player.bullets[bullet_type_index])
+    gained = min(amount, max(0, capacity - current))
+    if gained <= 0:
+        return 0
+
+    player.bullets[bullet_type_index] = current + gained
+    return gained
+
+
+def current_weapon_has_ammo(player: PlayerState) -> bool:
+    bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
+    if bullet_type is None:
+        return True
+    if bullet_type >= len(player.bullets):
+        return False
+    return player.bullets[bullet_type] > 0
+
+
+def consume_current_weapon_ammo(player: PlayerState) -> bool:
+    bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
+    if bullet_type is None:
+        return True
+    if bullet_type >= len(player.bullets):
+        return False
+    if player.bullets[bullet_type] <= 0:
+        return False
+
+    player.bullets[bullet_type] -= 1
+    return True
 
 
 def apply_player_controls(
@@ -275,13 +359,20 @@ def apply_player_damage(player: PlayerState, damage: float) -> bool:
 def _handle_shoot_input(player: PlayerState, level: LevelData, active: set[InputAction]) -> None:
     if InputAction.SHOOT in active:
         if player.load_count >= player.current_weapon_profile.loading_time:
-            _fire_weapon(player, level)
+            if current_weapon_has_ammo(player):
+                _fire_weapon(player, level)
+            elif player.current_weapon != 0:
+                player.current_weapon = 0
+                player.load_count = 0
         player.shoot_hold_count += 1
     else:
         player.shoot_hold_count = 0
 
 
 def _fire_weapon(player: PlayerState, level: LevelData) -> None:
+    if not consume_current_weapon_ammo(player):
+        return
+
     angle_radians = math.radians(player.angle)
     origin_x = player.center_x + (10.0 * math.sin(angle_radians))
     origin_y = player.center_y + (10.0 * math.cos(angle_radians))

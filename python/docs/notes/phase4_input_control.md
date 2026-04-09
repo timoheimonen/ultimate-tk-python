@@ -34,6 +34,8 @@ Implemented:
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
+  - Added first-pass player ammo economy for non-fist weapons: ammo-gated firing, one-round consumption per shot, and empty-weapon fallback to fist.
+  - Bullet crate rewards now apply to player ammo pools with legacy-like per-type caps.
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
@@ -72,5 +74,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
-- Add bullet-ammo capacity/consumption parity so bullet crate rewards feed full weapon economy.
+- Extend HUD/shop parity to expose ammo pools and ammo purchasing/selling behavior.
 - Continue parity tuning for collision feel and camera response.

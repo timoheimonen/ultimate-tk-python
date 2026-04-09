@@ -144,6 +144,7 @@ python/
 - Added player death/game-over flow in gameplay runtime state with countdown-based return to main menu.
 - Added first-pass destructible crate entities (level-driven spawn, shot/projectile hit handling, and crate runtime telemetry).
 - Added first-pass crate pickup/reward flow (player overlap collection, weapon unlock crates, bullet-pack crates, and energy restore crates).
+- Added first-pass player ammo economy parity hooks (weapon ammo gating/consumption, bullet-crate ammo grants with per-type capacity caps, and empty-weapon fallback to fist).
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
@@ -152,4 +153,4 @@ python/
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Combat/entity/progression systems are still in progress (advanced projectile edge cases, full ammo economy parity for bullet crates, UI/progression flow).
+- Combat/entity/progression systems are still in progress (advanced projectile edge cases, HUD/shop ammo parity, UI/progression flow).
