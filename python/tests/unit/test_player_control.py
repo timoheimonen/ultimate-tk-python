@@ -253,6 +253,46 @@ class PlayerControlTests(unittest.TestCase):
 
         self.assertGreater(moving_camera_x, start_camera_x)
 
+    def test_follow_camera_shooting_idle_uses_tighter_dead_zone(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        player.angle = 90
+        player.walking = False
+
+        target_camera_x = int(player.center_x + 25.0) - 160
+        start_camera_x = target_camera_x - 8
+        start_camera_y = int(player.center_y) - 100
+
+        idle_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+        self.assertEqual(idle_camera_x, start_camera_x)
+
+        player.shoot_hold_count = 1
+        shooting_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+        self.assertGreater(shooting_camera_x, start_camera_x)
+
+        player.shoot_hold_count = 0
+        player.fire_animation_ticks = 2
+        firing_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+        self.assertGreater(firing_camera_x, start_camera_x)
+
     def test_follow_camera_large_vertical_gap_snaps_to_target(self) -> None:
         level = _build_level(width=40, height=30, start=(12, 8))
         player = spawn_player_from_level(level)

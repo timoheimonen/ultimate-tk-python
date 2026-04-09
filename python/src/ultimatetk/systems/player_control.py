@@ -23,6 +23,8 @@ CAMERA_DEAD_ZONE_X = 6
 CAMERA_DEAD_ZONE_Y = 4
 CAMERA_IDLE_DEAD_ZONE_X_BONUS = 4
 CAMERA_IDLE_DEAD_ZONE_Y_BONUS = 2
+CAMERA_ACTION_DEAD_ZONE_X_BONUS = 1
+CAMERA_ACTION_DEAD_ZONE_Y_BONUS = 1
 CAMERA_CATCHUP_DIVISOR = 4
 CAMERA_MAX_STEP = 16
 DEFAULT_AIM_DISTANCE = 10.0
@@ -1049,9 +1051,13 @@ def follow_player_camera(
 
     dead_zone_x = CAMERA_DEAD_ZONE_X
     dead_zone_y = CAMERA_DEAD_ZONE_Y
-    if not player.walking:
+    action_active = player.shoot_hold_count > 0 or player.fire_animation_ticks > 0
+    if not player.walking and not action_active:
         dead_zone_x += CAMERA_IDLE_DEAD_ZONE_X_BONUS
         dead_zone_y += CAMERA_IDLE_DEAD_ZONE_Y_BONUS
+    elif action_active:
+        dead_zone_x += CAMERA_ACTION_DEAD_ZONE_X_BONUS
+        dead_zone_y += CAMERA_ACTION_DEAD_ZONE_Y_BONUS
 
     if abs(camera_x - target_camera_x) > half_width:
         camera_x = target_camera_x

@@ -28,6 +28,7 @@ Implemented:
   - Camera follow behavior adapted from legacy `Player::move_scr`.
   - Camera response smoothing tuned with look-ahead dead-zones and minimum step catch-up so small look-offset deltas no longer stall.
   - Camera large-gap vertical catch-up now snaps at viewport half-height parity (matching horizontal threshold style) to reduce delayed re-centering after abrupt Y-offset jumps.
+  - Camera dead-zone handling now treats idle shooting/firing as action-active (tighter dead-zones than fully idle) so turn/aim response while stationary is less sluggish.
   - Added first-pass shop trading helpers with legacy-aligned buy/sell behavior for ammo, weapons, shield, and target system.
   - Added seeded shop sell-price generation matching legacy formulas and player-side shield/target state tracking.
   - Added shop selection/navigation helpers plus normalized buy/sell transaction event helpers for row/column-driven shop flow.
@@ -169,6 +170,7 @@ Verification:
   - Added enemy strafe blocked-lane opposite-retry unit coverage and projectile-expiry splash crate-cover unit coverage.
   - Added player C4/mine tight-corridor crate-cover splash unit coverage.
   - Added mine trigger partial-corner near-versus-far unit coverage.
+  - Added camera action-active idle dead-zone unit coverage (shoot-hold/fire-animation versus fully idle behavior).
   - Added scene-flow coverage for shop cell state classification and state-driven color mapping.
   - Added C4 remote-trigger ammo-conservation scene-flow coverage.
   - Added enemy-projectile dead-player guard unit coverage so in-flight projectiles no longer count/player-damage after death.
@@ -182,7 +184,11 @@ Finalized and locked (do not retune further unless a regression appears):
 
 Remaining work for Phase 4:
 
-- Continue expanding combat parity details (projectile/explosive interactions, enemy cadence/movement tuning, and additional edge-case coverage).
-- Continue mine/C4 tuning against legacy feel (arming/trigger timing and obstruction-model micro-cases in tight corners/corridors).
-- Continue visual shop/HUD parity polish (legacy icon/detail fidelity, spacing, and color treatment passes).
-- Continue movement/collision/camera parity tuning from side-by-side legacy play-feel checks.
+- Add scripted (headless `--input-script`) parity coverage for blocked-lane enemy strafe fallback and projectile-expiry crate-cover interactions to validate runtime ordering beyond unit-level checks.
+- Retune enemy combat cadence around sight reacquisition and reload transitions in multi-enemy rooms (focus: avoid over-synchronized stutter/side-switch patterns).
+- Validate mine/C4 arm/trigger timing against legacy frame windows (`N-1`, `N`, `N+1`) at the arm-transition boundary and remote-trigger boundary.
+- Add multi-contact mine/C4 micro-cases in tight lanes (simultaneous enemy edges, chained explosives, and nearest-contact ordering) with scripted runtime assertions.
+- Complete shop icon/detail fidelity pass for remaining weapon/ammo silhouettes and 2-character label/counter alignment in dense grid cells.
+- Add explicit HUD warning-transition checks (low HP, low ammo, hot C4, unarmed mines) so color/readability states are asserted, not only render-digest changed.
+- Run side-by-side movement/camera feel checks for turn-in-place firing, backward movement, and strafe-turn blends; tune response constants from those captures.
+- Retune camera edge behavior at map bounds (look-ahead clamp/release) to avoid sticky edge drift when re-entering open space.
