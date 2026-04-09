@@ -36,7 +36,7 @@ Current baseline already implemented:
    - Verify ammo consumption/refund rules across normal fire, trigger-only follow-ups, and empty-weapon fallback paths.
    - Verify runtime telemetry invariants (shots/hits/damage/explosive counts) for monotonic and state-consistent updates.
 
-5. Regression expansion and lock criteria
+5. Regression expansion and lock criteria (in progress)
    - Add unit micro-cases for any uncovered combat/entity ordering boundaries.
    - Add scripted headless (`--input-script`) runtime scenarios for parity-sensitive transitions.
    - Keep Phase 4 finalized bundles locked unless a regression is proven.
@@ -106,6 +106,24 @@ Current baseline already implemented:
   - Extended C4 remote-trigger boundary coverage (`test_scripted_c4_remote_trigger_uses_n_minus_1_n_n_plus_1_timing`) with runtime ammo snapshot assertions so trigger-only refund flow is validated end-to-end (two shots, one retained C4 ammo unit).
   - Added explicit active-explosive telemetry invariant assertion in scripted mine+C4 runtime coverage (`test_scripted_mine_and_c4_update_explosive_runtime`) to ensure `player_explosives_active == player_mines_active + player_c4_active`.
   - Workstream 4 goals are now covered across unit + scene-flow + scripted integration paths: normal fire consumption, trigger-only refund follow-up behavior, empty-weapon fallback consistency, and monotonic/state-consistent combat telemetry snapshots.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Started Workstream 5 regression expansion by adding explicit lock tests for Phase 4/5 projectile-lifecycle invariants:
+  - Added unit micro-case `test_enemy_projectile_with_unknown_owner_is_not_discarded_by_owner_gating` in `python/tests/unit/test_combat.py` so owner-liveness filtering keeps standalone scripted projectiles when owner ids are unknown (discard only known-dead owners).
+  - Added scripted headless runtime scenario `test_scripted_dead_player_projectile_telemetry_gates_hits_and_damage` in `python/tests/integration/test_headless_input_script_runtime.py` to lock dead-player projectile telemetry gating end-to-end (no post-death hit/damage accumulation, projectile buffer cleared, crate side effects suppressed, game-over active).
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Continued Workstream 5 with additional owner-liveness boundary lock coverage:
+  - Added unit micro-case `test_enemy_projectile_owner_gating_drops_only_known_dead_owners` in `python/tests/unit/test_combat.py` to assert mixed-owner behavior in the same update pass (known-dead owner projectiles are discarded while unknown-owner projectiles still resolve normally).
+  - Added scripted headless runtime scenario `test_scripted_unknown_owner_projectile_is_preserved_by_owner_gating` in `python/tests/integration/test_headless_input_script_runtime.py` to lock the gameplay-loop path where `update_enemy_projectiles(..., enemies=...)` must preserve unknown-owner projectiles and publish corresponding hit/damage telemetry.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Continued Workstream 5 with dead-player cleanup precedence lock coverage:
+  - Added unit micro-case `test_enemy_projectile_dead_player_gating_precedes_owner_and_crate_resolution` in `python/tests/unit/test_combat.py` to ensure dead-player short-circuit cleanup wins over owner-gating and crate-resolution branches in mixed projectile sets.
+  - Added scripted headless runtime scenario `test_scripted_dead_player_clears_projectile_and_explosive_buffers_same_tick` in `python/tests/integration/test_headless_input_script_runtime.py` to lock same-tick gameplay cleanup invariants (projectile/explosive buffers zeroed, no post-death detonation/hit/damage telemetry drift, game-over active).
   - Verified with the full phase command set:
     - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`

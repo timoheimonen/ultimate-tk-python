@@ -1090,6 +1090,159 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.hits_taken_total, 0)
         self.assertEqual(len(projectiles), 0)
 
+    def test_enemy_projectile_with_unknown_owner_is_not_discarded_by_owner_gating(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        alive_enemy = EnemyState(
+            enemy_id=7,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            alive=True,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=99,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, enemies=[alive_enemy])
+
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertGreater(report.damage_to_player, 0.0)
+        self.assertLess(player.health, 100.0)
+        self.assertEqual(player.hits_taken_total, 1)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_owner_gating_drops_only_known_dead_owners(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        dead_enemy = EnemyState(
+            enemy_id=7,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=0.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            alive=False,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=7,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+            EnemyProjectile(
+                owner_enemy_id=99,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, enemies=[dead_enemy])
+
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertGreater(report.damage_to_player, 0.0)
+        self.assertLess(player.health, 100.0)
+        self.assertEqual(player.hits_taken_total, 1)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_dead_player_gating_precedes_owner_and_crate_resolution(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=0.0, dead=True)
+        dead_enemy = EnemyState(
+            enemy_id=7,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=0.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            alive=False,
+        )
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=56.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=7,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+            EnemyProjectile(
+                owner_enemy_id=99,
+                weapon_slot=1,
+                x=54.0,
+                y=54.0,
+                vx=0.0,
+                vy=1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, crates=[crate], enemies=[dead_enemy])
+
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertEqual(report.crates_hit, 0)
+        self.assertEqual(report.crates_destroyed, 0)
+        self.assertEqual(player.hits_taken_total, 0)
+        self.assertEqual(player.health, 0.0)
+        self.assertEqual(crate.health, crate.max_health)
+        self.assertTrue(crate.alive)
+        self.assertEqual(len(projectiles), 0)
+
     def test_dead_enemy_attack_resolution_is_gated(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)
