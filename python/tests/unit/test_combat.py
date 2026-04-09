@@ -877,6 +877,33 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.health, 95.0)
         self.assertEqual(len(projectiles), 0)
 
+    def test_enemy_projectile_does_not_apply_damage_when_player_already_dead(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=0.0, dead=True)
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player)
+
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertEqual(player.health, 0.0)
+        self.assertEqual(player.hits_taken_total, 0)
+        self.assertEqual(len(projectiles), 0)
+
     def test_enemy_projectile_stops_at_wall_before_player(self) -> None:
         level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})

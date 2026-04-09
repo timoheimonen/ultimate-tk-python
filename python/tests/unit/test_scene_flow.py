@@ -482,6 +482,52 @@ class SceneFlowTests(unittest.TestCase):
         self.assertGreaterEqual(context.runtime.player_explosive_detonations_total, 1)
         self.assertFalse(enemy.alive)
 
+    def test_gameplay_c4_remote_trigger_does_not_consume_extra_c4_ammo(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if player is None or enemies is None or explosives is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        player.grant_weapon(9)
+        player.current_weapon = 9
+        player.load_count = player.current_weapon_profile.loading_time
+        gained = grant_bullet_ammo(player, 6, 2)
+        self.assertEqual(gained, 2)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        manager.handle_events((AppEvent.action_released(InputAction.SHOOT),))
+        manager.update(0.025)
+
+        self.assertEqual(len(explosives), 1)
+        self.assertEqual(player.bullets[6], 1)
+
+        player.load_count = player.current_weapon_profile.loading_time
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        manager.handle_events((AppEvent.action_released(InputAction.SHOOT),))
+        manager.update(0.025)
+
+        self.assertEqual(len(explosives), 0)
+        self.assertEqual(player.bullets[6], 1)
+        self.assertGreaterEqual(context.runtime.player_explosive_detonations_total, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

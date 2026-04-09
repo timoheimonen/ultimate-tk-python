@@ -1646,6 +1646,11 @@ class GameplayScene(BaseScene):
                 if shot.weapon_slot == 9:
                     armed_c4 = [explosive for explosive in self._player_explosives if explosive.kind == "c4"]
                     if armed_c4:
+                        c4_bullet_type = weapon_bullet_type_index_for_slot(shot.weapon_slot)
+                        if c4_bullet_type is not None and c4_bullet_type < len(self._player.bullets):
+                            c4_capacity = bullet_capacity_units_for_type(c4_bullet_type)
+                            if self._player.bullets[c4_bullet_type] < c4_capacity:
+                                self._player.bullets[c4_bullet_type] += 1
                         for explosive in armed_c4:
                             explosive.fuse_ticks = 0
                         self._player.shot_effect_x = int(armed_c4[0].x)

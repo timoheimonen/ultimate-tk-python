@@ -994,7 +994,7 @@ def update_enemy_projectiles(
             crates=crates,
         )
 
-        if advance.damage_to_player > 0:
+        if advance.damage_to_player > 0 and not player.dead:
             apply_player_damage(player, advance.damage_to_player)
             hits_on_player += 1
             damage_to_player += advance.damage_to_player

@@ -63,6 +63,7 @@ Implemented:
   - Retuned mine proximity-trigger contact geometry so trigger checks use nearest enemy collision-bounds points (not only enemy centers), improving edge-contact trigger parity.
   - Added crate-aware mine proximity trigger gating so live crates can block enemy contact-trigger LOS checks (matching wall obstruction behavior).
   - Added C4 activator follow-up behavior in gameplay flow: firing the C4 slot while a C4 charge is already active now remote-triggers existing charges instead of placing another charge.
+  - Retuned C4 activator economy flow so remote-trigger follow-up shots refund the consumed C4 ammo unit when reusing already-placed charges (no extra ammo burn for trigger-only shots).
   - Retuned enemy explosive splash-to-player edge handling with collision-bounds fallback: if player-center splash miss occurs but the collision box edge is inside blast radius, apply scaled edge-contact splash damage instead of full center miss.
   - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
   - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
@@ -78,6 +79,7 @@ Implemented:
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
   - Enemy firing now stops once the player is dead.
+  - Enemy projectile damage/hit telemetry now also gates on player-alive state, so in-flight projectiles no longer add post-death damage/hit totals.
 - Gameplay integration in `python/src/ultimatetk/systems/gameplay_scene.py`:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.
@@ -158,7 +160,15 @@ Verification:
   - Added mine proximity-trigger crate-obstruction unit coverage.
   - Added mine proximity-trigger edge-contact coverage for enemy collision-bounds trigger checks.
   - Added projectile splash edge-contact coverage for player collision-bounds fallback handling.
+  - Added C4 remote-trigger ammo-conservation scene-flow coverage.
+  - Added enemy-projectile dead-player guard unit coverage so in-flight projectiles no longer count/player-damage after death.
   - Added scene-flow coverage for C4 remote-trigger behavior and new explosive readiness runtime counters.
+
+Finalized and locked (do not retune further unless a regression appears):
+
+- Mine proximity trigger nearest-collision-bounds contact math plus HUD explosive-readiness hint color-coding.
+- Movement/camera/combat micro-parity bundle: diagonal per-axis collision wall-slide behavior, vertical half-screen camera snap threshold, and scaled player-edge splash fallback.
+- C4 remote-trigger ammo conservation (refund on trigger-only follow-up) plus dead-player projectile hit/damage telemetry gating.
 
 Remaining work for Phase 4:
 
