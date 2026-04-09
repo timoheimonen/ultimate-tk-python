@@ -19,7 +19,7 @@ from ultimatetk.formats.lev import Block
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, WALL_BLOCK_TYPE
 from ultimatetk.systems import combat
 import ultimatetk.systems.gameplay_scene as gameplay_scene_module
-from ultimatetk.systems.player_control import ShotEvent, grant_bullet_ammo
+from ultimatetk.systems.player_control import ShotEvent, bullet_capacity_units_for_type, grant_bullet_ammo
 
 
 class HeadlessInputScriptRuntimeTests(unittest.TestCase):
@@ -1876,7 +1876,16 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
 
     def _run_scripted_c4_remote_trigger_boundary_scenario(
         self,
-    ) -> tuple[dict[int, tuple[tuple[int, ...], int, int]], int | None, int, int]:
+    ) -> tuple[
+        dict[int, tuple[tuple[int, ...], int, int]],
+        int | None,
+        int,
+        int,
+        int,
+        int,
+        int,
+        int,
+    ]:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
             self.skipTest("python/game_data not migrated yet")
@@ -2002,6 +2011,80 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             remote_trigger_frame,
             app.context.runtime.player_shots_fired_total,
             app.context.runtime.player_explosive_detonations_total,
+            app.context.runtime.player_weapon_slot,
+            app.context.runtime.player_current_ammo_type_index,
+            app.context.runtime.player_current_ammo_units,
+            app.context.runtime.player_ammo_pools[6],
+        )
+
+    def _run_scripted_empty_weapon_fallback_scenario(self) -> tuple[int, int, int, int, int, int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.9,
+            input_script="20:+SHOOT;35:-SHOOT;60:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(1)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        player.current_weapon = 1
+        player.load_count = player.current_weapon_profile.loading_time
+        player.shots_fired_total = 0
+
+        with patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ), patch.object(
+            gameplay_scene_module,
+            "update_enemy_projectiles",
+            return_value=combat.EnemyProjectileReport(),
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            app.context.runtime.player_weapon_slot,
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.player_current_ammo_type_index,
+            app.context.runtime.player_current_ammo_units,
+            app.context.runtime.player_current_ammo_capacity,
+            app.context.runtime.player_ammo_pools[0],
         )
 
     def _run_scripted_mine_simultaneous_edge_contacts_scenario(self) -> tuple[int, int, int, int]:
@@ -2478,6 +2561,10 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(app.context.runtime.player_mines_active, 1)
         self.assertEqual(app.context.runtime.player_c4_active, 0)
         self.assertGreaterEqual(app.context.runtime.player_explosives_active, 1)
+        self.assertEqual(
+            app.context.runtime.player_explosives_active,
+            app.context.runtime.player_mines_active + app.context.runtime.player_c4_active,
+        )
 
     def test_scripted_mine_arm_transition_uses_n_minus_1_n_n_plus_1_timing(self) -> None:
         deploy_frame, frame_samples, shots, detonations = self._run_scripted_mine_arm_transition_boundary_scenario()
@@ -2508,7 +2595,16 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(n_plus_1_mines_after, 0)
 
     def test_scripted_c4_remote_trigger_uses_n_minus_1_n_n_plus_1_timing(self) -> None:
-        frame_samples, remote_frame, shots, detonations = self._run_scripted_c4_remote_trigger_boundary_scenario()
+        (
+            frame_samples,
+            remote_frame,
+            shots,
+            detonations,
+            weapon_slot,
+            current_ammo_type,
+            current_ammo_units,
+            c4_ammo_pool,
+        ) = self._run_scripted_c4_remote_trigger_boundary_scenario()
 
         self.assertIsNotNone(remote_frame)
         assert remote_frame is not None
@@ -2523,6 +2619,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
 
         self.assertEqual(shots, 2)
         self.assertEqual(detonations, 1)
+        self.assertEqual(weapon_slot, 9)
+        self.assertEqual(current_ammo_type, 6)
+        self.assertEqual(current_ammo_units, 1)
+        self.assertEqual(c4_ammo_pool, 1)
+        self.assertEqual(current_ammo_units, c4_ammo_pool)
+        self.assertEqual(bullet_capacity_units_for_type(6), 100)
         self.assertTrue(n_minus_1_fuse)
         self.assertTrue(all(fuse > 0 for fuse in n_minus_1_fuse))
         self.assertEqual(n_minus_1_detonations, 0)
@@ -2535,6 +2637,18 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(n_plus_1_fuse, ())
         self.assertEqual(n_plus_1_detonations, 0)
         self.assertEqual(n_plus_1_c4_after, 0)
+
+    def test_scripted_empty_weapon_fallback_keeps_runtime_ammo_and_shot_telemetry_stable(self) -> None:
+        weapon_slot, shots, ammo_type, ammo_units, ammo_capacity, pistol_pool = (
+            self._run_scripted_empty_weapon_fallback_scenario()
+        )
+
+        self.assertEqual(weapon_slot, 0)
+        self.assertEqual(shots, 0)
+        self.assertEqual(ammo_type, -1)
+        self.assertEqual(ammo_units, 0)
+        self.assertEqual(ammo_capacity, 0)
+        self.assertEqual(pistol_pool, 0)
 
     def test_scripted_mine_simultaneous_enemy_edge_contacts_hit_both_targets(self) -> None:
         shots, detonations, kills, enemies_alive = self._run_scripted_mine_simultaneous_edge_contacts_scenario()

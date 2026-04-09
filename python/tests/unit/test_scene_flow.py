@@ -1116,6 +1116,11 @@ class SceneFlowTests(unittest.TestCase):
 
         self.assertEqual(len(explosives), 1)
         self.assertEqual(player.bullets[6], 1)
+        self.assertEqual(context.runtime.player_shots_fired_total, 1)
+        self.assertEqual(context.runtime.player_current_ammo_type_index, 6)
+        self.assertEqual(context.runtime.player_current_ammo_units, 1)
+        self.assertEqual(context.runtime.player_current_ammo_capacity, bullet_capacity_units_for_type(6))
+        self.assertEqual(context.runtime.player_weapon_slot, 9)
 
         player.load_count = player.current_weapon_profile.loading_time
         manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
@@ -1125,7 +1130,171 @@ class SceneFlowTests(unittest.TestCase):
 
         self.assertEqual(len(explosives), 0)
         self.assertEqual(player.bullets[6], 1)
+        self.assertEqual(context.runtime.player_shots_fired_total, 2)
+        self.assertEqual(context.runtime.player_current_ammo_type_index, 6)
+        self.assertEqual(context.runtime.player_current_ammo_units, 1)
+        self.assertEqual(context.runtime.player_current_ammo_capacity, bullet_capacity_units_for_type(6))
+        self.assertEqual(context.runtime.player_weapon_slot, 9)
         self.assertGreaterEqual(context.runtime.player_explosive_detonations_total, 1)
+
+    def test_gameplay_empty_weapon_fallback_keeps_runtime_shot_and_ammo_state_consistent(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        player.load_count = player.current_weapon_profile.loading_time
+        player.shots_fired_total = 0
+        player.bullets[0] = 0
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        manager.handle_events((AppEvent.action_released(InputAction.SHOOT),))
+        manager.update(0.025)
+
+        self.assertEqual(player.current_weapon, 0)
+        self.assertEqual(player.shots_fired_total, 0)
+        self.assertEqual(player.bullets[0], 0)
+        self.assertEqual(context.runtime.player_weapon_slot, 0)
+        self.assertEqual(context.runtime.player_shots_fired_total, 0)
+        self.assertEqual(context.runtime.player_current_ammo_type_index, -1)
+        self.assertEqual(context.runtime.player_current_ammo_units, 0)
+        self.assertEqual(context.runtime.player_current_ammo_capacity, 0)
+
+    def test_gameplay_runtime_combat_telemetry_totals_are_monotonic_and_active_counts_match_state(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        explosives = getattr(gameplay_scene, "_player_explosives", None)
+        projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        if (
+            player is None
+            or explosives is None
+            or projectiles is None
+            or enemies is None
+            or crates is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        crates.clear()
+        projectiles.clear()
+        explosives.clear()
+
+        player.health = 100.0
+        player.dead = False
+        player.grant_weapon(11)
+        player.current_weapon = 11
+        player.load_count = player.current_weapon_profile.loading_time
+        gained = grant_bullet_ammo(player, 8, 1)
+        self.assertEqual(gained, 1)
+
+        snapshots: list[tuple[int, int, int, float, int, int, float, int]] = []
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        manager.handle_events((AppEvent.action_released(InputAction.SHOOT),))
+
+        snapshots.append(
+            (
+                context.runtime.player_shots_fired_total,
+                context.runtime.player_hits_total,
+                context.runtime.player_hits_taken_total,
+                context.runtime.player_damage_taken_total,
+                context.runtime.enemy_hits_total,
+                context.runtime.enemy_shots_fired_total,
+                context.runtime.enemy_damage_to_player_total,
+                context.runtime.player_explosive_detonations_total,
+            ),
+        )
+        self.assertEqual(context.runtime.player_explosives_active, len(explosives))
+        self.assertEqual(context.runtime.enemy_projectiles_active, len(projectiles))
+
+        self.assertEqual(len(explosives), 1)
+        explosives[0].arming_ticks = 1
+        explosives[0].fuse_ticks = 1
+        projectiles.append(
+            EnemyProjectile(
+                owner_enemy_id=999,
+                weapon_slot=1,
+                x=player.center_x,
+                y=player.center_y,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=5.0,
+                remaining_ticks=5,
+                radius=1,
+                splash_radius=0,
+            ),
+        )
+
+        manager.update(0.025)
+        snapshots.append(
+            (
+                context.runtime.player_shots_fired_total,
+                context.runtime.player_hits_total,
+                context.runtime.player_hits_taken_total,
+                context.runtime.player_damage_taken_total,
+                context.runtime.enemy_hits_total,
+                context.runtime.enemy_shots_fired_total,
+                context.runtime.enemy_damage_to_player_total,
+                context.runtime.player_explosive_detonations_total,
+            ),
+        )
+        self.assertEqual(context.runtime.player_explosives_active, len(explosives))
+        self.assertEqual(context.runtime.enemy_projectiles_active, len(projectiles))
+        self.assertLessEqual(context.runtime.enemy_hits_total, context.runtime.player_hits_taken_total)
+        self.assertLessEqual(context.runtime.enemy_damage_to_player_total, context.runtime.player_damage_taken_total)
+
+        manager.update(0.025)
+        snapshots.append(
+            (
+                context.runtime.player_shots_fired_total,
+                context.runtime.player_hits_total,
+                context.runtime.player_hits_taken_total,
+                context.runtime.player_damage_taken_total,
+                context.runtime.enemy_hits_total,
+                context.runtime.enemy_shots_fired_total,
+                context.runtime.enemy_damage_to_player_total,
+                context.runtime.player_explosive_detonations_total,
+            ),
+        )
+        self.assertEqual(context.runtime.player_explosives_active, len(explosives))
+        self.assertEqual(context.runtime.enemy_projectiles_active, len(projectiles))
+
+        for previous, current in zip(snapshots, snapshots[1:]):
+            for index, value in enumerate(previous):
+                self.assertGreaterEqual(current[index], value)
 
 
 if __name__ == "__main__":

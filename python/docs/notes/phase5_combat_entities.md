@@ -32,7 +32,7 @@ Current baseline already implemented:
    - Verify destruction-versus-collection exclusivity for crate outcomes.
    - Validate crate reward application and combat-side crate counters in mixed combat/pickup scenarios.
 
-4. Combat economy and telemetry consistency
+4. Combat economy and telemetry consistency (completed)
    - Verify ammo consumption/refund rules across normal fire, trigger-only follow-ups, and empty-weapon fallback paths.
    - Verify runtime telemetry invariants (shots/hits/damage/explosive counts) for monotonic and state-consistent updates.
 
@@ -91,6 +91,21 @@ Current baseline already implemented:
 - Closed Workstream 3 after validating crate outcome exclusivity and mixed-scenario counter coherence:
   - Added scripted headless runtime coverage (`test_scripted_mixed_crate_collect_and_destroy_updates_runtime_consistently`) where one crate is collected while another is destroyed in the same runtime window, verifying reward/counter consistency end-to-end.
   - Confirmed single-crate exclusivity in both directions across unit+scene-flow paths (collect-precedes-destroy on eligible pickup crates, and full-health energy crates remain destroyable without accidental collection).
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Started Workstream 4 combat economy + telemetry consistency by extending scene-flow runtime coverage in `python/tests/unit/test_scene_flow.py`:
+  - Added empty-weapon fallback runtime assertions (`test_gameplay_empty_weapon_fallback_keeps_runtime_shot_and_ammo_state_consistent`) to verify no accidental shot/ammo counter drift when no-ammo shoot input falls back to fist.
+  - Extended C4 trigger-only follow-up economy checks (`test_gameplay_c4_remote_trigger_does_not_consume_extra_c4_ammo`) with runtime ammo snapshot and shot-counter assertions so trigger-only refunds stay telemetry-coherent.
+  - Added monotonic telemetry/state-consistency coverage (`test_gameplay_runtime_combat_telemetry_totals_are_monotonic_and_active_counts_match_state`) to lock non-decreasing combat totals and runtime active-entity snapshot coherence against internal projectile/explosive buffers.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Closed Workstream 4 by extending scripted headless runtime economy/telemetry coverage in `python/tests/integration/test_headless_input_script_runtime.py`:
+  - Added empty-weapon fallback scripted coverage (`test_scripted_empty_weapon_fallback_keeps_runtime_ammo_and_shot_telemetry_stable`) to verify runtime weapon/ammo snapshots and shot counters remain consistent when shoot input falls back to fist due to empty ammo.
+  - Extended C4 remote-trigger boundary coverage (`test_scripted_c4_remote_trigger_uses_n_minus_1_n_n_plus_1_timing`) with runtime ammo snapshot assertions so trigger-only refund flow is validated end-to-end (two shots, one retained C4 ammo unit).
+  - Added explicit active-explosive telemetry invariant assertion in scripted mine+C4 runtime coverage (`test_scripted_mine_and_c4_update_explosive_runtime`) to ensure `player_explosives_active == player_mines_active + player_c4_active`.
+  - Workstream 4 goals are now covered across unit + scene-flow + scripted integration paths: normal fire consumption, trigger-only refund follow-up behavior, empty-weapon fallback consistency, and monotonic/state-consistent combat telemetry snapshots.
   - Verified with the full phase command set:
     - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
