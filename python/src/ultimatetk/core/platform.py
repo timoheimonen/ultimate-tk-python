@@ -37,12 +37,15 @@ class HeadlessPlatformBackend:
             return
 
         context.logger.info(
-            "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f",
+            "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x",
             frame,
             context.runtime.mode.value,
             scene_name,
             context.runtime.simulation_frame,
             context.runtime.elapsed_seconds,
+            context.runtime.last_render_width,
+            context.runtime.last_render_height,
+            context.runtime.last_render_digest,
         )
 
     def shutdown(self, context: GameContext) -> None:

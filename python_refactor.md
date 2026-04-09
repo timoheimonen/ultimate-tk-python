@@ -130,7 +130,11 @@ python/
 - Section 1 implementation started and completed with a runnable runtime skeleton (`python/src/ultimatetk/core/`).
 - Fixed-step clock (40 FPS target) and scene/state boundaries are in place.
 - Section 2 implementation completed for binary format parsing in `python/src/ultimatetk/formats/`.
+- Section 3 rendering baseline implemented in `python/src/ultimatetk/rendering/` and integrated into `GameplayScene`.
+- Tile rendering, transparent/translucent sprite paths, and palette shadow/light table application are now active.
 - Unit tests cover clock/scene flow plus EFP/FNT/LEV/palette/options format parsing.
+- Rendering unit tests and a real-data rendering integration check were added under `python/tests/`.
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
+- Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Gameplay content systems are still placeholders.
+- Gameplay simulation systems are still placeholders.

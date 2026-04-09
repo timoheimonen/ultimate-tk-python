@@ -5,7 +5,8 @@ This directory contains the Python refactor work.
 ## Current status
 - Section 1 (architecture/runtime skeleton) is implemented.
 - Section 2 (binary format parity loaders) is implemented.
-- Rendering and gameplay features are placeholders.
+- Section 3 rendering baseline is implemented with a software-style indexed renderer.
+- Input, combat, and full gameplay systems are still in progress.
 
 ## Run the skeleton
 From the `python/` directory:
@@ -29,4 +30,10 @@ Probe format loaders against migrated data:
 
 ```bash
 python3 tools/format_probe.py
+```
+
+Render a baseline gameplay frame to a screenshot:
+
+```bash
+python3 tools/render_probe.py --output runs/screenshots/phase3_render_probe.ppm
 ```

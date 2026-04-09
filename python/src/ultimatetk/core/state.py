@@ -18,6 +18,9 @@ class RuntimeState:
     simulation_frame: int = 0
     render_frame: int = 0
     elapsed_seconds: float = 0.0
+    last_render_digest: int = 0
+    last_render_width: int = 0
+    last_render_height: int = 0
 
 
 @dataclass(slots=True)
