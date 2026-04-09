@@ -384,11 +384,18 @@ class SceneFlowTests(unittest.TestCase):
 
         manager.update(0.025)
         self.assertEqual(len(explosives), 1)
+        self.assertEqual(context.runtime.player_explosives_active, 1)
+        self.assertEqual(context.runtime.player_mines_active, 1)
+        self.assertEqual(context.runtime.player_c4_active, 0)
         explosives[0].arming_ticks = 1
 
         manager.update(0.025)
 
         self.assertEqual(len(explosives), 0)
+        self.assertEqual(context.runtime.player_explosives_active, 0)
+        self.assertEqual(context.runtime.player_mines_active, 0)
+        self.assertEqual(context.runtime.player_c4_active, 0)
+        self.assertGreaterEqual(context.runtime.player_explosive_detonations_total, 1)
         self.assertFalse(enemy.alive)
         self.assertGreaterEqual(context.runtime.player_hits_total, 1)
         self.assertGreaterEqual(context.runtime.enemies_killed_by_player, 1)

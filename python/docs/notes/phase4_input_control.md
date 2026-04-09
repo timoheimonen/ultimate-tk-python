@@ -35,6 +35,7 @@ Implemented:
   - Added explosive near-miss splash damage for grenade-class enemy shots and low tick-damage handling for flamethrower shots.
   - Added enemy projectile entities with travel-time simulation, wall impact handling, splash falloff, and per-frame projectile updates.
   - Added first-pass player explosive entities for mine/C4 weapons (deploy from player shots, mine arming delay/contact trigger, fuse expiry, and radial detonation damage against enemies/crates/player).
+  - Added wall-aware mine/C4 blast gating with lateral ray fan checks so explosive damage is blocked by map walls.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
@@ -56,6 +57,7 @@ Implemented:
   - Runtime metadata now includes shop-active flag, shop selection row/column, and latest transaction outcome fields including blocked-reason text.
   - Added first-pass visual shop overlay panel (selection grid, per-cell short labels + owned/stock counters, selected-item legacy names, buy/sell info, and transaction feedback text with blocked reason) rendered on top of gameplay while shop mode is active.
   - Added first-pass gameplay HUD overlay (weapon/ammo/health status bars, cash/shield/target text, and shop-open control hint) while shop mode is closed.
+  - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
   - Touching a live crate now consumes it and applies crate-type reward effects.
@@ -82,10 +84,11 @@ Verification:
   - `python/tests/unit/test_scene_flow.py`
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
+  - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
 
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details and additional enemy behavior tuning.
-- Continue mine/C4 parity refinement (detonation feel, wall interaction, and blast-model tuning versus legacy explosive rays).
+- Continue mine/C4 parity refinement (detonation feel and blast-model tuning versus legacy explosive rays, including more nuanced obstruction edge cases).
 - Continue refining visual shop/HUD parity toward legacy presentation (icon-like cell glyphs, color/layout polish, and HUD styling/detail parity).
 - Continue parity tuning for collision feel and camera response.

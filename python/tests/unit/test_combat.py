@@ -826,6 +826,7 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(mine.radius, 20)
 
     def test_player_c4_fuse_explosion_damages_enemy_and_crate(self) -> None:
+        level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)
         enemy = EnemyState(
             enemy_id=0,
@@ -860,7 +861,13 @@ class CombatSystemTests(unittest.TestCase):
         explosive.fuse_ticks = 1
 
         explosives = [explosive]
-        report = update_player_explosives(explosives, [enemy], player, crates=[crate])
+        report = update_player_explosives(
+            explosives,
+            [enemy],
+            player,
+            level=level,
+            crates=[crate],
+        )
 
         self.assertEqual(report.detonations, 1)
         self.assertGreaterEqual(report.enemies_hit, 1)
@@ -870,6 +877,46 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(len(explosives), 0)
         self.assertFalse(enemy.alive)
         self.assertFalse(crate.alive)
+
+    def test_player_c4_explosion_is_blocked_by_wall(self) -> None:
+        level = _build_level(height=12, walls={(2, 5), (3, 5)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+        explosive.fuse_ticks = 1
+
+        explosives = [explosive]
+        report = update_player_explosives(
+            explosives,
+            [enemy],
+            player,
+            level=level,
+        )
+
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(report.enemies_hit, 0)
+        self.assertEqual(report.enemies_killed, 0)
+        self.assertEqual(enemy.health, 18.0)
+        self.assertTrue(enemy.alive)
 
     def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
         player = PlayerState(x=0.0, y=0.0)

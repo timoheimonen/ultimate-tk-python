@@ -150,6 +150,7 @@ class GameplayScene(BaseScene):
         self._crates: list[CrateState] = []
         self._enemy_projectiles: list[EnemyProjectile] = []
         self._player_explosives: list[PlayerExplosive] = []
+        self._player_explosive_detonations = 0
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._crates_destroyed_by_player = 0
@@ -206,6 +207,10 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_hits_total = 0
         context.runtime.enemy_damage_to_player_total = 0.0
         context.runtime.enemy_projectiles_active = 0
+        context.runtime.player_explosives_active = 0
+        context.runtime.player_mines_active = 0
+        context.runtime.player_c4_active = 0
+        context.runtime.player_explosive_detonations_total = 0
         context.runtime.game_over_active = False
         context.runtime.game_over_ticks_remaining = 0
 
@@ -237,6 +242,7 @@ class GameplayScene(BaseScene):
         self._crates = []
         self._enemy_projectiles = []
         self._player_explosives = []
+        self._player_explosive_detonations = 0
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._crates_destroyed_by_player = 0
@@ -430,8 +436,10 @@ class GameplayScene(BaseScene):
                     self._player_explosives,
                     self._enemies,
                     self._player,
+                    level=self._level,
                     crates=self._crates,
                 )
+                self._player_explosive_detonations += explosive_report.detonations
                 self._enemy_hits_by_player += explosive_report.enemies_hit
                 self._enemies_killed_by_player += explosive_report.enemies_killed
                 self._crates_destroyed_by_player += explosive_report.crates_destroyed
@@ -1096,11 +1104,15 @@ class GameplayScene(BaseScene):
             right_text,
             self._HUD_VALUE_COLOR,
         )
+
+        active_explosives = len(self._player_explosives)
+        hint_text = f"R/ENT SHOP EX {active_explosives:02d}"
+        hint_x = max(4, SCREEN_WIDTH - ((len(hint_text) + 1) * 8))
         self._draw_shop_text(
             pixels,
-            right_x,
+            hint_x,
             panel_y + 16,
-            "R/ENT SHOP",
+            hint_text,
             self._HUD_TEXT_COLOR,
         )
 
@@ -1415,6 +1427,10 @@ class GameplayScene(BaseScene):
             context.runtime.enemy_hits_total = 0
             context.runtime.enemy_damage_to_player_total = 0.0
             context.runtime.enemy_projectiles_active = 0
+            context.runtime.player_explosives_active = 0
+            context.runtime.player_mines_active = 0
+            context.runtime.player_c4_active = 0
+            context.runtime.player_explosive_detonations_total = 0
             context.runtime.game_over_active = False
             context.runtime.game_over_ticks_remaining = 0
             return
@@ -1469,6 +1485,12 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
         context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
+        mines_active = sum(1 for explosive in self._player_explosives if explosive.kind == "mine")
+        c4_active = sum(1 for explosive in self._player_explosives if explosive.kind == "c4")
+        context.runtime.player_mines_active = mines_active
+        context.runtime.player_c4_active = c4_active
+        context.runtime.player_explosives_active = mines_active + c4_active
+        context.runtime.player_explosive_detonations_total = self._player_explosive_detonations
         context.runtime.game_over_active = self._game_over_active
         context.runtime.game_over_ticks_remaining = self._game_over_ticks_remaining
 

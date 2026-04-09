@@ -164,6 +164,7 @@ PLAYER_MINE_SLEEP_TICKS = 25
 PLAYER_C4_EXPLOSION_RADIUS = 80
 PLAYER_MINE_EXPLOSION_RADIUS = 20
 PLAYER_EXPLOSIVE_BASE_DAMAGE = 30.0
+PLAYER_EXPLOSIVE_RAY_OFFSETS: tuple[float, ...] = (0.0, -6.0, 6.0, -12.0, 12.0)
 
 
 @dataclass(slots=True)
@@ -933,6 +934,7 @@ def update_player_explosives(
     enemies: Sequence[EnemyState],
     player: PlayerState,
     *,
+    level: LevelData | None = None,
     crates: Sequence[CrateState] | None = None,
 ) -> PlayerExplosiveReport:
     if not explosives:
@@ -969,6 +971,7 @@ def update_player_explosives(
             explosive,
             enemies,
             player,
+            level=level,
             crates=crates,
         )
         enemies_hit += detonation.enemies_hit
@@ -1005,6 +1008,7 @@ def _detonate_player_explosive(
     enemies: Sequence[EnemyState],
     player: PlayerState,
     *,
+    level: LevelData | None = None,
     crates: Sequence[CrateState] | None = None,
 ) -> _PlayerExplosiveDetonation:
     blast_x, blast_y = _player_explosive_blast_center(explosive)
@@ -1015,7 +1019,8 @@ def _detonate_player_explosive(
         if not enemy.alive:
             continue
 
-        damage = _radial_damage(
+        damage = _player_explosive_damage(
+            level=level,
             target_x=enemy.center_x,
             target_y=enemy.center_y,
             impact_x=blast_x,
@@ -1038,7 +1043,8 @@ def _detonate_player_explosive(
             if not crate.alive:
                 continue
 
-            damage = _radial_damage(
+            damage = _player_explosive_damage(
+                level=level,
                 target_x=crate.center_x,
                 target_y=crate.center_y,
                 impact_x=blast_x,
@@ -1054,7 +1060,8 @@ def _detonate_player_explosive(
             if crate.apply_damage(damage):
                 crates_destroyed += 1
 
-    player_damage = _radial_damage(
+    player_damage = _player_explosive_damage(
+        level=level,
         target_x=player.center_x,
         target_y=player.center_y,
         impact_x=blast_x,
@@ -1080,6 +1087,72 @@ def _player_explosive_blast_center(explosive: PlayerExplosive) -> tuple[float, f
         explosive.x - (5.0 * math.sin(angle_radians)),
         explosive.y - (5.0 * math.cos(angle_radians)),
     )
+
+
+def _player_explosive_damage(
+    *,
+    level: LevelData | None,
+    target_x: float,
+    target_y: float,
+    impact_x: float,
+    impact_y: float,
+    max_damage: float,
+    radius: int,
+) -> float:
+    damage = _radial_damage(
+        target_x=target_x,
+        target_y=target_y,
+        impact_x=impact_x,
+        impact_y=impact_y,
+        max_damage=max_damage,
+        radius=radius,
+    )
+    if damage <= 0:
+        return 0.0
+    if level is None:
+        return damage
+    if _explosive_rays_reach_target(
+        level,
+        blast_x=impact_x,
+        blast_y=impact_y,
+        target_x=target_x,
+        target_y=target_y,
+    ):
+        return damage
+    return 0.0
+
+
+def _explosive_rays_reach_target(
+    level: LevelData,
+    *,
+    blast_x: float,
+    blast_y: float,
+    target_x: float,
+    target_y: float,
+) -> bool:
+    dx = target_x - blast_x
+    dy = target_y - blast_y
+    distance = math.hypot(dx, dy)
+    if distance <= 0.0:
+        return True
+
+    normal_x = -dy / distance
+    normal_y = dx / distance
+
+    for lateral in PLAYER_EXPLOSIVE_RAY_OFFSETS:
+        ray_start_x = blast_x + (normal_x * lateral)
+        ray_start_y = blast_y + (normal_y * lateral)
+        ray_end_x = target_x + (normal_x * lateral)
+        ray_end_y = target_y + (normal_y * lateral)
+        if _line_of_sight_clear(
+            level,
+            start_x=ray_start_x,
+            start_y=ray_start_y,
+            end_x=ray_end_x,
+            end_y=ray_end_y,
+        ):
+            return True
+    return False
 
 
 def _radial_damage(

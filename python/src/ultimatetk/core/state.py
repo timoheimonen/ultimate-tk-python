@@ -62,6 +62,10 @@ class RuntimeState:
     enemy_hits_total: int = 0
     enemy_damage_to_player_total: float = 0.0
     enemy_projectiles_active: int = 0
+    player_explosives_active: int = 0
+    player_mines_active: int = 0
+    player_c4_active: int = 0
+    player_explosive_detonations_total: int = 0
     game_over_active: bool = False
     game_over_ticks_remaining: int = 0
 
