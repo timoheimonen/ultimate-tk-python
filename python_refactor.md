@@ -86,11 +86,11 @@ python/
    - Load `.EFP`, `.FNT`, `.LEV`, `palette.tab`, `options.cfg` into Python structures
 3. Rendering baseline
    - Tile/sprite drawing, transparency rules, palette/shadow/light table usage
-4. Input and player control
+4. Input and player control (completed)
    - Movement, collision, aiming/rotation, weapon switching
-5. Combat and entities
+5. Combat and entities (active closeout phase)
    - Bullets, enemies, crates, effects, damage/death flow
-6. UI and progression
+6. UI and progression (next)
    - Main menu, options, episode/level flow, shop, HUD
 7. Balancing and parity pass
    - Timing adjustments, camera behavior, spawn and effect cadence
@@ -189,4 +189,6 @@ python/
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Combat/entity/progression systems are still in progress (advanced projectile edge cases, visual HUD/shop parity, and broader UI/progression flow).
+- Phase 4 input/control parity checklist is complete and locked in `python/docs/notes/phase4_input_control.md`.
+- Phase 5 combat/entities planning note created at `python/docs/notes/phase5_combat_entities.md` and is now the active implementation guide.
+- Next focus is Phase 5 combat/entity closeout and hardening; broader UI/progression flow remains Phase 6 scope.

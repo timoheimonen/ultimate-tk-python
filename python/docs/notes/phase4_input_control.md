@@ -203,3 +203,7 @@ Finalized and locked (do not retune further unless a regression appears):
 Remaining work for Phase 4:
 
 - None. Phase 4 input/control parity checklist is complete.
+
+Next phase planning:
+
+- See `python/docs/notes/phase5_combat_entities.md` for active combat/entity closeout workstreams.
