@@ -48,6 +48,7 @@ Implemented:
   - Tightened enemy projectile sub-step sampling to reduce corner-graze wall leakage in travel-time projectile hits.
   - Tuned enemy firing cadence bookkeeping to follow legacy attack-window behavior: `shoot_count` now advances while enemies stay aligned with a visible target (not only on fire events) and resets when LOS/alignment is lost, improving projectile/explosive burst spread cadence parity.
   - Added post-shot explosive pressure parity: after long-range explosive shots, enemies now keep a short forward-pressure window during reload (legacy-style `walk_cnt` behavior) instead of immediately defaulting to strafe-only repositioning.
+  - Added lost-sight chase parity: enemies now start a distance-scaled short chase window after breaking LOS from a previously seen target, preserving last known attack heading before returning to patrol.
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
@@ -109,11 +110,13 @@ Verification:
   - Added player shot corner-graze coverage so wall-edge obstruction blocks leaked hitscan enemy hits.
   - Added enemy projectile corner-graze coverage so wall-edge obstruction blocks leaked travel-time projectile hits.
   - Added enemy shoot-counter cadence coverage for LOS/alignment attack windows and reload-phase accumulation before explosive projectile fire.
+  - Added lost-sight chase-window coverage for previously seen versus never-seen enemy LOS states.
   - Added mine proximity-trigger LOS coverage plus enemy projectile wall-impact crate-splash coverage.
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
   - Added scripted shield shop + energy-crate flow coverage, including buy-heal-to-shield-cap and sell-back clamp-to-base-cap assertions.
   - Added scripted enemy explosive post-shot pressure coverage by comparing pressured versus near-disabled pressure-trigger runs.
+  - Added scripted enemy lost-sight chase coverage for prior-contact versus no-prior-contact LOS break behavior.
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
   - Added scripted C4 corner-obstruction scenario asserting open-lane crate destruction versus blocked-corner survival.
   - Added scripted C4 side-wall leakage scenario asserting damped partial crate damage for side-only obstruction and zero damage for fully blocked lanes.

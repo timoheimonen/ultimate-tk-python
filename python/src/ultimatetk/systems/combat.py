@@ -31,6 +31,7 @@ PLAYER_SHOT_TRACE_STEP = 2
 ENEMY_EXPLOSIVE_MIN_SAFE_RADIUS_RATIO = 0.2
 ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO = 0.5
 ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE = 32.0
+ENEMY_LOST_SIGHT_CHASE_TICKS_MAX = 120
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -198,6 +199,7 @@ class EnemyState:
     target_angle: int = 0
     walk_ticks: int = 0
     pressure_ticks: int = 0
+    chase_ticks: int = 0
     load_count: int = 0
     shoot_count: int = 0
     sees_player: bool = False
@@ -651,12 +653,14 @@ def update_enemy_behavior(
         if not enemy.alive:
             enemy.sees_player = False
             enemy.pressure_ticks = 0
+            enemy.chase_ticks = 0
             enemy.shoot_count = 0
             continue
 
         if player.dead:
             enemy.sees_player = False
             enemy.pressure_ticks = 0
+            enemy.chase_ticks = 0
             enemy.shoot_count = 0
             _advance_enemy_patrol(
                 enemy,
@@ -669,8 +673,7 @@ def update_enemy_behavior(
 
         weapon_slot = enemy_weapon_for_type(enemy.type_index)
         player_angle = _angle_to_point(enemy.center_x, enemy.center_y, player.center_x, player.center_y)
-        enemy.target_angle = player_angle
-        enemy.angle = _rotate_towards_angle(enemy.angle, player_angle, step=ENEMY_ROTATION_STEP_DEGREES)
+        saw_player_last_tick = enemy.sees_player
 
         enemy.sees_player = _line_of_sight_clear(
             level,
@@ -682,6 +685,20 @@ def update_enemy_behavior(
         )
 
         distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)
+        if enemy.sees_player:
+            enemy.target_angle = player_angle
+        elif saw_player_last_tick:
+            enemy.chase_ticks = _enemy_lost_sight_chase_ticks(
+                enemy,
+                distance_to_player=distance_to_player,
+            )
+
+        enemy.angle = _rotate_towards_angle(
+            enemy.angle,
+            enemy.target_angle,
+            step=ENEMY_ROTATION_STEP_DEGREES,
+        )
+
         if enemy.sees_player and _enemy_is_attack_aligned(enemy):
             enemy.shoot_count += 1
         else:
@@ -689,6 +706,7 @@ def update_enemy_behavior(
 
         if enemy.sees_player:
             enemy.walk_ticks = 0
+            enemy.chase_ticks = 0
             if enemy.pressure_ticks > 0:
                 enemy.pressure_ticks -= 1
 
@@ -750,12 +768,20 @@ def update_enemy_behavior(
                     damage_to_player += attack.total_damage
         else:
             enemy.pressure_ticks = 0
-            _advance_enemy_patrol(
-                enemy,
-                level,
-                enemies=enemies,
-                player=player,
-            )
+            if enemy.chase_ticks > 0:
+                _advance_enemy_lost_sight_chase(
+                    enemy,
+                    level,
+                    enemies=enemies,
+                    player=player,
+                )
+            else:
+                _advance_enemy_patrol(
+                    enemy,
+                    level,
+                    enemies=enemies,
+                    player=player,
+                )
 
         _advance_enemy_reload(enemy, weapon_slot=weapon_slot)
 
@@ -1405,6 +1431,16 @@ def _enemy_post_shot_pressure_ticks(type_index: int) -> int:
     return max(1, int(round(20.0 / speed)))
 
 
+def _enemy_lost_sight_chase_ticks(
+    enemy: EnemyState,
+    *,
+    distance_to_player: float,
+) -> int:
+    speed = max(0.1, enemy_speed_for_type(enemy.type_index))
+    chase_ticks = int(distance_to_player / speed)
+    return min(ENEMY_LOST_SIGHT_CHASE_TICKS_MAX, max(0, chase_ticks))
+
+
 def _enemy_strafe_angle(enemy: EnemyState) -> int:
     seed = enemy.enemy_id * 37 + enemy.shoot_count * 17 + enemy.load_count * 11
     if seed % 2 == 0:
@@ -1416,6 +1452,27 @@ def _advance_enemy_reload(enemy: EnemyState, *, weapon_slot: int) -> None:
     loading_time = weapon_profile_for_slot(weapon_slot).loading_time
     if enemy.load_count < loading_time:
         enemy.load_count += 1
+
+
+def _advance_enemy_lost_sight_chase(
+    enemy: EnemyState,
+    level: LevelData,
+    *,
+    enemies: Sequence[EnemyState],
+    player: PlayerState,
+) -> None:
+    moved = _move_enemy_with_collision(
+        enemy,
+        level,
+        angle=enemy.angle,
+        speed=enemy_speed_for_type(enemy.type_index),
+        enemies=enemies,
+        player=player,
+    )
+    if moved:
+        enemy.chase_ticks -= 1
+    else:
+        enemy.chase_ticks = 0
 
 
 def _advance_enemy_patrol(

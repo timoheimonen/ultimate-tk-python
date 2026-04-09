@@ -497,6 +497,57 @@ class CombatSystemTests(unittest.TestCase):
         self.assertFalse(enemy.sees_player)
         self.assertEqual(enemy.shoot_count, 0)
 
+    def test_enemy_lost_sight_starts_chase_window(self) -> None:
+        open_level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=0,
+            chase_ticks=0,
+        )
+
+        first = update_enemy_behavior(open_level, [enemy], player)
+        self.assertEqual(first.shots_fired, 0)
+        self.assertTrue(enemy.sees_player)
+        self.assertEqual(enemy.chase_ticks, 0)
+
+        start_y = enemy.y
+        second = update_enemy_behavior(blocked_level, [enemy], player)
+        self.assertEqual(second.shots_fired, 0)
+        self.assertFalse(enemy.sees_player)
+        self.assertGreater(enemy.chase_ticks, 0)
+        self.assertLess(enemy.y, start_y)
+
+    def test_enemy_without_prior_sight_does_not_start_chase_window(self) -> None:
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=0,
+            chase_ticks=0,
+        )
+
+        report = update_enemy_behavior(blocked_level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertFalse(enemy.sees_player)
+        self.assertEqual(enemy.chase_ticks, 0)
+
     def test_enemy_explosive_shoot_counter_accumulates_during_reload(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)

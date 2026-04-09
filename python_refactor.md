@@ -156,6 +156,7 @@ python/
 - Tuned enemy firing cadence parity bookkeeping so `shoot_count` advances through aligned LOS attack windows (not only at fire instants) and resets on attack-window breaks, improving projectile/explosive spread cadence behavior.
 - Added scripted headless shield shop + energy-crate integration coverage for buy-heal and sell-clamp flow.
 - Added legacy-style enemy post-shot explosive forward-pressure tuning so long-range explosive shots temporarily bias reload movement toward forward push (walk-count style) before falling back to normal strafing/patrol flow.
+- Added legacy-style enemy lost-sight chase-window tuning so enemies keep moving along last known attack heading for a distance-scaled window after LOS breaks, with new unit/integration coverage for prior-contact versus no-prior-contact behavior.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
