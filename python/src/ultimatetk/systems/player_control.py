@@ -21,6 +21,8 @@ CAMERA_LOOK_AHEAD_DISTANCE = 25.0
 CAMERA_WALK_LOOK_BOOST = 4.0
 CAMERA_DEAD_ZONE_X = 6
 CAMERA_DEAD_ZONE_Y = 4
+CAMERA_IDLE_DEAD_ZONE_X_BONUS = 4
+CAMERA_IDLE_DEAD_ZONE_Y_BONUS = 2
 CAMERA_CATCHUP_DIVISOR = 4
 CAMERA_MAX_STEP = 16
 DEFAULT_AIM_DISTANCE = 10.0
@@ -1045,15 +1047,21 @@ def follow_player_camera(
     target_camera_x = int(look_x) - half_width
     target_camera_y = int(look_y) - half_height
 
+    dead_zone_x = CAMERA_DEAD_ZONE_X
+    dead_zone_y = CAMERA_DEAD_ZONE_Y
+    if not player.walking:
+        dead_zone_x += CAMERA_IDLE_DEAD_ZONE_X_BONUS
+        dead_zone_y += CAMERA_IDLE_DEAD_ZONE_Y_BONUS
+
     if abs(camera_x - target_camera_x) > half_width:
         camera_x = target_camera_x
     else:
-        camera_x = _approach_camera_axis(camera_x, target_camera_x, dead_zone=CAMERA_DEAD_ZONE_X)
+        camera_x = _approach_camera_axis(camera_x, target_camera_x, dead_zone=dead_zone_x)
 
     if abs(camera_y - target_camera_y) > half_height:
         camera_y = target_camera_y
     else:
-        camera_y = _approach_camera_axis(camera_y, target_camera_y, dead_zone=CAMERA_DEAD_ZONE_Y)
+        camera_y = _approach_camera_axis(camera_y, target_camera_y, dead_zone=dead_zone_y)
 
     camera_x = _clamp(camera_x, 0, max_camera_x)
     camera_y = _clamp(camera_y, 0, max_camera_y)

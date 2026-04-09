@@ -844,6 +844,8 @@ class GameplayScene(BaseScene):
                 cell_x = grid_x + (column * cell_pitch)
                 selected = row == self._shop_row and column == self._shop_column
                 selected_pulse = ((self._spot_phase // 15) % 2) == 0
+                locked = self._shop_cell_is_locked(row, column)
+                affordable = self._shop_cell_is_affordable(row, column)
 
                 fill_color = self._SHOP_SELECTED_COLOR if selected else self._SHOP_CELL_COLOR
                 border_color = self._SHOP_TEXT_COLOR
@@ -879,6 +881,10 @@ class GameplayScene(BaseScene):
                 icon_kind = self._shop_cell_icon_kind(row, column)
                 if icon_kind:
                     icon_color = self._SHOP_ICON_SELECTED_COLOR if selected else self._SHOP_ICON_COLOR
+                    if locked:
+                        icon_color = self._SHOP_MUTED_COLOR
+                    elif not affordable:
+                        icon_color = self._SHOP_ERROR_COLOR if selected else self._SHOP_MUTED_COLOR
                     self._draw_shop_cell_icon(
                         pixels,
                         x=cell_x + 2,
@@ -890,12 +896,17 @@ class GameplayScene(BaseScene):
                 cell_label = self._fit_shop_cell_text(self._shop_cell_label_text(row, column), max_chars=2)
                 if cell_label:
                     label_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(cell_label) * 8)) // 2)
+                    label_color = self._SHOP_VALUE_COLOR if selected else self._SHOP_TEXT_COLOR
+                    if locked:
+                        label_color = self._SHOP_MUTED_COLOR
+                    elif not affordable:
+                        label_color = self._SHOP_ERROR_COLOR if selected else self._SHOP_MUTED_COLOR
                     self._draw_shop_text(
                         pixels,
                         label_x,
                         row_y + 1,
                         cell_label,
-                        self._SHOP_VALUE_COLOR if selected else self._SHOP_TEXT_COLOR,
+                        label_color,
                     )
 
                 counter_text = self._shop_cell_counter_text(row, column)
@@ -1331,6 +1342,51 @@ class GameplayScene(BaseScene):
         if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
             return "ON"
         return ""
+
+    def _shop_cell_is_locked(self, row: int, column: int) -> bool:
+        if self._player is None:
+            return True
+
+        if row == SHOP_ROW_WEAPONS:
+            weapon_slot = column + 1
+            return weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]
+
+        if row == SHOP_ROW_AMMO:
+            if column >= len(self._player.bullets):
+                return True
+            return self._player.bullets[column] >= bullet_capacity_units_for_type(column)
+
+        if row == SHOP_ROW_OTHER and column == 0:
+            return self._player.shield >= SHOP_SHIELD_MAX_LEVEL
+
+        if row == SHOP_ROW_OTHER and column == 1:
+            return self._player.target_system_enabled
+
+        return False
+
+    def _shop_cell_buy_cost(self, row: int, column: int) -> int:
+        if self._player is None:
+            return 0
+
+        if row == SHOP_ROW_WEAPONS:
+            return weapon_shop_cost_for_slot(column + 1)
+
+        if row == SHOP_ROW_AMMO:
+            return bullet_shop_cost_for_type(column)
+
+        if row == SHOP_ROW_OTHER and column == 0:
+            return shield_shop_buy_cost_for_level(self._player.shield)
+
+        if row == SHOP_ROW_OTHER and column == 1:
+            return SHOP_TARGET_SYSTEM_COST
+
+        return 0
+
+    def _shop_cell_is_affordable(self, row: int, column: int) -> bool:
+        if self._player is None:
+            return False
+        buy_cost = self._shop_cell_buy_cost(row, column)
+        return buy_cost <= 0 or self._player.cash >= buy_cost
 
     def _draw_gameplay_hud(self, pixels: bytearray) -> None:
         if self._player is None:

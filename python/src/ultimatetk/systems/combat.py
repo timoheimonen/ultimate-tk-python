@@ -38,6 +38,7 @@ ENEMY_PATROL_TURN_CHANCE_DIVISOR = 50
 ENEMY_PATROL_START_CHANCE_DIVISOR = 100
 ENEMY_PATROL_BURST_BASE_TICKS = 20
 ENEMY_PATROL_BURST_EXTRA_TICKS = 40
+ENEMY_STRAFE_DIRECTION_HOLD_TICKS = 4
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -1226,10 +1227,12 @@ def _mine_contact_triggered(
 ) -> bool:
     del player
 
+    trigger_origin_x, trigger_origin_y = _player_explosive_blast_center(explosive)
+
     trigger_radius = max(0, explosive.trigger_radius)
     if trigger_radius <= 0:
-        trigger_x = int(explosive.x)
-        trigger_y = int(explosive.y)
+        trigger_x = int(trigger_origin_x)
+        trigger_y = int(trigger_origin_y)
         return _enemy_at_point(enemies, x=trigger_x, y=trigger_y) is not None
 
     for enemy in enemies:
@@ -1238,17 +1241,17 @@ def _mine_contact_triggered(
 
         target_x, target_y = _closest_point_on_enemy_collision_bounds(
             enemy,
-            x=explosive.x,
-            y=explosive.y,
+            x=trigger_origin_x,
+            y=trigger_origin_y,
         )
-        distance = math.hypot(target_x - explosive.x, target_y - explosive.y)
+        distance = math.hypot(target_x - trigger_origin_x, target_y - trigger_origin_y)
         if distance > trigger_radius:
             continue
 
         if level is not None and not _line_of_sight_clear(
             level,
-            start_x=explosive.x,
-            start_y=explosive.y,
+            start_x=trigger_origin_x,
+            start_y=trigger_origin_y,
             end_x=target_x,
             end_y=target_y,
             step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
@@ -1511,7 +1514,9 @@ def _enemy_within_vision_cone(enemy: EnemyState, *, player_angle: int) -> bool:
 
 
 def _enemy_strafe_angle(enemy: EnemyState) -> int:
-    seed = enemy.enemy_id * 37 + enemy.shoot_count * 17 + enemy.load_count * 11
+    hold_ticks = max(1, ENEMY_STRAFE_DIRECTION_HOLD_TICKS)
+    cadence_bucket = enemy.load_count // hold_ticks
+    seed = enemy.enemy_id * 37 + enemy.shoot_count * 17 + cadence_bucket * 11
     if seed % 2 == 0:
         return (enemy.angle + 90) % 360
     return (enemy.angle + 270) % 360

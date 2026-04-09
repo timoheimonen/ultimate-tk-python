@@ -1290,6 +1290,32 @@ class CombatSystemTests(unittest.TestCase):
         self.assertFalse(enemy.sees_player)
         self.assertEqual(enemy.pressure_ticks, 0)
 
+    def test_enemy_strafe_direction_holds_across_short_reload_windows(self) -> None:
+        enemy = EnemyState(
+            enemy_id=3,
+            type_index=2,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            shoot_count=5,
+        )
+
+        hold_ticks = max(1, combat_module.ENEMY_STRAFE_DIRECTION_HOLD_TICKS)
+        first_block: list[int] = []
+        for load in range(hold_ticks):
+            enemy.load_count = load
+            first_block.append(combat_module._enemy_strafe_angle(enemy))
+
+        self.assertTrue(all(angle == first_block[0] for angle in first_block))
+
+        enemy.load_count = hold_ticks
+        second_block_angle = combat_module._enemy_strafe_angle(enemy)
+        self.assertIn(second_block_angle, ((enemy.angle + 90) % 360, (enemy.angle + 270) % 360))
+        self.assertNotEqual(second_block_angle, first_block[0])
+
     def test_grenade_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
         player = PlayerState(x=20.0, y=64.0)
@@ -1910,6 +1936,46 @@ class CombatSystemTests(unittest.TestCase):
         assert explosive is not None
 
         self.assertGreater(math.hypot(enemy.center_x - explosive.x, enemy.center_y - explosive.y), 14.0)
+        explosive.arming_ticks = 1
+        explosive.fuse_ticks = 5
+        explosive.trigger_radius = 14
+
+        explosives = [explosive]
+        report = update_player_explosives(
+            explosives,
+            [enemy],
+            player,
+            level=level,
+        )
+
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(len(explosives), 0)
+
+    def test_player_mine_trigger_uses_blast_center_anchor_for_proximity(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=58.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=54,
+            impact_y=98,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+
         explosive.arming_ticks = 1
         explosive.fuse_ticks = 5
         explosive.trigger_radius = 14

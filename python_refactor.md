@@ -169,6 +169,7 @@ python/
 - FINALIZED (locked): mine proximity trigger contact math now uses nearest enemy collision-bounds points (instead of center-only distance/LOS), and HUD hint/readout color-codes mine/C4 readiness values for quicker in-combat parsing.
 - FINALIZED (locked): movement/camera/combat micro-parity bundle includes per-axis diagonal collision wall-slide behavior, viewport half-height vertical camera snap for large gaps, and scaled player-collision-edge splash fallback when center-only splash misses.
 - FINALIZED (locked): C4 activator trigger economy refunds the consumed C4 ammo unit on trigger-only follow-up shots when reusing existing charges, and enemy projectile hit/damage telemetry now gates on player-alive state to avoid post-death accumulation.
+- Continued remaining Phase-4 tuning with enemy strafe-direction hold windows to reduce reload-phase zig-zag jitter, mine proximity checks anchored to explosive blast-center offsets, state-aware shop cell tinting for owned/full/unaffordable entries, and idle camera dead-zone stabilization; added unit coverage for strafe hold cadence, blast-center mine triggering, and idle-versus-walking camera response.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
