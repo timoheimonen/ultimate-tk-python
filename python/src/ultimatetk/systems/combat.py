@@ -792,6 +792,7 @@ def resolve_enemy_attack_against_player(
                     impact_y=shot.impact_y,
                     max_damage=pellet_damage,
                     radius=splash_radius,
+                    level=level,
                 )
 
         if dealt_damage <= 0:
@@ -1462,18 +1463,32 @@ def _explosive_splash_damage(
     impact_y: int,
     max_damage: float,
     radius: int,
+    level: LevelData | None = None,
 ) -> float:
-    if radius <= 0 or max_damage <= 0:
+    damage = _radial_damage(
+        target_x=player.center_x,
+        target_y=player.center_y,
+        impact_x=float(impact_x),
+        impact_y=float(impact_y),
+        max_damage=max_damage,
+        radius=radius,
+    )
+    if damage <= 0.0:
         return 0.0
+    if level is None:
+        return damage
 
-    distance = math.hypot(player.center_x - impact_x, player.center_y - impact_y)
-    if distance >= radius:
+    ray_coverage = _explosive_ray_coverage(
+        level,
+        blast_x=float(impact_x),
+        blast_y=float(impact_y),
+        target_x=player.center_x,
+        target_y=player.center_y,
+        radius=radius,
+    )
+    if ray_coverage <= 0.0:
         return 0.0
-
-    falloff = 1.0 - (distance / radius)
-    if falloff <= 0:
-        return 0.0
-    return max_damage * falloff
+    return damage * ray_coverage
 
 
 def _advance_enemy_projectile(
@@ -1495,7 +1510,7 @@ def _advance_enemy_projectile(
             if crate is not None:
                 crate.hit_flash_ticks = CRATE_FLASH_TICKS
                 destroyed = crate.apply_damage(projectile.damage)
-                damage = _projectile_splash_damage(projectile, player)
+                damage = _projectile_splash_damage(level, projectile, player)
                 return EnemyProjectileAdvance(
                     keep_alive=False,
                     damage_to_player=damage,
@@ -1504,7 +1519,7 @@ def _advance_enemy_projectile(
                 )
 
         if _projectile_hits_wall(level, projectile):
-            damage = _projectile_splash_damage(projectile, player)
+            damage = _projectile_splash_damage(level, projectile, player)
             return EnemyProjectileAdvance(
                 keep_alive=False,
                 damage_to_player=damage,
@@ -1513,7 +1528,7 @@ def _advance_enemy_projectile(
         if _player_hit_by_projectile(player, projectile):
             direct_damage = projectile.damage
             if projectile.splash_radius > 0:
-                direct_damage = max(direct_damage, _projectile_splash_damage(projectile, player))
+                direct_damage = max(direct_damage, _projectile_splash_damage(level, projectile, player))
             return EnemyProjectileAdvance(
                 keep_alive=False,
                 damage_to_player=direct_damage,
@@ -1523,7 +1538,7 @@ def _advance_enemy_projectile(
     if projectile.remaining_ticks <= 0:
         return EnemyProjectileAdvance(
             keep_alive=False,
-            damage_to_player=_projectile_splash_damage(projectile, player),
+            damage_to_player=_projectile_splash_damage(level, projectile, player),
         )
     return EnemyProjectileAdvance(keep_alive=True)
 
@@ -1564,7 +1579,11 @@ def _player_hit_by_projectile(player: PlayerState, projectile: EnemyProjectile) 
     return True
 
 
-def _projectile_splash_damage(projectile: EnemyProjectile, player: PlayerState) -> float:
+def _projectile_splash_damage(
+    level: LevelData,
+    projectile: EnemyProjectile,
+    player: PlayerState,
+) -> float:
     if projectile.splash_radius <= 0:
         return 0.0
     return _explosive_splash_damage(
@@ -1573,6 +1592,7 @@ def _projectile_splash_damage(projectile: EnemyProjectile, player: PlayerState) 
         impact_y=int(projectile.y),
         max_damage=projectile.damage,
         radius=projectile.splash_radius,
+        level=level,
     )
 
 

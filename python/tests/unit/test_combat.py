@@ -672,7 +672,7 @@ class CombatSystemTests(unittest.TestCase):
 
     def test_grenade_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
-        player = PlayerState(x=44.0, y=40.0)
+        player = PlayerState(x=20.0, y=64.0)
         enemy = EnemyState(
             enemy_id=0,
             type_index=4,
@@ -696,10 +696,35 @@ class CombatSystemTests(unittest.TestCase):
         self.assertLess(attack.total_damage, 20.0)
         self.assertLess(player.health, 100.0)
 
+    def test_grenade_near_miss_is_fully_blocked_by_wall_fan(self) -> None:
+        level = _build_level(height=12, walls={(2, 3), (3, 3)})
+        player = PlayerState(x=44.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+        )
+
+        attack = resolve_enemy_attack_against_player(
+            level,
+            enemy=enemy,
+            player=player,
+            weapon_slot=5,
+        )
+
+        self.assertEqual(attack.hit_count, 0)
+        self.assertEqual(attack.total_damage, 0.0)
+        self.assertEqual(player.health, 100.0)
+
     def test_grenade_projectile_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})
-        player = PlayerState(x=44.0, y=40.0)
+        player = PlayerState(x=36.0, y=64.0)
         enemy = EnemyState(
             enemy_id=0,
             type_index=4,
@@ -729,6 +754,39 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(total_damage, 0.0)
         self.assertLess(total_damage, 20.0)
         self.assertLess(player.health, 100.0)
+
+    def test_grenade_projectile_near_miss_is_fully_blocked_by_wall_fan(self) -> None:
+        level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3), (2, 4)})
+        player = PlayerState(x=36.0, y=64.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=30,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(report.projectiles_spawned, 1)
+
+        total_damage = 0.0
+        total_hits = 0
+        for _ in range(10):
+            projectile_report = update_enemy_projectiles(blocked_level, projectiles, player)
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            if not projectiles:
+                break
+
+        self.assertEqual(total_hits, 0)
+        self.assertEqual(total_damage, 0.0)
+        self.assertEqual(player.health, 100.0)
 
     def test_enemy_flamer_deals_low_tick_damage(self) -> None:
         level = _build_level(height=12)
