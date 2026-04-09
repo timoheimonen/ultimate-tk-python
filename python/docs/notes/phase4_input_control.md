@@ -51,6 +51,7 @@ Implemented:
   - Added lost-sight chase parity: enemies now start a distance-scaled short chase window after breaking LOS from a previously seen target, preserving last known attack heading before returning to patrol.
   - Added legacy-style front-arc vision gating for enemy detection: enemy LOS now also requires the player to be inside a 180-degree forward vision cone, reducing rear-hemisphere instant aggro.
   - Added legacy-style vision-distance gating for enemy detection: enemy LOS now also respects the original short sight range (~160 px), reducing long-corridor instant aggro from far targets.
+  - Added legacy-style patrol idle/burst cadence for no-LOS enemies: patrol now idles until low-probability start rolls, then moves in finite bursts (matching old `walk_cnt` behavior) instead of continuously roaming.
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
@@ -115,6 +116,7 @@ Verification:
   - Added lost-sight chase-window coverage for previously seen versus never-seen enemy LOS states.
   - Added enemy front-vision-arc coverage so rear-hemisphere targets do not trigger direct fire while patrol heading is unchanged.
   - Added enemy vision-distance coverage so far targets beyond the legacy sight range do not trigger direct fire while heading/LOS remain clear.
+  - Added enemy patrol idle/burst cadence coverage so no-LOS enemies stay idle without start rolls and begin finite movement bursts on start rolls.
   - Added mine proximity-trigger LOS coverage plus enemy projectile wall-impact crate-splash coverage.
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
@@ -123,6 +125,7 @@ Verification:
   - Added scripted enemy lost-sight chase coverage for prior-contact versus no-prior-contact LOS break behavior.
   - Added scripted enemy front-vision-arc coverage for rear-target non-detection.
   - Added scripted enemy vision-distance coverage for far-target non-detection.
+  - Added scripted enemy patrol idle-vs-burst coverage by forcing patrol rolls to idle-only and burst-start variants.
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
   - Added scripted C4 corner-obstruction scenario asserting open-lane crate destruction versus blocked-corner survival.
   - Added scripted C4 side-wall leakage scenario asserting damped partial crate damage for side-only obstruction and zero damage for fully blocked lanes.

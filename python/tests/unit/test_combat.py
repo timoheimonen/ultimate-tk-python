@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ from ultimatetk.formats.lev import (
     GeneralLevelInfo,
     LevelData,
 )
+import ultimatetk.systems.combat as combat_module
 from ultimatetk.systems.combat import (
     CrateState,
     EnemyProjectile,
@@ -517,6 +519,53 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.damage_to_player, 0.0)
         self.assertFalse(enemy.sees_player)
         self.assertEqual(player.health, 100.0)
+
+    def test_enemy_patrol_idle_without_start_roll_does_not_move(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=120.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=0,
+            target_angle=0,
+            walk_ticks=0,
+            load_count=0,
+        )
+
+        with patch.object(combat_module, "_enemy_next_patrol_roll", return_value=0):
+            report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(enemy.walk_ticks, 0)
+        self.assertEqual(enemy.x, 120.0)
+        self.assertEqual(enemy.y, 120.0)
+
+    def test_enemy_patrol_start_roll_begins_burst_movement(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=120.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            walk_ticks=0,
+            load_count=0,
+        )
+
+        with patch.object(combat_module, "_enemy_next_patrol_roll", side_effect=(0, 1, 7)):
+            report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertGreater(enemy.walk_ticks, 0)
+        self.assertLess(enemy.y, 120.0)
 
     def test_enemy_shoot_counter_tracks_attack_window_and_los_break(self) -> None:
         open_level = _build_level(height=12)

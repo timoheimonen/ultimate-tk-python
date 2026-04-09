@@ -34,6 +34,10 @@ ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE = 32.0
 ENEMY_LOST_SIGHT_CHASE_TICKS_MAX = 120
 ENEMY_VISION_HALF_ANGLE_DEGREES = 90
 ENEMY_VISION_MAX_DISTANCE_PIXELS = 160.0
+ENEMY_PATROL_TURN_CHANCE_DIVISOR = 50
+ENEMY_PATROL_START_CHANCE_DIVISOR = 100
+ENEMY_PATROL_BURST_BASE_TICKS = 20
+ENEMY_PATROL_BURST_EXTRA_TICKS = 40
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -204,6 +208,7 @@ class EnemyState:
     chase_ticks: int = 0
     load_count: int = 0
     shoot_count: int = 0
+    patrol_rng_state: int = 0
     sees_player: bool = False
     alive: bool = True
     hit_flash_ticks: int = 0
@@ -1492,12 +1497,20 @@ def _advance_enemy_patrol(
     player: PlayerState,
 ) -> None:
     if enemy.walk_ticks <= 0:
-        seed = enemy.enemy_id * 31 + int(enemy.x) * 3 + int(enemy.y) * 5
-        enemy.walk_ticks = 16 + (seed % 26)
-        turn = 90 if seed % 2 == 0 else -90
-        enemy.target_angle = (enemy.angle + turn) % 360
+        turn_roll = _enemy_next_patrol_roll(enemy)
+        if turn_roll % ENEMY_PATROL_TURN_CHANCE_DIVISOR == 1:
+            enemy.target_angle = _enemy_next_patrol_roll(enemy) % 360
+
+        start_roll = _enemy_next_patrol_roll(enemy)
+        if start_roll % ENEMY_PATROL_START_CHANCE_DIVISOR == 1:
+            enemy.walk_ticks = ENEMY_PATROL_BURST_BASE_TICKS + (
+                _enemy_next_patrol_roll(enemy) % ENEMY_PATROL_BURST_EXTRA_TICKS
+            )
 
     enemy.angle = _rotate_towards_angle(enemy.angle, enemy.target_angle, step=ENEMY_ROTATION_STEP_DEGREES)
+    if enemy.walk_ticks <= 0:
+        return
+
     moved = _move_enemy_with_collision(
         enemy,
         level,
@@ -1510,6 +1523,20 @@ def _advance_enemy_patrol(
         enemy.walk_ticks -= 1
     else:
         enemy.walk_ticks = 0
+
+
+def _enemy_next_patrol_roll(enemy: EnemyState) -> int:
+    if enemy.patrol_rng_state == 0:
+        enemy.patrol_rng_state = (
+            ((enemy.enemy_id + 1) * 1103)
+            + (enemy.type_index * 1787)
+            + (int(enemy.x) * 313)
+            + (int(enemy.y) * 911)
+            + 1
+        ) & 0x7FFFFFFF
+
+    enemy.patrol_rng_state = (1103515245 * enemy.patrol_rng_state + 12345) & 0x7FFFFFFF
+    return enemy.patrol_rng_state
 
 
 def _move_enemy_with_collision(
