@@ -32,6 +32,7 @@ ENEMY_EXPLOSIVE_MIN_SAFE_RADIUS_RATIO = 0.2
 ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO = 0.5
 ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE = 32.0
 ENEMY_LOST_SIGHT_CHASE_TICKS_MAX = 120
+ENEMY_VISION_HALF_ANGLE_DEGREES = 90
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -682,6 +683,9 @@ def update_enemy_behavior(
             end_x=player.center_x,
             end_y=player.center_y,
             step=ENEMY_LINE_OF_SIGHT_TRACE_STEP,
+        ) and _enemy_within_vision_cone(
+            enemy,
+            player_angle=player_angle,
         )
 
         distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)
@@ -1439,6 +1443,10 @@ def _enemy_lost_sight_chase_ticks(
     speed = max(0.1, enemy_speed_for_type(enemy.type_index))
     chase_ticks = int(distance_to_player / speed)
     return min(ENEMY_LOST_SIGHT_CHASE_TICKS_MAX, max(0, chase_ticks))
+
+
+def _enemy_within_vision_cone(enemy: EnemyState, *, player_angle: int) -> bool:
+    return _angular_distance(enemy.angle, player_angle) <= ENEMY_VISION_HALF_ANGLE_DEGREES
 
 
 def _enemy_strafe_angle(enemy: EnemyState) -> int:

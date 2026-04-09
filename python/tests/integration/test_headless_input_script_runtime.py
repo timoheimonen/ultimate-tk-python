@@ -773,6 +773,7 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         enemy_x: float = 6.0,
         enemy_y: float = 6.0,
         enemy_angle: int = 34,
+        enemy_walk_ticks: int = 0,
         enemy_load_count: int = 10,
         player_x: float = 54.0,
         player_y: float = 76.0,
@@ -844,6 +845,7 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
                 max_health=18.0,
                 angle=enemy_angle,
                 target_angle=enemy_angle,
+                walk_ticks=enemy_walk_ticks,
                 load_count=enemy_load_count,
             ),
         )
@@ -1283,6 +1285,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreater(seen_chase_ticks, 0)
         self.assertEqual(unseen_chase_ticks, 0)
         self.assertLess(seen_end_y, seen_start_y)
+
+    def test_scripted_enemy_front_vision_arc_blocks_rear_detection(self) -> None:
+        shots, hits, damage = self._run_scripted_enemy_los_corner_graze_scenario(
+            wall_tiles=set(),
+            enemy_type_index=0,
+            enemy_x=40.0,
+            enemy_y=80.0,
+            enemy_angle=0,
+            enemy_walk_ticks=120,
+            enemy_load_count=10,
+            player_x=40.0,
+            player_y=40.0,
+        )
+
+        self.assertEqual(shots, 0)
+        self.assertEqual(hits, 0)
+        self.assertEqual(damage, 0.0)
 
     def test_scripted_enemy_los_corner_graze_open_vs_blocked(self) -> None:
         open_shots, open_hits, open_damage = self._run_scripted_enemy_los_corner_graze_scenario(
