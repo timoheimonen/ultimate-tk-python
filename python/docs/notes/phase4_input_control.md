@@ -92,6 +92,7 @@ Verification:
   - Added scripted C4 corner-obstruction scenario asserting open-lane crate destruction versus blocked-corner survival.
   - Added scripted C4 side-wall leakage scenario asserting damped partial crate damage for side-only obstruction and zero damage for fully blocked lanes.
   - Added scripted mine corridor obstruction scenario (enemy-triggered mine detonation with open-lane versus blocked-lane crate/enemy outcomes).
+  - Added scripted enemy grenade obstruction scenario asserting partial-damage lane behavior versus fully blocked lane behavior.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.
 
 Remaining work for Phase 4:
