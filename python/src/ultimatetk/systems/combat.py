@@ -23,6 +23,7 @@ ENEMY_FLASH_TICKS = 3
 MAX_SPAWNED_ENEMIES = 24
 ENEMY_ROTATION_STEP_DEGREES = 9
 ENEMY_ALIGNMENT_TOLERANCE_DEGREES = 9
+ENEMY_LINE_OF_SIGHT_TRACE_STEP = 2
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -657,6 +658,7 @@ def update_enemy_behavior(
             start_y=enemy.center_y,
             end_x=player.center_x,
             end_y=player.center_y,
+            step=ENEMY_LINE_OF_SIGHT_TRACE_STEP,
         )
 
         distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)

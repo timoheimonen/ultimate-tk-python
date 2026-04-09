@@ -1196,6 +1196,28 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(len(explosives), 0)
         self.assertFalse(enemy.alive)
 
+    def test_enemy_behavior_corner_graze_line_of_sight_is_blocked(self) -> None:
+        level = _build_level(width=10, height=10, walls={(3, 3)})
+        player = PlayerState(x=54.0, y=76.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=6.0,
+            y=6.0,
+            health=18.0,
+            max_health=18.0,
+            angle=34,
+            target_angle=34,
+            load_count=10,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(player.health, 100.0)
+        self.assertFalse(enemy.sees_player)
+
     def test_enemy_behavior_does_not_shoot_through_walls(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
         player = PlayerState(x=40.0, y=40.0)
