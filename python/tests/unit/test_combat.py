@@ -1738,8 +1738,8 @@ class CombatSystemTests(unittest.TestCase):
             crate_id=0,
             type1=0,
             type2=0,
-            x=48.0,
-            y=84.0,
+            x=20.0,
+            y=60.0,
             health=12.0,
             max_health=12.0,
         )
@@ -1999,6 +1999,74 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(graze_damage, 0.0)
         self.assertLess(graze_damage, open_damage * 0.2)
 
+    def test_player_c4_splash_respects_crate_cover_in_tight_corridor(self) -> None:
+        level = _build_level(height=12, walls={(2, 6), (3, 6), (4, 6)})
+        open_player = PlayerState(x=0.0, y=0.0)
+        cover_player = PlayerState(x=0.0, y=0.0)
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=30.0,
+            y=100.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        enemy_cover = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=30.0,
+            y=100.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        cover_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=36.0,
+            y=104.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=94.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=9,
+            impact_x=54,
+            impact_y=128,
+        )
+
+        open_explosive = deploy_player_explosive_from_shot(shot)
+        cover_explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(open_explosive)
+        self.assertIsNotNone(cover_explosive)
+        assert open_explosive is not None
+        assert cover_explosive is not None
+        open_explosive.fuse_ticks = 1
+        cover_explosive.fuse_ticks = 1
+
+        open_report = update_player_explosives(
+            [open_explosive],
+            [enemy_open],
+            open_player,
+            level=level,
+        )
+        cover_report = update_player_explosives(
+            [cover_explosive],
+            [enemy_cover],
+            cover_player,
+            level=level,
+            crates=[cover_crate],
+        )
+
+        self.assertEqual(open_report.enemies_hit, 1)
+        self.assertEqual(cover_report.enemies_hit, 0)
+        self.assertLess(enemy_open.health, enemy_cover.health)
+        self.assertEqual(enemy_cover.health, enemy_cover.max_health)
+        self.assertFalse(cover_crate.alive)
+
     def test_player_mine_arms_then_triggers_on_enemy_contact(self) -> None:
         player = PlayerState(x=0.0, y=0.0)
         enemy = EnemyState(
@@ -2180,6 +2248,80 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(len(open_explosives), 0)
         self.assertEqual(blocked_report.detonations, 0)
         self.assertEqual(len(blocked_explosives), 1)
+
+    def test_player_mine_splash_respects_crate_cover_in_tight_corridor(self) -> None:
+        corridor_walls = {(1, tile_y) for tile_y in range(1, 8)}
+        corridor_walls.update({(3, tile_y) for tile_y in range(1, 8)})
+        level = _build_level(width=6, height=10, walls=corridor_walls)
+        open_player = PlayerState(x=0.0, y=0.0)
+        cover_player = PlayerState(x=0.0, y=0.0)
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=34.0,
+            y=38.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        enemy_cover = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=34.0,
+            y=38.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        cover_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=42.0,
+            y=46.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=54,
+            impact_y=98,
+        )
+
+        open_mine = deploy_player_explosive_from_shot(shot)
+        cover_mine = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(open_mine)
+        self.assertIsNotNone(cover_mine)
+        assert open_mine is not None
+        assert cover_mine is not None
+        open_mine.fuse_ticks = 1
+        open_mine.arming_ticks = 0
+        open_mine.trigger_radius = 0
+        cover_mine.fuse_ticks = 1
+        cover_mine.arming_ticks = 0
+        cover_mine.trigger_radius = 0
+
+        open_report = update_player_explosives(
+            [open_mine],
+            [enemy_open],
+            open_player,
+            level=level,
+        )
+        cover_report = update_player_explosives(
+            [cover_mine],
+            [enemy_cover],
+            cover_player,
+            level=level,
+            crates=[cover_crate],
+        )
+
+        self.assertEqual(open_report.enemies_hit, 1)
+        self.assertEqual(cover_report.enemies_hit, 0)
+        self.assertLess(enemy_open.health, enemy_cover.health)
+        self.assertEqual(enemy_cover.health, enemy_cover.max_health)
+        self.assertFalse(cover_crate.alive)
 
     def test_player_mine_proximity_trigger_respects_crate_obstruction(self) -> None:
         level = _build_level(height=12)

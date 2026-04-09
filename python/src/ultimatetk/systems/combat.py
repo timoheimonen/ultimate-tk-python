@@ -1155,6 +1155,7 @@ def _detonate_player_explosive(
             max_damage=explosive.damage,
             radius=explosive.radius,
             falloff_exponent=explosive.falloff_exponent,
+            crates=crates,
         )
         if damage <= 0:
             continue
@@ -1180,6 +1181,8 @@ def _detonate_player_explosive(
                 max_damage=explosive.damage,
                 radius=explosive.radius,
                 falloff_exponent=explosive.falloff_exponent,
+                crates=crates,
+                ignore_crate_id=crate.crate_id,
             )
             if damage <= 0:
                 continue
@@ -1198,6 +1201,7 @@ def _detonate_player_explosive(
         max_damage=explosive.damage,
         radius=explosive.radius,
         falloff_exponent=explosive.falloff_exponent,
+        crates=crates,
     )
     if player_damage > 0:
         apply_player_damage(player, player_damage)
@@ -1298,6 +1302,8 @@ def _player_explosive_damage(
     max_damage: float,
     radius: int,
     falloff_exponent: float,
+    crates: Sequence[CrateState] | None = None,
+    ignore_crate_id: int | None = None,
 ) -> float:
     damage = _radial_damage(
         target_x=target_x,
@@ -1312,6 +1318,15 @@ def _player_explosive_damage(
         return 0.0
     if level is None:
         return damage
+
+    splash_crates = crates
+    if splash_crates is not None and ignore_crate_id is not None:
+        splash_crates = tuple(
+            crate
+            for crate in splash_crates
+            if crate.alive and crate.crate_id != ignore_crate_id
+        )
+
     ray_coverage = _explosive_ray_coverage(
         level,
         blast_x=impact_x,
@@ -1319,6 +1334,7 @@ def _player_explosive_damage(
         target_x=target_x,
         target_y=target_y,
         radius=radius,
+        crates=splash_crates,
     )
     if ray_coverage <= 0.0:
         return 0.0
