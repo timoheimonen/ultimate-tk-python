@@ -23,6 +23,7 @@ from ultimatetk.systems.combat import (
     EnemyState,
     advance_enemy_effects,
     alive_enemy_count,
+    resolve_enemy_attack_against_player,
     resolve_shot_against_enemies,
     spawn_enemies_for_level,
     update_enemy_behavior,
@@ -243,6 +244,54 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(second.shots_fired, 0)
         self.assertEqual(second.hits_on_player, 0)
         self.assertEqual(second.damage_to_player, 0.0)
+
+    def test_grenade_near_miss_applies_splash_damage(self) -> None:
+        level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=64.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+        )
+
+        attack = resolve_enemy_attack_against_player(
+            level,
+            enemy=enemy,
+            player=player,
+            weapon_slot=5,
+        )
+
+        self.assertEqual(attack.hit_count, 1)
+        self.assertGreater(attack.total_damage, 0.0)
+        self.assertLess(attack.total_damage, 20.0)
+        self.assertLess(player.health, 100.0)
+
+    def test_enemy_flamer_deals_low_tick_damage(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=7,
+            x=40.0,
+            y=80.0,
+            health=100.0,
+            max_health=100.0,
+            angle=180,
+            target_angle=180,
+            load_count=1,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 1)
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertAlmostEqual(report.damage_to_player, 0.4)
+        self.assertAlmostEqual(player.health, 99.6)
 
     def test_enemy_behavior_does_not_shoot_through_walls(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})

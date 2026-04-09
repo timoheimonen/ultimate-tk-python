@@ -40,7 +40,7 @@ WEAPON_DAMAGE: tuple[float, ...] = (
     28.0,
     18.0,
     10.0,
-    4.0,
+    0.4,
     16.0,
 )
 
@@ -87,6 +87,21 @@ WEAPON_ANGLE_SPREAD: tuple[int, ...] = (
     1,
     1,
     1,
+)
+
+WEAPON_EXPLOSIVE_SPLASH_RADIUS: tuple[int, ...] = (
+    0,
+    0,
+    0,
+    0,
+    0,
+    48,
+    56,
+    64,
+    0,
+    40,
+    0,
+    40,
 )
 
 
@@ -184,6 +199,12 @@ def weapon_angle_spread_for_slot(weapon_slot: int) -> int:
     if 0 <= weapon_slot < len(WEAPON_ANGLE_SPREAD):
         return WEAPON_ANGLE_SPREAD[weapon_slot]
     return WEAPON_ANGLE_SPREAD[0]
+
+
+def weapon_explosive_splash_radius_for_slot(weapon_slot: int) -> int:
+    if 0 <= weapon_slot < len(WEAPON_EXPLOSIVE_SPLASH_RADIUS):
+        return WEAPON_EXPLOSIVE_SPLASH_RADIUS[weapon_slot]
+    return WEAPON_EXPLOSIVE_SPLASH_RADIUS[0]
 
 
 def enemy_weapon_for_type(type_index: int) -> int:
@@ -454,12 +475,26 @@ def resolve_enemy_attack_against_player(
             angle=shot_angle,
             damage=pellet_damage,
         )
-        if not shot.player_hit:
+        dealt_damage = 0.0
+        if shot.player_hit:
+            dealt_damage = shot.damage
+        else:
+            splash_radius = weapon_explosive_splash_radius_for_slot(weapon_slot)
+            if splash_radius > 0:
+                dealt_damage = _explosive_splash_damage(
+                    player,
+                    impact_x=shot.impact_x,
+                    impact_y=shot.impact_y,
+                    max_damage=pellet_damage,
+                    radius=splash_radius,
+                )
+
+        if dealt_damage <= 0:
             continue
 
         hit_count += 1
-        total_damage += shot.damage
-        apply_player_damage(player, shot.damage)
+        total_damage += dealt_damage
+        apply_player_damage(player, dealt_damage)
         if player.dead:
             break
 
@@ -703,6 +738,27 @@ def _enemy_shot_angle(
     )
     offset = (seed % spread) - (spread // 2)
     return (enemy.angle + offset) % 360
+
+
+def _explosive_splash_damage(
+    player: PlayerState,
+    *,
+    impact_x: int,
+    impact_y: int,
+    max_damage: float,
+    radius: int,
+) -> float:
+    if radius <= 0 or max_damage <= 0:
+        return 0.0
+
+    distance = math.hypot(player.center_x - impact_x, player.center_y - impact_y)
+    if distance >= radius:
+        return 0.0
+
+    falloff = 1.0 - (distance / radius)
+    if falloff <= 0:
+        return 0.0
+    return max_damage * falloff
 
 
 def _player_at_point(

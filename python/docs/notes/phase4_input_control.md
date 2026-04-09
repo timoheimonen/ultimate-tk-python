@@ -29,6 +29,7 @@ Implemented:
   - Hitscan-style shot resolution against walls and enemy hitboxes.
   - Weapon-slot damage table for first pass damage application.
   - Added weapon-specific enemy pellet volleys (shotgun/auto-shotgun spread) for more legacy-like fire behavior.
+  - Added explosive near-miss splash damage for grenade-class enemy shots and low tick-damage handling for flamethrower shots.
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
