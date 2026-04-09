@@ -23,6 +23,7 @@ from ultimatetk.formats.lev import (
 from ultimatetk.systems.player_control import (
     aim_point_from_player,
     apply_player_controls,
+    consume_pending_shots,
     cycle_weapon_slot,
     follow_player_camera,
     select_weapon_slot_if_owned,
@@ -196,6 +197,11 @@ class PlayerControlTests(unittest.TestCase):
         self.assertEqual(player.load_count, 1)
         self.assertGreater(player.fire_animation_ticks, 0)
 
+        pending = consume_pending_shots(player)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].weapon_slot, 0)
+        self.assertEqual(len(consume_pending_shots(player)), 0)
+
     def test_autofire_respects_loading_cadence(self) -> None:
         level = _build_level(height=12)
         player = spawn_player_from_level(level)
@@ -216,6 +222,10 @@ class PlayerControlTests(unittest.TestCase):
         self.assertEqual(player.shot_effect_x, 54)
         self.assertLess(player.shot_effect_y, 80)
         self.assertGreater(player.shot_effect_y, 64)
+
+        shot = consume_pending_shots(player)[0]
+        self.assertEqual(shot.impact_x, player.shot_effect_x)
+        self.assertEqual(shot.impact_y, player.shot_effect_y)
 
     def test_weapon_change_resets_reload_counter(self) -> None:
         level = _build_level()

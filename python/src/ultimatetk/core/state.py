@@ -28,6 +28,10 @@ class RuntimeState:
     player_load_count: int = 0
     player_fire_ticks: int = 0
     player_shots_fired_total: int = 0
+    player_hits_total: int = 0
+    enemies_total: int = 0
+    enemies_alive: int = 0
+    enemies_killed_by_player: int = 0
 
 
 @dataclass(slots=True)

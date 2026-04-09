@@ -49,6 +49,7 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertGreater(app.context.runtime.player_shots_fired_total, 0)
+        self.assertGreaterEqual(app.context.runtime.enemies_total, app.context.runtime.enemies_alive)
 
 
 if __name__ == "__main__":

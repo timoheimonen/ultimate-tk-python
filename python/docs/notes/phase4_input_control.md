@@ -24,22 +24,29 @@ Implemented:
   - Initial shoot/reload cadence based on legacy weapon loading times.
   - Simple shot tracing to wall impact points for first combat plumbing.
   - Camera follow behavior adapted from legacy `Player::move_scr`.
+- Combat scaffolding in `python/src/ultimatetk/systems/combat.py`:
+  - Deterministic enemy spawn from level enemy counts.
+  - Hitscan-style shot resolution against walls and enemy hitboxes.
+  - Weapon-slot damage table for first pass damage application.
+  - Enemy hit flash and alive/dead state bookkeeping.
 - Gameplay integration in `python/src/ultimatetk/systems/gameplay_scene.py`:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.
   - Camera follows the player and aiming direction.
-  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, and shots fired.
+  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, and enemy counters.
 
 Visual baseline updates:
 
 - Gameplay scene now draws a player sprite frame from `RAMBO2.EFP` based on current view angle.
 - Gameplay scene also renders a translucent aim marker (`TARGET.EFP`) at player look direction.
 - Gameplay scene now renders a short-lived shot impact marker at traced hit points.
+- Gameplay scene now renders enemy sprites (`ENEMY*.EFP`) and supports being hit/killed by player shots.
 
 Verification:
 
 - Added unit tests:
   - `python/tests/unit/test_app_platform_selection.py`
+  - `python/tests/unit/test_combat.py`
   - `python/tests/unit/test_events.py`
   - `python/tests/unit/test_terminal_input.py`
   - `python/tests/unit/test_input_script.py`
@@ -50,5 +57,5 @@ Verification:
 
 Remaining work for Phase 4:
 
-- Extend player interaction logic (damage application, projectiles/hitscan rules, and enemy/player combat states).
+- Extend combat behavior (enemy movement/AI, enemy shooting, and richer weapon-specific projectile/explosive behavior).
 - Continue parity tuning for collision feel and camera response.

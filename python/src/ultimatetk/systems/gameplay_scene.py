@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Sequence
 
 from ultimatetk.assets import GameDataRepository
@@ -18,11 +19,19 @@ from ultimatetk.rendering import (
     extract_horizontal_sprite_frame,
     frame_digest,
 )
+from ultimatetk.systems.combat import (
+    EnemyState,
+    advance_enemy_effects,
+    alive_enemy_count,
+    resolve_shot_against_enemies,
+    spawn_enemies_for_level,
+)
 from ultimatetk.systems.player_control import (
     PLAYER_CENTER_OFFSET,
     PlayerState,
     aim_point_from_player,
     apply_player_controls,
+    consume_pending_shots,
     follow_player_camera,
     spawn_player_from_level,
 )
@@ -51,6 +60,10 @@ class GameplayScene(BaseScene):
         self._target_width = 0
         self._target_height = 0
         self._rambo_frames: tuple[bytes, ...] = ()
+        self._enemy_frames: dict[int, tuple[bytes, ...]] = {}
+        self._enemies: list[EnemyState] = []
+        self._enemy_hits_by_player = 0
+        self._enemies_killed_by_player = 0
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.GAMEPLAY
@@ -64,6 +77,10 @@ class GameplayScene(BaseScene):
         context.runtime.player_load_count = 0
         context.runtime.player_fire_ticks = 0
         context.runtime.player_shots_fired_total = 0
+        context.runtime.player_hits_total = 0
+        context.runtime.enemies_total = 0
+        context.runtime.enemies_alive = 0
+        context.runtime.enemies_killed_by_player = 0
 
         self._held_actions.clear()
         self._cycle_weapon_requested = False
@@ -72,6 +89,10 @@ class GameplayScene(BaseScene):
         self._target_width = 0
         self._target_height = 0
         self._rambo_frames = ()
+        self._enemy_frames = {}
+        self._enemies = []
+        self._enemy_hits_by_player = 0
+        self._enemies_killed_by_player = 0
         self._static_sprites = ()
         self._spot_phase = 0
         self._render_flags = RenderFlags()
@@ -133,15 +154,24 @@ class GameplayScene(BaseScene):
         self._static_sprites = self._load_static_sprites(repo, player=player)
         self._target_pixels, self._target_width, self._target_height = self._load_target_sprite(repo)
         self._rambo_frames = self._load_rambo_frames(repo)
+        self._enemy_frames = self._load_enemy_frames(repo)
+        self._enemies = list(
+            spawn_enemies_for_level(
+                self._level,
+                player_x=player.x,
+                player_y=player.y,
+            ),
+        )
 
         self._publish_player_runtime_state(context)
         context.logger.info(
-            "Gameplay phase-4 controls ready: %s/%s dark=%s lights=%s shadows=%s",
+            "Gameplay phase-4 controls ready: %s/%s dark=%s lights=%s shadows=%s enemies=%d",
             episode,
             level_name,
             self._render_flags.dark_mode,
             self._render_flags.light_effects,
             self._render_flags.shadows,
+            len(self._enemies),
         )
 
     def on_exit(self, context: GameContext) -> None:
@@ -149,6 +179,7 @@ class GameplayScene(BaseScene):
         self._held_actions.clear()
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
+        self._enemies.clear()
 
     def handle_events(self, context: GameContext, events: Sequence[AppEvent]) -> None:
         del context
@@ -182,6 +213,9 @@ class GameplayScene(BaseScene):
             cycle_weapon=self._cycle_weapon_requested,
             select_weapon_slot=self._pending_weapon_slot,
         )
+        self._resolve_pending_player_shots()
+        advance_enemy_effects(self._enemies)
+
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
 
@@ -219,6 +253,27 @@ class GameplayScene(BaseScene):
         sprites = list(self._static_sprites)
         if self._player is None:
             return tuple(sprites)
+
+        for enemy in self._enemies:
+            if not enemy.alive:
+                continue
+            frames = self._enemy_frames.get(enemy.type_index)
+            if not frames:
+                continue
+
+            angle_index = (_enemy_angle_to_point(enemy, self._player.center_x, self._player.center_y) // 9) % len(frames)
+            sprites.append(
+                WorldSprite(
+                    world_x=int(enemy.center_x),
+                    world_y=int(enemy.center_y),
+                    width=28,
+                    height=28,
+                    pixels=frames[angle_index],
+                    anchor_x=PLAYER_CENTER_OFFSET,
+                    anchor_y=PLAYER_CENTER_OFFSET,
+                    translucent=False,
+                ),
+            )
 
         if self._rambo_frames:
             angle_index = (self._player.angle // 9) % len(self._rambo_frames)
@@ -308,9 +363,36 @@ class GameplayScene(BaseScene):
             return ()
 
         try:
-            return _extract_rambo_frames(rambo_sheet, animation_row=1)
+            return _extract_actor_frames(rambo_sheet, animation_row=1)
         except ValueError:
             return ()
+
+    def _load_enemy_frames(self, repo: GameDataRepository) -> dict[int, tuple[bytes, ...]]:
+        frames: dict[int, tuple[bytes, ...]] = {}
+        for enemy_type in range(8):
+            try:
+                image = repo.load_efp(f"ENEMY{enemy_type}.EFP")
+            except FileNotFoundError:
+                continue
+
+            try:
+                frames[enemy_type] = _extract_actor_frames(image, animation_row=1)
+            except ValueError:
+                continue
+        return frames
+
+    def _resolve_pending_player_shots(self) -> None:
+        if self._level is None or self._player is None:
+            return
+
+        for shot in consume_pending_shots(self._player):
+            result = resolve_shot_against_enemies(self._level, self._enemies, shot)
+            self._player.shot_effect_x = result.impact_x
+            self._player.shot_effect_y = result.impact_y
+            if result.enemy_id is not None:
+                self._enemy_hits_by_player += 1
+            if result.enemy_killed:
+                self._enemies_killed_by_player += 1
 
     def _publish_player_runtime_state(self, context: GameContext) -> None:
         if self._player is None:
@@ -321,6 +403,10 @@ class GameplayScene(BaseScene):
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
             context.runtime.player_shots_fired_total = 0
+            context.runtime.player_hits_total = 0
+            context.runtime.enemies_total = 0
+            context.runtime.enemies_alive = 0
+            context.runtime.enemies_killed_by_player = 0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
@@ -330,20 +416,24 @@ class GameplayScene(BaseScene):
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
         context.runtime.player_shots_fired_total = self._player.shots_fired_total
+        context.runtime.player_hits_total = self._enemy_hits_by_player
+        context.runtime.enemies_total = len(self._enemies)
+        context.runtime.enemies_alive = alive_enemy_count(self._enemies)
+        context.runtime.enemies_killed_by_player = self._enemies_killed_by_player
 
 
-def _extract_rambo_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:
+def _extract_actor_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:
     frame_width = 28
     frame_height = 28
     frame_stride = 29
 
     row_y = 1 + (animation_row * frame_stride)
     if row_y < 0 or row_y + frame_height > image.height:
-        raise ValueError("invalid rambo animation row")
+        raise ValueError("invalid actor animation row")
 
     angle_frames = image.width // frame_stride
     if angle_frames <= 0:
-        raise ValueError("rambo sprite sheet has no angle frames")
+        raise ValueError("actor sprite sheet has no angle frames")
 
     frames: list[bytes] = []
     for angle in range(angle_frames):
@@ -359,5 +449,12 @@ def _extract_rambo_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes
         frames.append(bytes(frame))
 
     if not frames:
-        raise ValueError("failed to extract rambo angle frames")
+        raise ValueError("failed to extract actor angle frames")
     return tuple(frames)
+
+
+def _enemy_angle_to_point(enemy: EnemyState, target_x: float, target_y: float) -> int:
+    dx = target_x - enemy.center_x
+    dy = target_y - enemy.center_y
+    angle = int(math.degrees(math.atan2(dx, dy)))
+    return angle % 360

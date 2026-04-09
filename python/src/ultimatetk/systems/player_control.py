@@ -29,6 +29,17 @@ class WeaponProfile:
     is_gun: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ShotEvent:
+    origin_x: float
+    origin_y: float
+    angle: int
+    max_distance: int
+    weapon_slot: int
+    impact_x: int
+    impact_y: int
+
+
 WEAPON_PROFILES: tuple[WeaponProfile, ...] = (
     WeaponProfile(loading_time=10, is_gun=False),
     WeaponProfile(loading_time=10, is_gun=True),
@@ -67,6 +78,7 @@ class PlayerState:
     shot_effect_y: int = 0
     shots_fired_total: int = 0
     walking: bool = False
+    pending_shots: list[ShotEvent] = field(default_factory=list)
 
     @property
     def center_x(self) -> float:
@@ -224,6 +236,14 @@ def trace_shot_impact(
     return px, py
 
 
+def consume_pending_shots(player: PlayerState) -> tuple[ShotEvent, ...]:
+    if not player.pending_shots:
+        return ()
+    shots = tuple(player.pending_shots)
+    player.pending_shots.clear()
+    return shots
+
+
 def _handle_shoot_input(player: PlayerState, level: LevelData, active: set[InputAction]) -> None:
     if InputAction.SHOOT in active:
         if player.load_count >= player.current_weapon_profile.loading_time:
@@ -257,6 +277,17 @@ def _fire_weapon(player: PlayerState, level: LevelData) -> None:
     player.shot_effect_ticks = SHOT_EFFECT_TICKS
     player.shot_effect_x = impact_x
     player.shot_effect_y = impact_y
+    player.pending_shots.append(
+        ShotEvent(
+            origin_x=origin_x,
+            origin_y=origin_y,
+            angle=player.angle,
+            max_distance=max_distance,
+            weapon_slot=player.current_weapon,
+            impact_x=impact_x,
+            impact_y=impact_y,
+        ),
+    )
 
 
 def _advance_reload_counter(player: PlayerState) -> None:
