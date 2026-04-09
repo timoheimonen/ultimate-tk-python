@@ -13,6 +13,7 @@ from ultimatetk.systems.player_control import (
     ShotEvent,
     apply_player_damage,
     grant_bullet_ammo,
+    player_health_capacity,
     weapon_profile_for_slot,
 )
 
@@ -646,10 +647,12 @@ def update_enemy_behavior(
     for enemy in enemies:
         if not enemy.alive:
             enemy.sees_player = False
+            enemy.shoot_count = 0
             continue
 
         if player.dead:
             enemy.sees_player = False
+            enemy.shoot_count = 0
             _advance_enemy_patrol(
                 enemy,
                 level,
@@ -674,6 +677,11 @@ def update_enemy_behavior(
         )
 
         distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)
+        if enemy.sees_player and _enemy_is_attack_aligned(enemy):
+            enemy.shoot_count += 1
+        else:
+            enemy.shoot_count = 0
+
         if enemy.sees_player:
             enemy.walk_ticks = 0
 
@@ -705,7 +713,6 @@ def update_enemy_behavior(
             if _can_enemy_fire(enemy, weapon_slot=weapon_slot, distance_to_player=distance_to_player):
                 shots_fired += 1
                 enemy.load_count = 0
-                enemy.shoot_count += 1
                 if enemy_projectiles is not None and weapon_projectile_speed_for_slot(weapon_slot) > 0:
                     spawned = spawn_enemy_projectiles(
                         enemy,
@@ -1311,7 +1318,7 @@ def _can_enemy_fire(
     profile = weapon_profile_for_slot(weapon_slot)
     if enemy.load_count < profile.loading_time:
         return False
-    if _angular_distance(enemy.angle, enemy.target_angle) > ENEMY_ALIGNMENT_TOLERANCE_DEGREES:
+    if not _enemy_is_attack_aligned(enemy):
         return False
     if distance_to_player > weapon_range_for_slot(weapon_slot):
         return False
@@ -1322,6 +1329,10 @@ def _can_enemy_fire(
         if distance_to_player < min_safe_distance:
             return False
     return True
+
+
+def _enemy_is_attack_aligned(enemy: EnemyState) -> bool:
+    return _angular_distance(enemy.angle, enemy.target_angle) <= ENEMY_ALIGNMENT_TOLERANCE_DEGREES
 
 
 def _enemy_should_strafe(
@@ -1910,10 +1921,11 @@ def _apply_crate_reward(player: PlayerState, crate: CrateState) -> CrateCollectR
         )
 
     if crate.type1 == 2:
-        if player.health >= player.max_health:
+        health_capacity = player_health_capacity(player)
+        if player.health >= health_capacity:
             return CrateCollectReport()
 
-        restored = min(CRATE_ENERGY_RESTORE, player.max_health - player.health)
+        restored = min(CRATE_ENERGY_RESTORE, health_capacity - player.health)
         if restored <= 0:
             return CrateCollectReport()
 

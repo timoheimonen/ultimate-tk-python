@@ -32,6 +32,7 @@ SHOT_TRACE_STEP = 4
 
 PLAYER_COLLISION_EDGE = 6
 PLAYER_COLLISION_CENTER_INSET = 4
+SHIELD_HEALTH_BONUS_PER_LEVEL = 10.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +292,19 @@ class PlayerState:
         return self.current_weapon_profile.is_gun
 
 
+def player_health_capacity(player: PlayerState) -> float:
+    return max(0.0, player.max_health + (max(0, player.shield) * SHIELD_HEALTH_BONUS_PER_LEVEL))
+
+
+def clamp_player_health_to_capacity(player: PlayerState) -> float:
+    capacity = player_health_capacity(player)
+    if player.health > capacity:
+        player.health = capacity
+    if player.health < 0.0:
+        player.health = 0.0
+    return capacity
+
+
 def spawn_player_from_level(level: LevelData, player_index: int = 0) -> PlayerState:
     index = 0 if player_index <= 0 else 1
     return PlayerState(
@@ -526,6 +540,7 @@ def sell_shield_to_shop(player: PlayerState, sell_prices: ShopSellPriceTable) ->
     player.cash += max(0, sell_prices.shield_base)
     player.cash += (SHOP_SHIELD_LEVEL_COST_STEP * prior_level) // 2
     player.shield -= 1
+    clamp_player_health_to_capacity(player)
     return True
 
 

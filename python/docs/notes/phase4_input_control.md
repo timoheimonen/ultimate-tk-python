@@ -46,6 +46,7 @@ Implemented:
   - Tightened enemy direct-shot trace sampling to reduce wall-graze pellet leakage in hitscan/non-projectile enemy fire.
   - Tightened player shot trace sampling to reduce wall-graze leakage when resolving hitscan shots against enemies/crates.
   - Tightened enemy projectile sub-step sampling to reduce corner-graze wall leakage in travel-time projectile hits.
+  - Tuned enemy firing cadence bookkeeping to follow legacy attack-window behavior: `shoot_count` now advances while enemies stay aligned with a visible target (not only on fire events) and resets when LOS/alignment is lost, improving projectile/explosive burst spread cadence parity.
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
@@ -55,6 +56,7 @@ Implemented:
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
+  - Added shield-aware health capacity parity for player energy flow: shield levels now raise effective max health (`+10` per level), energy crates heal up to that effective cap, and shield sell-down clamps current health to the new cap.
   - Added first-pass player ammo economy for non-fist weapons: ammo-gated firing, one-round consumption per shot, and empty-weapon fallback to fist.
   - Bullet crate rewards now apply to player ammo pools with legacy-like per-type caps.
   - Added ammo snapshot helpers for runtime telemetry: current-weapon ammo (type/index, units, cap) and full per-type ammo pools/capacities.
@@ -73,6 +75,7 @@ Implemented:
   - Runtime metadata now includes shop-active flag, shop selection row/column, and latest transaction outcome fields including blocked-reason text.
   - Added first-pass visual shop overlay panel (selection grid, per-cell short labels + owned/stock counters, selected-item legacy names, buy/sell info, and transaction feedback text with blocked reason) rendered on top of gameplay while shop mode is active.
   - Added first-pass gameplay HUD overlay (weapon/ammo/health status bars, cash/shield/target text, and shop-open control hint) while shop mode is closed.
+  - HUD health readout now renders current/effective-capacity values so shield-based health capacity changes are visible during gameplay.
   - Shop overlay cell rendering now includes icon-like pixel glyphs with per-weapon/per-ammo identity (distinct silhouettes for each weapon slot and ammo type) plus highlighted selected-state icon color.
   - HUD layout/styling updated with multi-meter bars (health/ammo/reload), denser status readout, and explicit active mine/C4 counters.
   - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
@@ -104,9 +107,11 @@ Verification:
   - Added enemy shotgun corner-graze coverage so wall-edge obstruction reduces leaked pellet hits.
   - Added player shot corner-graze coverage so wall-edge obstruction blocks leaked hitscan enemy hits.
   - Added enemy projectile corner-graze coverage so wall-edge obstruction blocks leaked travel-time projectile hits.
+  - Added enemy shoot-counter cadence coverage for LOS/alignment attack windows and reload-phase accumulation before explosive projectile fire.
   - Added mine proximity-trigger LOS coverage plus enemy projectile wall-impact crate-splash coverage.
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
+  - Added scripted shield shop + energy-crate flow coverage, including buy-heal-to-shield-cap and sell-back clamp-to-base-cap assertions.
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
   - Added scripted C4 corner-obstruction scenario asserting open-lane crate destruction versus blocked-corner survival.
   - Added scripted C4 side-wall leakage scenario asserting damped partial crate damage for side-only obstruction and zero damage for fully blocked lanes.

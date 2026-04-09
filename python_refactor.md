@@ -152,6 +152,9 @@ python/
 - Tightened player shot tracing for corner-edge wall grazes, reducing leaked hitscan enemy hits and adding dedicated player-shot corner-graze unit plus scripted integration coverage.
 - Tightened enemy projectile sub-step tracing for corner-edge wall grazes, reducing leaked travel-time projectile hits and adding dedicated unit plus scripted projectile corner-graze integration coverage.
 - Continued Phase 4 parity tuning with enemy in-range strafe behavior, point-blank explosive safety gating, grenade splash-to-crate propagation, mine proximity trigger LOS gating, extra narrow-lane explosive-ray damping, kind-specific mine/C4 falloff tuning, camera smoothing dead-zones/min-step catch-up, refined collision probes, visual shop/HUD polish including per-weapon/per-ammo shop glyph silhouettes plus expanded HUD status bars/readouts, and additional scripted mine/C4 obstruction micro-case coverage (diagonal and one-tile choke variants).
+- Added shield-aware player health-capacity parity hooks: shield level now raises effective health cap (`+10` per level), energy-crate healing respects the shield-adjusted cap, shield sell-down clamps current health to the new cap, and HUD health text now shows current/capacity values.
+- Tuned enemy firing cadence parity bookkeeping so `shoot_count` advances through aligned LOS attack windows (not only at fire instants) and resets on attack-window breaks, improving projectile/explosive spread cadence behavior.
+- Added scripted headless shield shop + energy-crate integration coverage for buy-heal and sell-clamp flow.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

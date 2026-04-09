@@ -66,6 +66,7 @@ from ultimatetk.systems.player_control import (
     follow_player_camera,
     generate_shop_sell_prices,
     move_shop_selection,
+    player_health_capacity,
     sell_selected_shop_item,
     shield_shop_buy_cost_for_level,
     shop_column_count_for_row,
@@ -1379,8 +1380,9 @@ class GameplayScene(BaseScene):
                 ammo_ratio = max(0.0, min(1.0, ammo_units / ammo_capacity))
 
         health_ratio = 0.0
-        if self._player.max_health > 0.0:
-            health_ratio = max(0.0, min(1.0, self._player.health / self._player.max_health))
+        health_capacity = player_health_capacity(self._player)
+        if health_capacity > 0.0:
+            health_ratio = max(0.0, min(1.0, self._player.health / health_capacity))
 
         reload_ratio = 1.0
         if weapon_profile.loading_time > 0:
@@ -1439,7 +1441,10 @@ class GameplayScene(BaseScene):
             pixels,
             4,
             panel_y + 18,
-            f"HP {int(max(0.0, self._player.health)):03d} AM {ammo_label}",
+            (
+                f"HP {int(max(0.0, self._player.health)):03d}/{int(max(0.0, health_capacity)):03d} "
+                f"AM {ammo_label}"
+            ),
             self._HUD_TEXT_COLOR,
         )
 

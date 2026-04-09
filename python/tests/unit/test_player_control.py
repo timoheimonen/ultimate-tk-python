@@ -44,6 +44,7 @@ from ultimatetk.systems.player_control import (
     generate_shop_sell_prices,
     grant_bullet_ammo,
     move_shop_selection,
+    player_health_capacity,
     sell_selected_shop_item,
     sell_shield_to_shop,
     sell_target_system_to_shop,
@@ -475,6 +476,7 @@ class PlayerControlTests(unittest.TestCase):
         self.assertTrue(buy_shield_from_shop(player))
         self.assertEqual(player.shield, 1)
         self.assertEqual(player.cash, 0)
+        self.assertEqual(player_health_capacity(player), 110.0)
 
         player.shield = 30
         player.cash = 100000
@@ -492,6 +494,20 @@ class PlayerControlTests(unittest.TestCase):
         self.assertTrue(sell_shield_to_shop(player, sell_prices))
         self.assertEqual(player.shield, 4)
         self.assertEqual(player.cash, 130)
+
+    def test_sell_shield_clamps_health_to_new_capacity(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, health=130.0, shield=3)
+        sell_prices = ShopSellPriceTable(
+            weapon_slots=(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            shield_base=0,
+            target_system=0,
+        )
+
+        self.assertEqual(player_health_capacity(player), 130.0)
+        self.assertTrue(sell_shield_to_shop(player, sell_prices))
+        self.assertEqual(player.shield, 2)
+        self.assertEqual(player_health_capacity(player), 120.0)
+        self.assertEqual(player.health, 120.0)
 
     def test_target_system_shop_buy_and_sell(self) -> None:
         player = PlayerState(x=40.0, y=40.0, cash=499)

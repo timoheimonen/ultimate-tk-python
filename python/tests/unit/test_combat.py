@@ -254,6 +254,25 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.health, 100.0)
         self.assertFalse(crate.alive)
 
+    def test_collect_energy_crate_uses_shield_bonus_capacity(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, health=95.0, shield=2)
+        crate = CrateState(
+            crate_id=0,
+            type1=2,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 1)
+        self.assertEqual(report.energy_collected, 25.0)
+        self.assertEqual(player.health, 120.0)
+        self.assertFalse(crate.alive)
+
     def test_collect_energy_crate_at_full_health_keeps_crate(self) -> None:
         player = PlayerState(x=40.0, y=40.0, health=100.0)
         crate = CrateState(
@@ -450,6 +469,61 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(enemy.angle, 99)
         self.assertGreater(enemy.x, 40.0)
         self.assertLess(enemy.y, 140.0)
+
+    def test_enemy_shoot_counter_tracks_attack_window_and_los_break(self) -> None:
+        open_level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=0,
+            shoot_count=0,
+        )
+
+        first = update_enemy_behavior(open_level, [enemy], player)
+        self.assertEqual(first.shots_fired, 0)
+        self.assertTrue(enemy.sees_player)
+        self.assertEqual(enemy.shoot_count, 1)
+
+        second = update_enemy_behavior(blocked_level, [enemy], player)
+        self.assertEqual(second.shots_fired, 0)
+        self.assertFalse(enemy.sees_player)
+        self.assertEqual(enemy.shoot_count, 0)
+
+    def test_enemy_explosive_shoot_counter_accumulates_during_reload(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=120.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=28,
+            shoot_count=0,
+        )
+        projectiles: list[EnemyProjectile] = []
+
+        first = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        second = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        third = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+
+        self.assertEqual(first.shots_fired, 0)
+        self.assertEqual(second.shots_fired, 0)
+        self.assertEqual(third.shots_fired, 1)
+        self.assertEqual(third.projectiles_spawned, 1)
+        self.assertEqual(enemy.shoot_count, 3)
+        self.assertEqual(len(projectiles), 1)
 
     def test_enemy_behavior_shoots_and_hits_player(self) -> None:
         level = _build_level(height=12)

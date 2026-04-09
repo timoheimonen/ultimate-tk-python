@@ -22,6 +22,124 @@ from ultimatetk.systems.player_control import grant_bullet_ammo
 
 
 class HeadlessInputScriptRuntimeTests(unittest.TestCase):
+    def _run_scripted_shield_energy_scenario(
+        self,
+        *,
+        sell_after_collect: bool,
+    ) -> tuple[int, int, int, str, str, bool]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        script_parts = [
+            "20:+SHOP",
+            "26:+DOWN",
+            "32:+DOWN",
+            "38:+SHOOT",
+            "44:+SHOP",
+            "50:+UP",
+            "82:-UP",
+        ]
+        if sell_after_collect:
+            script_parts.extend(
+                (
+                    "100:+SHOP",
+                    "106:+DOWN",
+                    "112:+DOWN",
+                    "118:+NEXT",
+                    "140:QUIT",
+                ),
+            )
+        else:
+            script_parts.append("96:QUIT")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=3.8,
+            input_script=";".join(script_parts),
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 9):
+            for tile_x in range(1, 6):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        crates.append(
+            combat.CrateState(
+                crate_id=0,
+                type1=2,
+                type2=0,
+                x=47.0,
+                y=72.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.max_health = 100.0
+        player.health = 95.0
+        player.cash = 1200
+        player.shield = 0
+        player.dead = False
+
+        gameplay_scene._crates_collected_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._shop_last_transaction = None  # type: ignore[attr-defined]
+
+        exit_code = app.run()
+        self.assertEqual(exit_code, 0)
+
+        return (
+            app.context.runtime.player_health,
+            app.context.runtime.player_shield,
+            app.context.runtime.crates_collected_by_player,
+            app.context.runtime.shop_last_action,
+            app.context.runtime.shop_last_category,
+            app.context.runtime.shop_last_success,
+        )
+
     def _run_scripted_c4_crate_scenario(
         self,
         *,
@@ -721,6 +839,40 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(app.context.runtime.shop_last_category, "weapon")
         self.assertFalse(app.context.runtime.shop_last_success)
         self.assertEqual(app.context.runtime.shop_last_reason, "NO CASH")
+
+    def test_scripted_shield_buy_plus_energy_crate_reaches_shield_cap(self) -> None:
+        (
+            player_health,
+            player_shield,
+            crates_collected,
+            last_action,
+            last_category,
+            last_success,
+        ) = self._run_scripted_shield_energy_scenario(sell_after_collect=False)
+
+        self.assertEqual(player_shield, 1)
+        self.assertEqual(player_health, 110)
+        self.assertEqual(crates_collected, 1)
+        self.assertEqual(last_action, "buy")
+        self.assertEqual(last_category, "shield")
+        self.assertTrue(last_success)
+
+    def test_scripted_shield_sell_after_energy_clamps_health_to_base_cap(self) -> None:
+        (
+            player_health,
+            player_shield,
+            crates_collected,
+            last_action,
+            last_category,
+            last_success,
+        ) = self._run_scripted_shield_energy_scenario(sell_after_collect=True)
+
+        self.assertEqual(player_shield, 0)
+        self.assertEqual(player_health, 100)
+        self.assertEqual(crates_collected, 1)
+        self.assertEqual(last_action, "sell")
+        self.assertEqual(last_category, "shield")
+        self.assertTrue(last_success)
 
     def test_scripted_mine_and_c4_update_explosive_runtime(self) -> None:
         paths = GamePaths.discover()
