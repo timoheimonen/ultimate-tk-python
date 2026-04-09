@@ -27,6 +27,7 @@ from ultimatetk.systems.combat import (
     advance_crate_effects,
     advance_enemy_effects,
     alive_enemy_count,
+    collect_crates_for_player,
     resolve_enemy_attack_against_player,
     resolve_shot_against_enemies,
     spawn_crates_for_level,
@@ -149,6 +150,103 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(alive_crate_count(crates), 1)
         advance_crate_effects(crates)
         self.assertEqual(crates[1].hit_flash_ticks, 1)
+
+    def test_collect_weapon_crate_grants_slot_and_removes_crate(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 1)
+        self.assertEqual(report.weapons_granted, 1)
+        self.assertTrue(player.weapons[1])
+        self.assertFalse(crate.alive)
+        self.assertEqual(crate.health, 0.0)
+
+    def test_collect_weapon_crate_skips_already_owned_weapon(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        player.grant_weapon(1)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 0)
+        self.assertEqual(report.weapons_granted, 0)
+        self.assertTrue(crate.alive)
+        self.assertEqual(crate.health, 12.0)
+
+    def test_collect_bullet_crate_reports_legacy_pack_amount(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=1,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 1)
+        self.assertEqual(report.bullet_packs_collected, 1)
+        self.assertEqual(report.bullets_collected, 50)
+        self.assertFalse(crate.alive)
+
+    def test_collect_energy_crate_restores_health_with_cap(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, health=70.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=2,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 1)
+        self.assertEqual(report.energy_collected, 30.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertFalse(crate.alive)
+
+    def test_collect_energy_crate_at_full_health_keeps_crate(self) -> None:
+        player = PlayerState(x=40.0, y=40.0, health=100.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=2,
+            type2=0,
+            x=47.0,
+            y=47.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        report = collect_crates_for_player([crate], player)
+
+        self.assertEqual(report.crates_collected, 0)
+        self.assertEqual(report.energy_collected, 0.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertTrue(crate.alive)
 
     def test_resolve_shot_applies_damage_when_enemy_hit(self) -> None:
         level = _build_level(height=12)

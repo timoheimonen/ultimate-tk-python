@@ -33,6 +33,7 @@ Implemented:
   - Added enemy projectile entities with travel-time simulation, wall impact handling, splash falloff, and per-frame projectile updates.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
+  - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
@@ -44,6 +45,7 @@ Implemented:
   - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, enemy counters, and crate counters.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
+  - Touching a live crate now consumes it and applies crate-type reward effects.
   - Added player death -> game-over flow with countdown and automatic return to main menu.
   - Game-over return path now disables menu autostart to avoid immediate gameplay re-entry loops.
 
@@ -70,5 +72,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
-- Add first-pass crate reward/pickup behavior after crate destruction.
+- Add bullet-ammo capacity/consumption parity so bullet crate rewards feed full weapon economy.
 - Continue parity tuning for collision feel and camera response.

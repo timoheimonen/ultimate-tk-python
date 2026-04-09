@@ -15,6 +15,7 @@ from ultimatetk.core.config import RuntimeConfig
 from ultimatetk.core.context import GameContext
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.scenes import SceneManager
+from ultimatetk.systems.combat import CrateState
 
 
 class SceneFlowTests(unittest.TestCase):
@@ -66,6 +67,44 @@ class SceneFlowTests(unittest.TestCase):
 
         manager.update(0.025)
         self.assertEqual(manager.current_scene_name, "main_menu")
+
+    def test_gameplay_collects_touching_crate_and_updates_runtime_counter(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        if player is None or crates is None:
+            self.skipTest("gameplay scene did not initialize crates/player")
+
+        crates.clear()
+        crates.append(
+            CrateState(
+                crate_id=0,
+                type1=1,
+                type2=0,
+                x=player.x + 6.0,
+                y=player.y + 6.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+
+        manager.update(0.025)
+
+        self.assertEqual(context.runtime.crates_collected_by_player, 1)
+        self.assertEqual(context.runtime.crates_alive, 0)
 
 
 if __name__ == "__main__":

@@ -28,6 +28,19 @@ CRATE_COLLISION_INSET = 2
 CRATE_HEALTH = 12.0
 CRATE_FLASH_TICKS = 3
 MAX_SPAWNED_CRATES = 96
+CRATE_ENERGY_RESTORE = 40.0
+
+CRATE_BULLET_PACK_AMOUNTS: tuple[int, ...] = (
+    50,
+    50,
+    20,
+    15,
+    10,
+    5,
+    5,
+    500,
+    5,
+)
 
 ENEMY_WEAPON_SLOT: tuple[int, ...] = (1, 2, 3, 4, 5, 0, 8, 10)
 ENEMY_SPEED: tuple[float, ...] = (2.0, 2.0, 2.0, 3.0, 2.0, 2.0, 1.0, 2.0)
@@ -272,6 +285,15 @@ class EnemyProjectileAdvance:
     crate_destroyed: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class CrateCollectReport:
+    crates_collected: int = 0
+    weapons_granted: int = 0
+    bullet_packs_collected: int = 0
+    bullets_collected: int = 0
+    energy_collected: float = 0.0
+
+
 def enemy_health_for_type(type_index: int) -> float:
     if 0 <= type_index < len(ENEMY_HEALTH):
         return ENEMY_HEALTH[type_index]
@@ -318,6 +340,12 @@ def weapon_projectile_radius_for_slot(weapon_slot: int) -> int:
     if 0 <= weapon_slot < len(WEAPON_PROJECTILE_RADIUS):
         return WEAPON_PROJECTILE_RADIUS[weapon_slot]
     return WEAPON_PROJECTILE_RADIUS[0]
+
+
+def crate_bullet_pack_amount_for_type(type_index: int) -> int:
+    if 0 <= type_index < len(CRATE_BULLET_PACK_AMOUNTS):
+        return CRATE_BULLET_PACK_AMOUNTS[type_index]
+    return CRATE_BULLET_PACK_AMOUNTS[0]
 
 
 def enemy_weapon_for_type(type_index: int) -> int:
@@ -453,6 +481,48 @@ def spawn_crates_for_level(
         )
 
     return tuple(crates)
+
+
+def collect_crates_for_player(
+    crates: Sequence[CrateState],
+    player: PlayerState,
+) -> CrateCollectReport:
+    if player.dead:
+        return CrateCollectReport()
+
+    crates_collected = 0
+    weapons_granted = 0
+    bullet_packs_collected = 0
+    bullets_collected = 0
+    energy_collected = 0.0
+
+    for crate in crates:
+        if not crate.alive:
+            continue
+        if not _crate_center_inside_player(crate, player):
+            continue
+
+        reward = _apply_crate_reward(player, crate)
+        if not reward.crates_collected:
+            continue
+
+        crate.alive = False
+        crate.health = 0.0
+        crate.hit_flash_ticks = 0
+
+        crates_collected += reward.crates_collected
+        weapons_granted += reward.weapons_granted
+        bullet_packs_collected += reward.bullet_packs_collected
+        bullets_collected += reward.bullets_collected
+        energy_collected += reward.energy_collected
+
+    return CrateCollectReport(
+        crates_collected=crates_collected,
+        weapons_granted=weapons_granted,
+        bullet_packs_collected=bullet_packs_collected,
+        bullets_collected=bullets_collected,
+        energy_collected=energy_collected,
+    )
 
 
 def resolve_shot_against_enemies(
@@ -1215,6 +1285,58 @@ def _crate_at_point(
             continue
         return crate
     return None
+
+
+def _crate_center_inside_player(crate: CrateState, player: PlayerState) -> bool:
+    cx = crate.center_x
+    cy = crate.center_y
+
+    if cx <= player.x:
+        return False
+    if cx >= player.x + PLAYER_COLLISION_SIZE:
+        return False
+    if cy <= player.y:
+        return False
+    if cy >= player.y + PLAYER_COLLISION_SIZE:
+        return False
+    return True
+
+
+def _apply_crate_reward(player: PlayerState, crate: CrateState) -> CrateCollectReport:
+    if crate.type1 == 0:
+        weapon_slot = crate.type2 + 1
+        if weapon_slot < 0 or weapon_slot >= len(player.weapons):
+            return CrateCollectReport()
+        if player.weapons[weapon_slot]:
+            return CrateCollectReport()
+        player.grant_weapon(weapon_slot)
+        return CrateCollectReport(
+            crates_collected=1,
+            weapons_granted=1,
+        )
+
+    if crate.type1 == 1:
+        return CrateCollectReport(
+            crates_collected=1,
+            bullet_packs_collected=1,
+            bullets_collected=crate_bullet_pack_amount_for_type(crate.type2),
+        )
+
+    if crate.type1 == 2:
+        if player.health >= player.max_health:
+            return CrateCollectReport()
+
+        restored = min(CRATE_ENERGY_RESTORE, player.max_health - player.health)
+        if restored <= 0:
+            return CrateCollectReport()
+
+        player.health += restored
+        return CrateCollectReport(
+            crates_collected=1,
+            energy_collected=restored,
+        )
+
+    return CrateCollectReport()
 
 
 def advance_enemy_effects(enemies: Sequence[EnemyState]) -> None:

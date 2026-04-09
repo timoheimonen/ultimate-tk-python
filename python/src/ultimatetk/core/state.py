@@ -40,6 +40,7 @@ class RuntimeState:
     crates_total: int = 0
     crates_alive: int = 0
     crates_destroyed_by_player: int = 0
+    crates_collected_by_player: int = 0
     enemy_shots_fired_total: int = 0
     enemy_hits_total: int = 0
     enemy_damage_to_player_total: float = 0.0

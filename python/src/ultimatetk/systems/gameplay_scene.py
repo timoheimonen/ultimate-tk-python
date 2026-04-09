@@ -27,6 +27,7 @@ from ultimatetk.systems.combat import (
     advance_enemy_effects,
     alive_crate_count,
     alive_enemy_count,
+    collect_crates_for_player,
     resolve_shot_against_enemies,
     spawn_crates_for_level,
     spawn_enemies_for_level,
@@ -80,6 +81,7 @@ class GameplayScene(BaseScene):
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._crates_destroyed_by_player = 0
+        self._crates_collected_by_player = 0
         self._enemy_shots_fired = 0
         self._enemy_hits_on_player = 0
         self._enemy_damage_to_player = 0.0
@@ -109,6 +111,7 @@ class GameplayScene(BaseScene):
         context.runtime.crates_total = 0
         context.runtime.crates_alive = 0
         context.runtime.crates_destroyed_by_player = 0
+        context.runtime.crates_collected_by_player = 0
         context.runtime.enemy_shots_fired_total = 0
         context.runtime.enemy_hits_total = 0
         context.runtime.enemy_damage_to_player_total = 0.0
@@ -131,6 +134,7 @@ class GameplayScene(BaseScene):
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._crates_destroyed_by_player = 0
+        self._crates_collected_by_player = 0
         self._enemy_shots_fired = 0
         self._enemy_hits_on_player = 0
         self._enemy_damage_to_player = 0.0
@@ -237,6 +241,7 @@ class GameplayScene(BaseScene):
         self._crates.clear()
         self._enemy_projectiles.clear()
         self._crates_destroyed_by_player = 0
+        self._crates_collected_by_player = 0
 
     def handle_events(self, context: GameContext, events: Sequence[AppEvent]) -> None:
         del context
@@ -279,6 +284,8 @@ class GameplayScene(BaseScene):
                 cycle_weapon=self._cycle_weapon_requested,
                 select_weapon_slot=self._pending_weapon_slot,
             )
+            collected = collect_crates_for_player(self._crates, self._player)
+            self._crates_collected_by_player += collected.crates_collected
             self._resolve_pending_player_shots()
 
             report = update_enemy_behavior(
@@ -574,6 +581,7 @@ class GameplayScene(BaseScene):
             context.runtime.crates_total = 0
             context.runtime.crates_alive = 0
             context.runtime.crates_destroyed_by_player = 0
+            context.runtime.crates_collected_by_player = 0
             context.runtime.enemy_shots_fired_total = 0
             context.runtime.enemy_hits_total = 0
             context.runtime.enemy_damage_to_player_total = 0.0
@@ -600,6 +608,7 @@ class GameplayScene(BaseScene):
         context.runtime.crates_total = len(self._crates)
         context.runtime.crates_alive = alive_crate_count(self._crates)
         context.runtime.crates_destroyed_by_player = self._crates_destroyed_by_player
+        context.runtime.crates_collected_by_player = self._crates_collected_by_player
         context.runtime.enemy_shots_fired_total = self._enemy_shots_fired
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
