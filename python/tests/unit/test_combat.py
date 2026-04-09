@@ -2185,6 +2185,86 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.detonations, 1)
         self.assertEqual(len(explosives), 0)
 
+    def test_player_mine_trigger_allows_near_partial_corner_contact(self) -> None:
+        level = _build_level(width=8, height=8, walls={(3, 2)})
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=56.0,
+            y=54.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=54,
+            impact_y=98,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+
+        explosive.arming_ticks = 1
+        explosive.fuse_ticks = 5
+        explosive.trigger_radius = 14
+
+        explosives = [explosive]
+        report = update_player_explosives(
+            explosives,
+            [enemy],
+            player,
+            level=level,
+        )
+
+        self.assertEqual(report.detonations, 1)
+        self.assertEqual(len(explosives), 0)
+
+    def test_player_mine_trigger_keeps_far_partial_corner_contact_blocked(self) -> None:
+        level = _build_level(width=8, height=8, walls={(3, 2)})
+        player = PlayerState(x=0.0, y=0.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=56.0,
+            y=32.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=54,
+            impact_y=98,
+        )
+
+        explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(explosive)
+        assert explosive is not None
+
+        explosive.arming_ticks = 1
+        explosive.fuse_ticks = 5
+        explosive.trigger_radius = 14
+
+        explosives = [explosive]
+        report = update_player_explosives(
+            explosives,
+            [enemy],
+            player,
+            level=level,
+        )
+
+        self.assertEqual(report.detonations, 0)
+        self.assertEqual(len(explosives), 1)
+
     def test_player_mine_proximity_trigger_respects_wall_obstruction(self) -> None:
         open_level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})

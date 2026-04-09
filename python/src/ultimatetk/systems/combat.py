@@ -193,6 +193,8 @@ PLAYER_SPLASH_EDGE_CONTACT_DAMAGE_SCALE = 0.6
 PLAYER_C4_FALLOFF_EXPONENT = 1.05
 PLAYER_MINE_FALLOFF_EXPONENT = 1.1
 PLAYER_MINE_TRIGGER_RADIUS = 14
+PLAYER_MINE_PARTIAL_TRIGGER_COVERAGE_MIN = 0.25
+PLAYER_MINE_PARTIAL_TRIGGER_DISTANCE_RATIO = 0.55
 
 
 @dataclass(slots=True)
@@ -1263,7 +1265,20 @@ def _mine_contact_triggered(
             step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
             crates=crates,
         ):
-            continue
+            partial_coverage = _explosive_ray_coverage(
+                level,
+                blast_x=trigger_origin_x,
+                blast_y=trigger_origin_y,
+                target_x=target_x,
+                target_y=target_y,
+                radius=trigger_radius,
+                crates=crates,
+            )
+            if (
+                partial_coverage < PLAYER_MINE_PARTIAL_TRIGGER_COVERAGE_MIN
+                or distance > (trigger_radius * PLAYER_MINE_PARTIAL_TRIGGER_DISTANCE_RATIO)
+            ):
+                continue
         return True
     return False
 
