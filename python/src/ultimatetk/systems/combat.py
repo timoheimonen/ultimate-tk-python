@@ -26,6 +26,7 @@ ENEMY_ALIGNMENT_TOLERANCE_DEGREES = 9
 ENEMY_LINE_OF_SIGHT_TRACE_STEP = 2
 ENEMY_SHOT_TRACE_STEP = 2
 ENEMY_PROJECTILE_TRACE_STEP = 2
+PLAYER_SHOT_TRACE_STEP = 2
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -581,7 +582,7 @@ def resolve_shot_against_enemies(
 
     px = int(shot.origin_x)
     py = int(shot.origin_y)
-    for distance in range(0, shot.max_distance + 1, max(1, SHOT_TRACE_STEP)):
+    for distance in range(0, shot.max_distance + 1, max(1, PLAYER_SHOT_TRACE_STEP)):
         x = int(shot.origin_x + (distance * math.sin(angle_radians)))
         y = int(shot.origin_y + (distance * math.cos(angle_radians)))
 

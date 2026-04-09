@@ -391,6 +391,32 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(enemy.health, 18.0)
         self.assertLess(result.impact_y, 80)
 
+    def test_resolve_shot_corner_graze_wall_blocks_enemy_hit(self) -> None:
+        open_level = _build_level(width=12, height=12)
+        blocked_level = _build_level(width=12, height=12, walls={(1, 1)})
+        shot = ShotEvent(
+            origin_x=10.0,
+            origin_y=10.0,
+            angle=20,
+            max_distance=170,
+            weapon_slot=1,
+            impact_x=0,
+            impact_y=0,
+        )
+
+        enemy_open = EnemyState(enemy_id=0, type_index=0, x=10.0, y=34.0, health=18.0, max_health=18.0)
+        enemy_blocked = EnemyState(enemy_id=0, type_index=0, x=10.0, y=34.0, health=18.0, max_health=18.0)
+
+        open_result = resolve_shot_against_enemies(open_level, [enemy_open], shot)
+        blocked_result = resolve_shot_against_enemies(blocked_level, [enemy_blocked], shot)
+
+        self.assertEqual(open_result.enemy_id, 0)
+        self.assertEqual(open_result.damage, 5.0)
+        self.assertEqual(enemy_open.health, 13.0)
+
+        self.assertIsNone(blocked_result.enemy_id)
+        self.assertEqual(enemy_blocked.health, 18.0)
+
     def test_enemy_effect_progression_and_alive_count(self) -> None:
         enemies = [
             EnemyState(enemy_id=0, type_index=0, x=0.0, y=0.0, health=0.0, max_health=18.0, alive=False),

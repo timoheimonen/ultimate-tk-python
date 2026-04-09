@@ -42,6 +42,7 @@ Implemented:
   - Enemy grenade/projectile splash damage now uses the same wall-aware blast coverage model, including partial versus fully blocked obstruction behavior.
   - Tightened enemy line-of-sight corner-edge handling by using finer LOS trace sampling, preventing wall-graze peek shots.
   - Tightened enemy direct-shot trace sampling to reduce wall-graze pellet leakage in hitscan/non-projectile enemy fire.
+  - Tightened player shot trace sampling to reduce wall-graze leakage when resolving hitscan shots against enemies/crates.
   - Tightened enemy projectile sub-step sampling to reduce corner-graze wall leakage in travel-time projectile hits.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
@@ -91,6 +92,7 @@ Verification:
   - `python/tests/unit/test_scene_flow.py`
   - Added enemy corner-graze LOS coverage so enemies stop firing through wall-edge peeks.
   - Added enemy shotgun corner-graze coverage so wall-edge obstruction reduces leaked pellet hits.
+  - Added player shot corner-graze coverage so wall-edge obstruction blocks leaked hitscan enemy hits.
   - Added enemy projectile corner-graze coverage so wall-edge obstruction blocks leaked travel-time projectile hits.
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
