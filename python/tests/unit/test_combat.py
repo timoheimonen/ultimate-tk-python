@@ -939,6 +939,59 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.damage_to_player, 0.0)
         self.assertEqual(player.health, 100.0)
 
+    def test_enemy_explosive_long_range_shot_starts_forward_pressure(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=120.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=30,
+        )
+        projectiles: list[EnemyProjectile] = []
+
+        first = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(first.shots_fired, 1)
+        self.assertGreaterEqual(enemy.pressure_ticks, 1)
+
+        start_x = enemy.x
+        start_y = enemy.y
+        second = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+
+        self.assertEqual(second.shots_fired, 0)
+        self.assertLess(enemy.y, start_y)
+        self.assertLessEqual(abs(enemy.x - start_x), abs(enemy.y - start_y))
+
+    def test_enemy_explosive_pressure_resets_when_line_of_sight_breaks(self) -> None:
+        open_level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=120.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=30,
+        )
+
+        first = update_enemy_behavior(open_level, [enemy], player)
+        self.assertEqual(first.shots_fired, 1)
+        self.assertGreater(enemy.pressure_ticks, 0)
+
+        second = update_enemy_behavior(blocked_level, [enemy], player)
+        self.assertEqual(second.shots_fired, 0)
+        self.assertFalse(enemy.sees_player)
+        self.assertEqual(enemy.pressure_ticks, 0)
+
     def test_grenade_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
         player = PlayerState(x=20.0, y=64.0)

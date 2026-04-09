@@ -29,6 +29,8 @@ ENEMY_SHOT_TRACE_STEP = 2
 ENEMY_PROJECTILE_TRACE_STEP = 2
 PLAYER_SHOT_TRACE_STEP = 2
 ENEMY_EXPLOSIVE_MIN_SAFE_RADIUS_RATIO = 0.2
+ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO = 0.5
+ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE = 32.0
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -195,6 +197,7 @@ class EnemyState:
     angle: int = 0
     target_angle: int = 0
     walk_ticks: int = 0
+    pressure_ticks: int = 0
     load_count: int = 0
     shoot_count: int = 0
     sees_player: bool = False
@@ -647,11 +650,13 @@ def update_enemy_behavior(
     for enemy in enemies:
         if not enemy.alive:
             enemy.sees_player = False
+            enemy.pressure_ticks = 0
             enemy.shoot_count = 0
             continue
 
         if player.dead:
             enemy.sees_player = False
+            enemy.pressure_ticks = 0
             enemy.shoot_count = 0
             _advance_enemy_patrol(
                 enemy,
@@ -684,10 +689,16 @@ def update_enemy_behavior(
 
         if enemy.sees_player:
             enemy.walk_ticks = 0
+            if enemy.pressure_ticks > 0:
+                enemy.pressure_ticks -= 1
 
             attack_range = weapon_range_for_slot(weapon_slot)
             follow_distance = max(40.0, attack_range * 0.55)
-            if distance_to_player > follow_distance:
+            if distance_to_player > follow_distance or _enemy_should_apply_post_shot_pressure(
+                enemy,
+                weapon_slot=weapon_slot,
+                distance_to_player=distance_to_player,
+            ):
                 _move_enemy_with_collision(
                     enemy,
                     level,
@@ -713,6 +724,14 @@ def update_enemy_behavior(
             if _can_enemy_fire(enemy, weapon_slot=weapon_slot, distance_to_player=distance_to_player):
                 shots_fired += 1
                 enemy.load_count = 0
+                if _enemy_should_start_post_shot_pressure(
+                    weapon_slot=weapon_slot,
+                    distance_to_player=distance_to_player,
+                ):
+                    enemy.pressure_ticks = max(
+                        enemy.pressure_ticks,
+                        _enemy_post_shot_pressure_ticks(enemy.type_index),
+                    )
                 if enemy_projectiles is not None and weapon_projectile_speed_for_slot(weapon_slot) > 0:
                     spawned = spawn_enemy_projectiles(
                         enemy,
@@ -730,6 +749,7 @@ def update_enemy_behavior(
                     hits_on_player += attack.hit_count
                     damage_to_player += attack.total_damage
         else:
+            enemy.pressure_ticks = 0
             _advance_enemy_patrol(
                 enemy,
                 level,
@@ -1352,6 +1372,37 @@ def _enemy_should_strafe(
     if weapon_slot in (0, PLAYER_WEAPON_C4_SLOT, PLAYER_WEAPON_MINE_SLOT):
         return False
     return True
+
+
+def _enemy_should_start_post_shot_pressure(
+    *,
+    weapon_slot: int,
+    distance_to_player: float,
+) -> bool:
+    if weapon_explosive_splash_radius_for_slot(weapon_slot) <= 0:
+        return False
+    attack_range = float(weapon_range_for_slot(weapon_slot))
+    if attack_range <= 0.0:
+        return False
+    return distance_to_player >= attack_range * ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO
+
+
+def _enemy_should_apply_post_shot_pressure(
+    enemy: EnemyState,
+    *,
+    weapon_slot: int,
+    distance_to_player: float,
+) -> bool:
+    if enemy.pressure_ticks <= 0:
+        return False
+    if weapon_explosive_splash_radius_for_slot(weapon_slot) <= 0:
+        return False
+    return distance_to_player >= ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE
+
+
+def _enemy_post_shot_pressure_ticks(type_index: int) -> int:
+    speed = max(0.1, enemy_speed_for_type(type_index))
+    return max(1, int(round(20.0 / speed)))
 
 
 def _enemy_strafe_angle(enemy: EnemyState) -> int:
