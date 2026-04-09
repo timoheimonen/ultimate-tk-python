@@ -124,6 +124,126 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             app.context.runtime.player_shots_fired_total,
         )
 
+    def _run_scripted_mine_corridor_scenario(
+        self,
+        *,
+        wall_tiles: set[tuple[int, int]],
+    ) -> tuple[int, int, int, int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=1.8,
+            input_script="20:+SHOOT;35:-SHOOT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(1, 10):
+            for tile_x in range(1, 6):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        for tile_x, tile_y in wall_tiles:
+            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=0,
+                x=40.0,
+                y=50.0,
+                health=18.0,
+                max_health=18.0,
+                angle=180,
+                target_angle=180,
+                load_count=0,
+            ),
+        )
+        crates.append(
+            combat.CrateState(
+                crate_id=0,
+                type1=0,
+                type2=0,
+                x=51.0,
+                y=62.0,
+                health=12.0,
+                max_health=12.0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+        player.grant_weapon(11)
+        for bullet_type in range(len(player.bullets)):
+            player.bullets[bullet_type] = 0
+        self.assertGreater(grant_bullet_ammo(player, 8, 1), 0)
+        player.current_weapon = 11
+        player.load_count = player.current_weapon_profile.loading_time
+
+        gameplay_scene._enemy_hits_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._enemies_killed_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._crates_destroyed_by_player = 0  # type: ignore[attr-defined]
+        gameplay_scene._player_explosive_detonations = 0  # type: ignore[attr-defined]
+
+        with patch.object(combat, "PLAYER_MINE_SLEEP_TICKS", 2), patch.object(
+            combat,
+            "enemy_speed_for_type",
+            return_value=0.0,
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            app.context.runtime.crates_destroyed_by_player,
+            app.context.runtime.player_explosive_detonations_total,
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.enemies_killed_by_player,
+        )
+
     def test_scripted_turn_changes_player_angle(self) -> None:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
@@ -233,6 +353,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(blocked_detonations, 1)
         self.assertGreaterEqual(open_destroyed, 1)
         self.assertEqual(blocked_destroyed, 0)
+
+    def test_scripted_mine_corridor_obstruction_blocks_crate_damage(self) -> None:
+        open_destroyed, open_detonations, open_shots, open_kills = self._run_scripted_mine_corridor_scenario(
+            wall_tiles=set(),
+        )
+        blocked_destroyed, blocked_detonations, blocked_shots, blocked_kills = (
+            self._run_scripted_mine_corridor_scenario(wall_tiles={(2, 3)})
+        )
+
+        self.assertGreaterEqual(open_shots, 1)
+        self.assertGreaterEqual(blocked_shots, 1)
+        self.assertGreaterEqual(open_detonations, 1)
+        self.assertGreaterEqual(blocked_detonations, 1)
+        self.assertGreaterEqual(open_destroyed, 1)
+        self.assertEqual(blocked_destroyed, 0)
+        self.assertGreaterEqual(open_kills, 1)
+        self.assertEqual(blocked_kills, 0)
 
 
 if __name__ == "__main__":
