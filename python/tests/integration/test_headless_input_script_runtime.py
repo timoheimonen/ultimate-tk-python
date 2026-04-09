@@ -451,6 +451,13 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self,
         *,
         wall_tiles: set[tuple[int, int]],
+        enemy_type_index: int = 0,
+        enemy_x: float = 6.0,
+        enemy_y: float = 6.0,
+        enemy_angle: int = 34,
+        enemy_load_count: int = 10,
+        player_x: float = 54.0,
+        player_y: float = 76.0,
     ) -> tuple[int, int, float]:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
@@ -495,8 +502,8 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             old = blocks[index]
             blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
 
-        for tile_y in range(1, 6):
-            for tile_x in range(1, 6):
+        for tile_y in range(0, 6):
+            for tile_x in range(0, 6):
                 set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
@@ -512,19 +519,19 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         enemies.append(
             combat.EnemyState(
                 enemy_id=0,
-                type_index=0,
-                x=6.0,
-                y=6.0,
+                type_index=enemy_type_index,
+                x=enemy_x,
+                y=enemy_y,
                 health=18.0,
                 max_health=18.0,
-                angle=34,
-                target_angle=34,
-                load_count=10,
+                angle=enemy_angle,
+                target_angle=enemy_angle,
+                load_count=enemy_load_count,
             ),
         )
 
-        player.x = 54.0
-        player.y = 76.0
+        player.x = player_x
+        player.y = player_y
         player.angle = 0
         player.health = player.max_health
         player.dead = False
@@ -732,6 +739,36 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreater(open_damage, 0.0)
 
         self.assertEqual(blocked_shots, 0)
+        self.assertEqual(blocked_hits, 0)
+        self.assertEqual(blocked_damage, 0.0)
+
+    def test_scripted_enemy_direct_shot_corner_graze_open_vs_blocked(self) -> None:
+        open_shots, open_hits, open_damage = self._run_scripted_enemy_los_corner_graze_scenario(
+            wall_tiles=set(),
+            enemy_type_index=5,
+            enemy_x=28.0,
+            enemy_y=10.0,
+            enemy_angle=352,
+            enemy_load_count=10,
+            player_x=24.0,
+            player_y=38.0,
+        )
+        blocked_shots, blocked_hits, blocked_damage = self._run_scripted_enemy_los_corner_graze_scenario(
+            wall_tiles={(1, 1)},
+            enemy_type_index=5,
+            enemy_x=28.0,
+            enemy_y=10.0,
+            enemy_angle=352,
+            enemy_load_count=10,
+            player_x=24.0,
+            player_y=38.0,
+        )
+
+        self.assertGreaterEqual(open_shots, 1)
+        self.assertGreaterEqual(open_hits, 1)
+        self.assertGreater(open_damage, 0.0)
+
+        self.assertGreaterEqual(blocked_shots, 1)
         self.assertEqual(blocked_hits, 0)
         self.assertEqual(blocked_damage, 0.0)
 

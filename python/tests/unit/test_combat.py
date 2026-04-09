@@ -681,6 +681,47 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(open_report.hits_on_player, blocked_report.hits_on_player)
         self.assertGreater(open_report.damage_to_player, blocked_report.damage_to_player)
 
+    def test_enemy_direct_shot_corner_graze_is_blocked(self) -> None:
+        open_level = _build_level(width=10, height=10)
+        blocked_level = _build_level(width=10, height=10, walls={(1, 1)})
+
+        player_open = PlayerState(x=24.0, y=38.0)
+        player_blocked = PlayerState(x=24.0, y=38.0)
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=5,
+            x=28.0,
+            y=10.0,
+            health=10.0,
+            max_health=10.0,
+            angle=352,
+            target_angle=352,
+            load_count=10,
+        )
+        enemy_blocked = EnemyState(
+            enemy_id=0,
+            type_index=5,
+            x=28.0,
+            y=10.0,
+            health=10.0,
+            max_health=10.0,
+            angle=352,
+            target_angle=352,
+            load_count=10,
+        )
+
+        open_report = update_enemy_behavior(open_level, [enemy_open], player_open)
+        blocked_report = update_enemy_behavior(blocked_level, [enemy_blocked], player_blocked)
+
+        self.assertEqual(open_report.shots_fired, 1)
+        self.assertEqual(open_report.hits_on_player, 1)
+        self.assertEqual(open_report.damage_to_player, 3.0)
+
+        self.assertEqual(blocked_report.shots_fired, 1)
+        self.assertEqual(blocked_report.hits_on_player, 0)
+        self.assertEqual(blocked_report.damage_to_player, 0.0)
+        self.assertEqual(player_blocked.health, 100.0)
+
     def test_dead_player_no_longer_receives_enemy_fire(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0, health=4.0)
