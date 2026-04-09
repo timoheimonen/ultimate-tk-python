@@ -51,6 +51,7 @@ Implemented:
   - Added lost-sight chase parity: enemies now start a distance-scaled short chase window after breaking LOS from a previously seen target, preserving last known attack heading before returning to patrol.
   - Added legacy-style front-arc vision gating for enemy detection: enemy LOS now also requires the player to be inside a 180-degree forward vision cone, reducing rear-hemisphere instant aggro.
   - Added legacy-style vision-distance gating for enemy detection: enemy LOS now also respects the original short sight range (~160 px), reducing long-corridor instant aggro from far targets.
+  - Retuned enemy LOS ray progression to legacy 5-pixel stepping cadence (with existing endpoint floor checks and vision gating), reducing over-eager wall-graze peek fire from dense modern trace sampling.
   - Added legacy-style patrol idle/burst cadence for no-LOS enemies: patrol now idles until low-probability start rolls, then moves in finite bursts (matching old `walk_cnt` behavior) instead of continuously roaming.
   - Added patrol turn-lock parity while idle: random patrol retarget rolls now apply only once enemies finish rotating to their current target heading, preventing mid-rotation retarget churn.
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
@@ -117,6 +118,7 @@ Verification:
   - Added lost-sight chase-window coverage for previously seen versus never-seen enemy LOS states.
   - Added enemy front-vision-arc coverage so rear-hemisphere targets do not trigger direct fire while patrol heading is unchanged.
   - Added enemy vision-distance coverage so far targets beyond the legacy sight range do not trigger direct fire while heading/LOS remain clear.
+  - Added enemy LOS trace-step coverage so enemy vision checks use legacy 5-pixel progression cadence.
   - Added enemy patrol idle/burst cadence coverage so no-LOS enemies stay idle without start rolls and begin finite movement bursts on start rolls.
   - Added patrol turn-lock coverage so idle retarget rolls wait for heading alignment and preserve in-progress turns.
   - Added mine proximity-trigger LOS coverage plus enemy projectile wall-impact crate-splash coverage.
@@ -127,6 +129,7 @@ Verification:
   - Added scripted enemy lost-sight chase coverage for prior-contact versus no-prior-contact LOS break behavior.
   - Added scripted enemy front-vision-arc coverage for rear-target non-detection.
   - Added scripted enemy vision-distance coverage for far-target non-detection.
+  - Added scripted enemy LOS trace-step coverage by recording runtime LOS calls and verifying legacy step usage.
   - Added scripted enemy patrol idle-vs-burst coverage by forcing patrol rolls to idle-only and burst-start variants.
   - Added scripted patrol turn-lock coverage by forcing retarget/start rolls during an in-progress idle turn and verifying target heading stability.
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
@@ -137,7 +140,7 @@ Verification:
   - Added scripted mine micro-obstruction scenarios for diagonal and one-tile choke variants.
   - Added scripted enemy grenade obstruction scenario asserting partial-damage lane behavior versus fully blocked lane behavior.
   - Added scripted enemy LOS corner-graze scenario asserting open-lane enemy fire versus blocked wall-edge no-fire behavior.
-  - Added scripted enemy direct-shot corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
+  - Added scripted enemy direct-shot corner-graze scenario asserting open-lane hits versus blocked wall-graze no-fire behavior under legacy LOS cadence.
   - Added scripted player-shot corner-graze scenario asserting open-lane hits/kills versus blocked wall-graze no-hit behavior.
   - Added scripted enemy projectile corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.
   - Added enemy grenade splash obstruction unit coverage for partial and fully blocked wall configurations.

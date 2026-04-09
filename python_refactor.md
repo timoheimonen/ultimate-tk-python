@@ -161,6 +161,7 @@ python/
 - Added legacy-style enemy vision-distance gating so LOS detection also requires targets to be within the short original sight radius (~160 px), with new unit/integration coverage for far-target non-detection.
 - Added legacy-style enemy patrol idle/burst cadence so no-LOS patrol movement starts only on low-probability rolls and runs in finite bursts (old `walk_cnt` style), with unit/integration coverage for idle versus burst-start paths.
 - Added patrol turn-lock parity so idle random retarget rolls wait until current heading rotation completes, with new unit/integration coverage for in-progress-turn target stability.
+- Retuned enemy LOS sampling cadence to legacy 5-pixel progression for vision checks (while preserving modern corner-graze endpoint checks and vision gating), with new unit/integration coverage for step usage and updated blocked corner direct-shot expectations.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

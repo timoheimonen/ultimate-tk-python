@@ -949,6 +949,96 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         return (enemies[0].angle, enemies[0].target_angle, enemies[0].walk_ticks)
 
+    def _run_scripted_enemy_los_trace_step_scenario(self) -> list[int]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.08,
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(0, 12):
+            for tile_x in range(0, 12):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        enemies.append(
+            combat.EnemyState(
+                enemy_id=0,
+                type_index=0,
+                x=40.0,
+                y=120.0,
+                health=18.0,
+                max_health=18.0,
+                angle=180,
+                target_angle=180,
+                load_count=0,
+            ),
+        )
+
+        player.x = 40.0
+        player.y = 40.0
+        player.angle = 0
+        player.health = player.max_health
+        player.dead = False
+
+        steps: list[int] = []
+        original_line_of_sight_clear = combat._line_of_sight_clear
+
+        def record_line_of_sight_step(*args: object, **kwargs: object) -> bool:
+            step = kwargs.get("step")
+            if isinstance(step, int):
+                steps.append(step)
+            return original_line_of_sight_clear(*args, **kwargs)
+
+        with patch.object(combat, "_line_of_sight_clear", side_effect=record_line_of_sight_step):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return steps
+
     def _run_scripted_enemy_los_corner_graze_scenario(
         self,
         *,
@@ -1497,6 +1587,13 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertLessEqual(angle, 90)
         self.assertGreater(walk_ticks, 0)
 
+    def test_scripted_enemy_los_uses_legacy_trace_step(self) -> None:
+        steps = self._run_scripted_enemy_los_trace_step_scenario()
+
+        self.assertTrue(steps)
+        self.assertTrue(all(step == combat.ENEMY_LINE_OF_SIGHT_TRACE_STEP for step in steps))
+        self.assertEqual(combat.ENEMY_LINE_OF_SIGHT_TRACE_STEP, 5)
+
     def test_scripted_enemy_front_vision_arc_blocks_rear_detection(self) -> None:
         shots, hits, damage = self._run_scripted_enemy_los_corner_graze_scenario(
             wall_tiles=set(),
@@ -1547,7 +1644,7 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked_hits, 0)
         self.assertEqual(blocked_damage, 0.0)
 
-    def test_scripted_enemy_direct_shot_corner_graze_open_vs_blocked(self) -> None:
+    def test_scripted_enemy_direct_shot_corner_graze_blocks_fire_with_legacy_los_step(self) -> None:
         open_shots, open_hits, open_damage = self._run_scripted_enemy_los_corner_graze_scenario(
             wall_tiles=set(),
             enemy_type_index=5,
@@ -1573,7 +1670,7 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(open_hits, 1)
         self.assertGreater(open_damage, 0.0)
 
-        self.assertGreaterEqual(blocked_shots, 1)
+        self.assertEqual(blocked_shots, 0)
         self.assertEqual(blocked_hits, 0)
         self.assertEqual(blocked_damage, 0.0)
 

@@ -472,6 +472,29 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(enemy.x, 40.0)
         self.assertLess(enemy.y, 140.0)
 
+    def test_enemy_behavior_uses_legacy_los_trace_step(self) -> None:
+        level = _build_level(width=12, height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=140.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=0,
+        )
+
+        with patch.object(combat_module, "_line_of_sight_clear", return_value=True) as los:
+            update_enemy_behavior(level, [enemy], player)
+
+        self.assertTrue(enemy.sees_player)
+        self.assertGreaterEqual(los.call_count, 1)
+        self.assertEqual(los.call_args.kwargs["step"], combat_module.ENEMY_LINE_OF_SIGHT_TRACE_STEP)
+        self.assertEqual(combat_module.ENEMY_LINE_OF_SIGHT_TRACE_STEP, 5)
+
     def test_enemy_behavior_does_not_detect_player_outside_front_vision_arc(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)
@@ -1024,7 +1047,7 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(open_report.hits_on_player, blocked_report.hits_on_player)
         self.assertGreater(open_report.damage_to_player, blocked_report.damage_to_player)
 
-    def test_enemy_direct_shot_corner_graze_is_blocked(self) -> None:
+    def test_enemy_direct_shot_corner_graze_blocks_fire_with_legacy_los_step(self) -> None:
         open_level = _build_level(width=10, height=10)
         blocked_level = _build_level(width=10, height=10, walls={(1, 1)})
 
@@ -1060,10 +1083,11 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(open_report.hits_on_player, 1)
         self.assertEqual(open_report.damage_to_player, 3.0)
 
-        self.assertEqual(blocked_report.shots_fired, 1)
+        self.assertEqual(blocked_report.shots_fired, 0)
         self.assertEqual(blocked_report.hits_on_player, 0)
         self.assertEqual(blocked_report.damage_to_player, 0.0)
         self.assertEqual(player_blocked.health, 100.0)
+        self.assertFalse(enemy_blocked.sees_player)
 
     def test_dead_player_no_longer_receives_enemy_fire(self) -> None:
         level = _build_level(height=12)
