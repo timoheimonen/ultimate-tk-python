@@ -26,6 +26,9 @@ class RuntimeState:
     player_world_y: int = 0
     player_angle_degrees: int = 0
     player_weapon_slot: int = 0
+    player_current_ammo_type_index: int = -1
+    player_current_ammo_units: int = 0
+    player_current_ammo_capacity: int = 0
     player_load_count: int = 0
     player_fire_ticks: int = 0
     player_shots_fired_total: int = 0

@@ -185,6 +185,18 @@ def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) 
     return gained
 
 
+def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:
+    bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
+    if bullet_type is None:
+        return -1, 0, 0
+    if bullet_type < 0 or bullet_type >= len(player.bullets):
+        return -1, 0, 0
+
+    capacity = bullet_capacity_units_for_type(bullet_type)
+    current = max(0, min(player.bullets[bullet_type], capacity))
+    return bullet_type, current, capacity
+
+
 def current_weapon_has_ammo(player: PlayerState) -> bool:
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:

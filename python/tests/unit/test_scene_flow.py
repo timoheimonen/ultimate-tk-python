@@ -16,6 +16,7 @@ from ultimatetk.core.context import GameContext
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.scenes import SceneManager
 from ultimatetk.systems.combat import CrateState
+from ultimatetk.systems.player_control import grant_bullet_ammo
 
 
 class SceneFlowTests(unittest.TestCase):
@@ -105,6 +106,41 @@ class SceneFlowTests(unittest.TestCase):
 
         self.assertEqual(context.runtime.crates_collected_by_player, 1)
         self.assertEqual(context.runtime.crates_alive, 0)
+
+    def test_gameplay_runtime_reports_current_weapon_ammo_snapshot(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        gained = grant_bullet_ammo(player, 0, 37)
+        self.assertEqual(gained, 37)
+
+        manager.update(0.025)
+        self.assertEqual(context.runtime.player_current_ammo_type_index, 0)
+        self.assertEqual(context.runtime.player_current_ammo_units, 37)
+        self.assertEqual(context.runtime.player_current_ammo_capacity, 300)
+
+        player.current_weapon = 0
+        manager.update(0.025)
+        self.assertEqual(context.runtime.player_current_ammo_type_index, -1)
+        self.assertEqual(context.runtime.player_current_ammo_units, 0)
+        self.assertEqual(context.runtime.player_current_ammo_capacity, 0)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,7 @@ from ultimatetk.systems.player_control import (
     PlayerState,
     aim_point_from_player,
     apply_player_controls,
+    current_weapon_ammo_snapshot,
     consume_pending_shots,
     follow_player_camera,
     spawn_player_from_level,
@@ -97,6 +98,9 @@ class GameplayScene(BaseScene):
         context.runtime.player_world_y = 0
         context.runtime.player_angle_degrees = 0
         context.runtime.player_weapon_slot = 0
+        context.runtime.player_current_ammo_type_index = -1
+        context.runtime.player_current_ammo_units = 0
+        context.runtime.player_current_ammo_capacity = 0
         context.runtime.player_load_count = 0
         context.runtime.player_fire_ticks = 0
         context.runtime.player_shots_fired_total = 0
@@ -567,6 +571,9 @@ class GameplayScene(BaseScene):
             context.runtime.player_world_y = 0
             context.runtime.player_angle_degrees = 0
             context.runtime.player_weapon_slot = 0
+            context.runtime.player_current_ammo_type_index = -1
+            context.runtime.player_current_ammo_units = 0
+            context.runtime.player_current_ammo_capacity = 0
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
             context.runtime.player_shots_fired_total = 0
@@ -594,6 +601,11 @@ class GameplayScene(BaseScene):
         context.runtime.player_world_y = int(self._player.center_y)
         context.runtime.player_angle_degrees = self._player.angle
         context.runtime.player_weapon_slot = self._player.current_weapon
+        (
+            context.runtime.player_current_ammo_type_index,
+            context.runtime.player_current_ammo_units,
+            context.runtime.player_current_ammo_capacity,
+        ) = current_weapon_ammo_snapshot(self._player)
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
         context.runtime.player_shots_fired_total = self._player.shots_fired_total

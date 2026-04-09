@@ -21,9 +21,11 @@ from ultimatetk.formats.lev import (
     LevelData,
 )
 from ultimatetk.systems.player_control import (
+    PlayerState,
     aim_point_from_player,
     apply_player_controls,
     consume_pending_shots,
+    current_weapon_ammo_snapshot,
     cycle_weapon_slot,
     follow_player_camera,
     grant_bullet_ammo,
@@ -272,6 +274,27 @@ class PlayerControlTests(unittest.TestCase):
         self.assertEqual(player.shots_fired_total, 1)
         self.assertEqual(player.bullets[0], 1)
         self.assertEqual(len(consume_pending_shots(player)), 1)
+
+    def test_current_weapon_ammo_snapshot_for_melee_weapon(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+
+        ammo_type, ammo_units, ammo_capacity = current_weapon_ammo_snapshot(player)
+
+        self.assertEqual(ammo_type, -1)
+        self.assertEqual(ammo_units, 0)
+        self.assertEqual(ammo_capacity, 0)
+
+    def test_current_weapon_ammo_snapshot_for_gun_weapon(self) -> None:
+        player = PlayerState(x=40.0, y=40.0)
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        player.bullets[0] = 350
+
+        ammo_type, ammo_units, ammo_capacity = current_weapon_ammo_snapshot(player)
+
+        self.assertEqual(ammo_type, 0)
+        self.assertEqual(ammo_units, 300)
+        self.assertEqual(ammo_capacity, 300)
 
 
 if __name__ == "__main__":

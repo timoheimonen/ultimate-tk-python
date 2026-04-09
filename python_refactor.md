@@ -145,6 +145,7 @@ python/
 - Added first-pass destructible crate entities (level-driven spawn, shot/projectile hit handling, and crate runtime telemetry).
 - Added first-pass crate pickup/reward flow (player overlap collection, weapon unlock crates, bullet-pack crates, and energy restore crates).
 - Added first-pass player ammo economy parity hooks (weapon ammo gating/consumption, bullet-crate ammo grants with per-type capacity caps, and empty-weapon fallback to fist).
+- Runtime telemetry now exposes current-weapon ammo snapshot fields (ammo type/index, units, and capacity) for HUD/shop parity work.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
