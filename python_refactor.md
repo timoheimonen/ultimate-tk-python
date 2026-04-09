@@ -142,6 +142,7 @@ python/
 - Added explosive near-miss splash damage for grenade-class enemy attacks and low tick-damage behavior for flamethrower attacks.
 - Added enemy projectile entities with travel-time updates, wall/splash resolution, and active projectile tracking in gameplay runtime telemetry.
 - Added player death/game-over flow in gameplay runtime state with countdown-based return to main menu.
+- Added first-pass destructible crate entities (level-driven spawn, shot/projectile hit handling, and crate runtime telemetry).
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
@@ -150,4 +151,4 @@ python/
 - Asset repository adapter and migration/probe tooling added under `python/src/ultimatetk/assets/` and `python/tools/`.
 - Added `python/tools/render_probe.py` to output a baseline rendered frame as PPM.
 - Planning document created.
-- Combat/entity/progression systems are still in progress (advanced projectiles, crates/effects interactions, UI/progression flow).
+- Combat/entity/progression systems are still in progress (advanced projectile edge cases, crate pickups/rewards, UI/progression flow).

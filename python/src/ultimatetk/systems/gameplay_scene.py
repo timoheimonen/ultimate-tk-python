@@ -19,11 +19,16 @@ from ultimatetk.rendering import (
     frame_digest,
 )
 from ultimatetk.systems.combat import (
+    CRATE_SIZE,
+    CrateState,
     EnemyProjectile,
     EnemyState,
+    advance_crate_effects,
     advance_enemy_effects,
+    alive_crate_count,
     alive_enemy_count,
     resolve_shot_against_enemies,
+    spawn_crates_for_level,
     spawn_enemies_for_level,
     update_enemy_behavior,
     update_enemy_projectiles,
@@ -45,6 +50,7 @@ class GameplayScene(BaseScene):
     _GAME_OVER_RETURN_TICKS = 80
     _PROJECTILE_MARKER_PIXELS = bytes((252, 252, 252, 252))
     _PROJECTILE_MARKER_SIZE = 2
+    _CRATE_FRAME_SIZE = CRATE_SIZE
 
     def __init__(self) -> None:
         self._renderer: SoftwareRenderer | None = None
@@ -65,12 +71,15 @@ class GameplayScene(BaseScene):
         self._target_pixels: bytes | None = None
         self._target_width = 0
         self._target_height = 0
+        self._crate_frames: tuple[bytes, ...] = ()
         self._rambo_frames: tuple[bytes, ...] = ()
         self._enemy_frames: dict[int, tuple[bytes, ...]] = {}
         self._enemies: list[EnemyState] = []
+        self._crates: list[CrateState] = []
         self._enemy_projectiles: list[EnemyProjectile] = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
+        self._crates_destroyed_by_player = 0
         self._enemy_shots_fired = 0
         self._enemy_hits_on_player = 0
         self._enemy_damage_to_player = 0.0
@@ -97,6 +106,9 @@ class GameplayScene(BaseScene):
         context.runtime.enemies_total = 0
         context.runtime.enemies_alive = 0
         context.runtime.enemies_killed_by_player = 0
+        context.runtime.crates_total = 0
+        context.runtime.crates_alive = 0
+        context.runtime.crates_destroyed_by_player = 0
         context.runtime.enemy_shots_fired_total = 0
         context.runtime.enemy_hits_total = 0
         context.runtime.enemy_damage_to_player_total = 0.0
@@ -110,12 +122,15 @@ class GameplayScene(BaseScene):
         self._target_pixels = None
         self._target_width = 0
         self._target_height = 0
+        self._crate_frames = ()
         self._rambo_frames = ()
         self._enemy_frames = {}
         self._enemies = []
+        self._crates = []
         self._enemy_projectiles = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
+        self._crates_destroyed_by_player = 0
         self._enemy_shots_fired = 0
         self._enemy_hits_on_player = 0
         self._enemy_damage_to_player = 0.0
@@ -179,8 +194,9 @@ class GameplayScene(BaseScene):
         self._camera_max_x = self._renderer.max_camera_x
         self._camera_max_y = self._renderer.max_camera_y
 
-        self._static_sprites = self._load_static_sprites(repo, player=player)
+        self._static_sprites = ()
         self._target_pixels, self._target_width, self._target_height = self._load_target_sprite(repo)
+        self._crate_frames = self._load_crate_frames(repo)
         self._rambo_frames = self._load_rambo_frames(repo)
         self._enemy_frames = self._load_enemy_frames(repo)
         self._enemies = list(
@@ -190,16 +206,24 @@ class GameplayScene(BaseScene):
                 player_y=player.y,
             ),
         )
+        self._crates = list(
+            spawn_crates_for_level(
+                self._level,
+                player_x=player.x,
+                player_y=player.y,
+            ),
+        )
 
         self._publish_player_runtime_state(context)
         context.logger.info(
-            "Gameplay phase-4 controls ready: %s/%s dark=%s lights=%s shadows=%s enemies=%d",
+            "Gameplay phase-4 controls ready: %s/%s dark=%s lights=%s shadows=%s enemies=%d crates=%d",
             episode,
             level_name,
             self._render_flags.dark_mode,
             self._render_flags.light_effects,
             self._render_flags.shadows,
             len(self._enemies),
+            len(self._crates),
         )
 
     def on_exit(self, context: GameContext) -> None:
@@ -210,7 +234,9 @@ class GameplayScene(BaseScene):
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
         self._enemies.clear()
+        self._crates.clear()
         self._enemy_projectiles.clear()
+        self._crates_destroyed_by_player = 0
 
     def handle_events(self, context: GameContext, events: Sequence[AppEvent]) -> None:
         del context
@@ -265,11 +291,13 @@ class GameplayScene(BaseScene):
                 self._level,
                 self._enemy_projectiles,
                 self._player,
+                crates=self._crates,
             )
             self._enemy_shots_fired += report.shots_fired
             self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
             self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
             advance_enemy_effects(self._enemies)
+            advance_crate_effects(self._crates)
 
             if self._player.dead:
                 self._activate_game_over(context)
@@ -314,6 +342,29 @@ class GameplayScene(BaseScene):
         sprites = list(self._static_sprites)
         if self._player is None:
             return tuple(sprites)
+
+        if self._crate_frames:
+            frame_count = len(self._crate_frames)
+            for crate in self._crates:
+                if not crate.alive:
+                    continue
+
+                frame_index = _crate_frame_index(crate, frame_count)
+                if crate.hit_flash_ticks > 0 and frame_count > 1:
+                    frame_index = (frame_index + 1) % frame_count
+
+                sprites.append(
+                    WorldSprite(
+                        world_x=int(crate.center_x),
+                        world_y=int(crate.center_y),
+                        width=self._CRATE_FRAME_SIZE,
+                        height=self._CRATE_FRAME_SIZE,
+                        pixels=self._crate_frames[frame_index],
+                        anchor_x=self._CRATE_FRAME_SIZE // 2,
+                        anchor_y=self._CRATE_FRAME_SIZE // 2,
+                        translucent=False,
+                    ),
+                )
 
         for enemy in self._enemies:
             if not enemy.alive:
@@ -396,33 +447,28 @@ class GameplayScene(BaseScene):
 
         return tuple(sprites)
 
-    def _load_static_sprites(self, repo: GameDataRepository, *, player: PlayerState) -> tuple[WorldSprite, ...]:
-        sprites: list[WorldSprite] = []
-
+    def _load_crate_frames(self, repo: GameDataRepository) -> tuple[bytes, ...]:
         try:
             crate_sheet = repo.load_efp("CRATES.EFP")
-            crate_frame = extract_horizontal_sprite_frame(
-                crate_sheet,
-                frame_width=14,
-                frame_height=14,
-                frame_index=0,
-            )
-            sprites.append(
-                WorldSprite(
-                    world_x=int(player.center_x) + 20,
-                    world_y=int(player.center_y) + 10,
-                    width=14,
-                    height=14,
-                    pixels=crate_frame,
-                    anchor_x=7,
-                    anchor_y=7,
-                    translucent=False,
-                ),
-            )
-        except (FileNotFoundError, ValueError):
-            pass
+        except FileNotFoundError:
+            return ()
 
-        return tuple(sprites)
+        frames: list[bytes] = []
+        frame_count = max(0, crate_sheet.width // self._CRATE_FRAME_SIZE)
+        for frame_index in range(frame_count):
+            try:
+                frames.append(
+                    extract_horizontal_sprite_frame(
+                        crate_sheet,
+                        frame_width=self._CRATE_FRAME_SIZE,
+                        frame_height=self._CRATE_FRAME_SIZE,
+                        frame_index=frame_index,
+                    ),
+                )
+            except ValueError:
+                break
+
+        return tuple(frames)
 
     def _load_target_sprite(self, repo: GameDataRepository) -> tuple[bytes | None, int, int]:
         try:
@@ -461,13 +507,20 @@ class GameplayScene(BaseScene):
             return
 
         for shot in consume_pending_shots(self._player):
-            result = resolve_shot_against_enemies(self._level, self._enemies, shot)
+            result = resolve_shot_against_enemies(
+                self._level,
+                self._enemies,
+                shot,
+                crates=self._crates,
+            )
             self._player.shot_effect_x = result.impact_x
             self._player.shot_effect_y = result.impact_y
             if result.enemy_id is not None:
                 self._enemy_hits_by_player += 1
             if result.enemy_killed:
                 self._enemies_killed_by_player += 1
+            if result.crate_destroyed:
+                self._crates_destroyed_by_player += 1
 
     def _activate_game_over(self, context: GameContext) -> None:
         if self._game_over_active:
@@ -518,6 +571,9 @@ class GameplayScene(BaseScene):
             context.runtime.enemies_total = 0
             context.runtime.enemies_alive = 0
             context.runtime.enemies_killed_by_player = 0
+            context.runtime.crates_total = 0
+            context.runtime.crates_alive = 0
+            context.runtime.crates_destroyed_by_player = 0
             context.runtime.enemy_shots_fired_total = 0
             context.runtime.enemy_hits_total = 0
             context.runtime.enemy_damage_to_player_total = 0.0
@@ -541,12 +597,23 @@ class GameplayScene(BaseScene):
         context.runtime.enemies_total = len(self._enemies)
         context.runtime.enemies_alive = alive_enemy_count(self._enemies)
         context.runtime.enemies_killed_by_player = self._enemies_killed_by_player
+        context.runtime.crates_total = len(self._crates)
+        context.runtime.crates_alive = alive_crate_count(self._crates)
+        context.runtime.crates_destroyed_by_player = self._crates_destroyed_by_player
         context.runtime.enemy_shots_fired_total = self._enemy_shots_fired
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
         context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
         context.runtime.game_over_active = self._game_over_active
         context.runtime.game_over_ticks_remaining = self._game_over_ticks_remaining
+
+
+def _crate_frame_index(crate: CrateState, frame_count: int) -> int:
+    if frame_count <= 0:
+        return 0
+
+    seed = (max(0, crate.type1) * 17) + (max(0, crate.type2) * 7)
+    return seed % frame_count
 
 
 def _extract_actor_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:

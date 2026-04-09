@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import math
 from typing import Sequence
 
-from ultimatetk.formats.lev import DIFF_ENEMIES, LevelData
+from ultimatetk.formats.lev import CrateInfo, DIFF_ENEMIES, LevelData
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, TILE_SIZE
 from ultimatetk.systems.player_control import (
     PLAYER_COLLISION_SIZE,
@@ -22,6 +22,12 @@ ENEMY_FLASH_TICKS = 3
 MAX_SPAWNED_ENEMIES = 24
 ENEMY_ROTATION_STEP_DEGREES = 9
 ENEMY_ALIGNMENT_TOLERANCE_DEGREES = 9
+
+CRATE_SIZE = 14
+CRATE_COLLISION_INSET = 2
+CRATE_HEALTH = 12.0
+CRATE_FLASH_TICKS = 3
+MAX_SPAWNED_CRATES = 96
 
 ENEMY_WEAPON_SLOT: tuple[int, ...] = (1, 2, 3, 4, 5, 0, 8, 10)
 ENEMY_SPEED: tuple[float, ...] = (2.0, 2.0, 2.0, 3.0, 2.0, 2.0, 1.0, 2.0)
@@ -171,13 +177,46 @@ class EnemyState:
         return False
 
 
+@dataclass(slots=True)
+class CrateState:
+    crate_id: int
+    type1: int
+    type2: int
+    x: float
+    y: float
+    health: float
+    max_health: float
+    alive: bool = True
+    hit_flash_ticks: int = 0
+
+    @property
+    def center_x(self) -> float:
+        return self.x + (CRATE_SIZE // 2)
+
+    @property
+    def center_y(self) -> float:
+        return self.y + (CRATE_SIZE // 2)
+
+    def apply_damage(self, damage: float) -> bool:
+        if not self.alive:
+            return False
+        self.health -= damage
+        if self.health <= 0:
+            self.health = 0.0
+            self.alive = False
+            return True
+        return False
+
+
 @dataclass(frozen=True, slots=True)
 class ShotResolution:
     enemy_id: int | None
+    crate_id: int | None
     impact_x: int
     impact_y: int
     damage: float
     enemy_killed: bool = False
+    crate_destroyed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +260,16 @@ class EnemyProjectile:
 class EnemyProjectileReport:
     hits_on_player: int = 0
     damage_to_player: float = 0.0
+    crates_hit: int = 0
+    crates_destroyed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyProjectileAdvance:
+    keep_alive: bool
+    damage_to_player: float = 0.0
+    crate_hit: bool = False
+    crate_destroyed: bool = False
 
 
 def enemy_health_for_type(type_index: int) -> float:
@@ -353,10 +402,65 @@ def spawn_enemies_for_level(
     return tuple(enemies)
 
 
+def spawn_crates_for_level(
+    level: LevelData,
+    *,
+    player_x: float,
+    player_y: float,
+    max_crates: int = MAX_SPAWNED_CRATES,
+) -> tuple[CrateState, ...]:
+    if max_crates <= 0:
+        return ()
+
+    if level.normal_crate_info:
+        return _spawn_crates_from_positions(level.normal_crate_info, max_crates=max_crates)
+
+    requested_types = _expand_crate_type_counts(level, max_crates=max_crates)
+    if not requested_types:
+        return ()
+
+    start_tile_x = int(player_x) // TILE_SIZE
+    start_tile_y = int(player_y) // TILE_SIZE
+    candidates = _collect_floor_spawn_tiles(level, start_tile_x=start_tile_x, start_tile_y=start_tile_y)
+    if not candidates:
+        return ()
+
+    stride = max(1, (len(candidates) // max(1, len(requested_types))) + 1)
+    index = (start_tile_x * 29 + start_tile_y * 43) % len(candidates)
+
+    used: set[tuple[int, int]] = set()
+    crates: list[CrateState] = []
+    for crate_id, (type1, type2) in enumerate(requested_types):
+        tile = _pick_crate_spawn_tile(candidates, used, index=index, stride=stride)
+        if tile is None:
+            break
+
+        used.add(tile)
+        index = (index + stride) % len(candidates)
+
+        spawn_x = tile[0] * TILE_SIZE + ((TILE_SIZE - CRATE_SIZE) // 2)
+        spawn_y = tile[1] * TILE_SIZE + ((TILE_SIZE - CRATE_SIZE) // 2)
+        crates.append(
+            CrateState(
+                crate_id=crate_id,
+                type1=type1,
+                type2=type2,
+                x=float(spawn_x),
+                y=float(spawn_y),
+                health=CRATE_HEALTH,
+                max_health=CRATE_HEALTH,
+            ),
+        )
+
+    return tuple(crates)
+
+
 def resolve_shot_against_enemies(
     level: LevelData,
     enemies: Sequence[EnemyState],
     shot: ShotEvent,
+    *,
+    crates: Sequence[CrateState] | None = None,
 ) -> ShotResolution:
     angle_radians = math.radians(shot.angle % 360)
     damage = weapon_damage_for_slot(shot.weapon_slot)
@@ -368,7 +472,21 @@ def resolve_shot_against_enemies(
         y = int(shot.origin_y + (distance * math.cos(angle_radians)))
 
         if not _is_floor_pixel(level, x, y):
-            return ShotResolution(enemy_id=None, impact_x=px, impact_y=py, damage=0.0)
+            return ShotResolution(enemy_id=None, crate_id=None, impact_x=px, impact_y=py, damage=0.0)
+
+        if crates is not None:
+            crate = _crate_at_point(crates, x=x, y=y)
+            if crate is not None:
+                crate.hit_flash_ticks = CRATE_FLASH_TICKS
+                destroyed = crate.apply_damage(damage)
+                return ShotResolution(
+                    enemy_id=None,
+                    crate_id=crate.crate_id,
+                    impact_x=int(crate.center_x),
+                    impact_y=int(crate.center_y),
+                    damage=damage,
+                    crate_destroyed=destroyed,
+                )
 
         enemy = _enemy_at_point(enemies, x=x, y=y)
         if enemy is not None:
@@ -376,6 +494,7 @@ def resolve_shot_against_enemies(
             killed = enemy.apply_damage(damage)
             return ShotResolution(
                 enemy_id=enemy.enemy_id,
+                crate_id=None,
                 impact_x=int(enemy.center_x),
                 impact_y=int(enemy.center_y),
                 damage=damage,
@@ -385,7 +504,7 @@ def resolve_shot_against_enemies(
         px = x
         py = y
 
-    return ShotResolution(enemy_id=None, impact_x=px, impact_y=py, damage=0.0)
+    return ShotResolution(enemy_id=None, crate_id=None, impact_x=px, impact_y=py, damage=0.0)
 
 
 def update_enemy_behavior(
@@ -630,33 +749,45 @@ def update_enemy_projectiles(
     level: LevelData,
     projectiles: list[EnemyProjectile],
     player: PlayerState,
+    *,
+    crates: Sequence[CrateState] | None = None,
 ) -> EnemyProjectileReport:
     if not projectiles:
         return EnemyProjectileReport()
 
     hits_on_player = 0
     damage_to_player = 0.0
+    crates_hit = 0
+    crates_destroyed = 0
     active: list[EnemyProjectile] = []
 
     for projectile in projectiles:
-        keep_alive, damage = _advance_enemy_projectile(
+        advance = _advance_enemy_projectile(
             level,
             projectile,
             player,
+            crates=crates,
         )
 
-        if damage > 0:
-            apply_player_damage(player, damage)
+        if advance.damage_to_player > 0:
+            apply_player_damage(player, advance.damage_to_player)
             hits_on_player += 1
-            damage_to_player += damage
+            damage_to_player += advance.damage_to_player
 
-        if keep_alive:
+        if advance.crate_hit:
+            crates_hit += 1
+        if advance.crate_destroyed:
+            crates_destroyed += 1
+
+        if advance.keep_alive:
             active.append(projectile)
 
     projectiles[:] = active
     return EnemyProjectileReport(
         hits_on_player=hits_on_player,
         damage_to_player=damage_to_player,
+        crates_hit=crates_hit,
+        crates_destroyed=crates_destroyed,
     )
 
 
@@ -924,7 +1055,9 @@ def _advance_enemy_projectile(
     level: LevelData,
     projectile: EnemyProjectile,
     player: PlayerState,
-) -> tuple[bool, float]:
+    *,
+    crates: Sequence[CrateState] | None = None,
+) -> EnemyProjectileAdvance:
     sub_steps = max(1, int(math.ceil(projectile.speed / SHOT_TRACE_STEP)))
     step_speed = projectile.speed / sub_steps
 
@@ -932,20 +1065,42 @@ def _advance_enemy_projectile(
         projectile.x += projectile.vx * step_speed
         projectile.y += projectile.vy * step_speed
 
+        if crates is not None:
+            crate = _crate_at_projectile(crates, projectile)
+            if crate is not None:
+                crate.hit_flash_ticks = CRATE_FLASH_TICKS
+                destroyed = crate.apply_damage(projectile.damage)
+                damage = _projectile_splash_damage(projectile, player)
+                return EnemyProjectileAdvance(
+                    keep_alive=False,
+                    damage_to_player=damage,
+                    crate_hit=True,
+                    crate_destroyed=destroyed,
+                )
+
         if _projectile_hits_wall(level, projectile):
             damage = _projectile_splash_damage(projectile, player)
-            return False, damage
+            return EnemyProjectileAdvance(
+                keep_alive=False,
+                damage_to_player=damage,
+            )
 
         if _player_hit_by_projectile(player, projectile):
             direct_damage = projectile.damage
             if projectile.splash_radius > 0:
                 direct_damage = max(direct_damage, _projectile_splash_damage(projectile, player))
-            return False, direct_damage
+            return EnemyProjectileAdvance(
+                keep_alive=False,
+                damage_to_player=direct_damage,
+            )
 
     projectile.remaining_ticks -= 1
     if projectile.remaining_ticks <= 0:
-        return False, _projectile_splash_damage(projectile, player)
-    return True, 0.0
+        return EnemyProjectileAdvance(
+            keep_alive=False,
+            damage_to_player=_projectile_splash_damage(projectile, player),
+        )
+    return EnemyProjectileAdvance(keep_alive=True)
 
 
 def _projectile_hits_wall(level: LevelData, projectile: EnemyProjectile) -> bool:
@@ -996,6 +1151,34 @@ def _projectile_splash_damage(projectile: EnemyProjectile, player: PlayerState) 
     )
 
 
+def _crate_at_projectile(
+    crates: Sequence[CrateState],
+    projectile: EnemyProjectile,
+) -> CrateState | None:
+    for crate in crates:
+        if not crate.alive:
+            continue
+        if _crate_hit_by_projectile(crate, projectile):
+            return crate
+    return None
+
+
+def _crate_hit_by_projectile(crate: CrateState, projectile: EnemyProjectile) -> bool:
+    x = projectile.x
+    y = projectile.y
+    radius = max(0, projectile.radius)
+
+    if x <= crate.x + CRATE_COLLISION_INSET - radius:
+        return False
+    if x >= crate.x + CRATE_SIZE - CRATE_COLLISION_INSET + radius:
+        return False
+    if y <= crate.y + CRATE_COLLISION_INSET - radius:
+        return False
+    if y >= crate.y + CRATE_SIZE - CRATE_COLLISION_INSET + radius:
+        return False
+    return True
+
+
 def _player_at_point(
     player: PlayerState,
     *,
@@ -1013,14 +1196,45 @@ def _player_at_point(
     return True
 
 
+def _crate_at_point(
+    crates: Sequence[CrateState],
+    *,
+    x: int,
+    y: int,
+) -> CrateState | None:
+    for crate in crates:
+        if not crate.alive:
+            continue
+        if x <= crate.x + CRATE_COLLISION_INSET:
+            continue
+        if x >= crate.x + CRATE_SIZE - CRATE_COLLISION_INSET:
+            continue
+        if y <= crate.y + CRATE_COLLISION_INSET:
+            continue
+        if y >= crate.y + CRATE_SIZE - CRATE_COLLISION_INSET:
+            continue
+        return crate
+    return None
+
+
 def advance_enemy_effects(enemies: Sequence[EnemyState]) -> None:
     for enemy in enemies:
         if enemy.hit_flash_ticks > 0:
             enemy.hit_flash_ticks -= 1
 
 
+def advance_crate_effects(crates: Sequence[CrateState]) -> None:
+    for crate in crates:
+        if crate.hit_flash_ticks > 0:
+            crate.hit_flash_ticks -= 1
+
+
 def alive_enemy_count(enemies: Sequence[EnemyState]) -> int:
     return sum(1 for enemy in enemies if enemy.alive)
+
+
+def alive_crate_count(crates: Sequence[CrateState]) -> int:
+    return sum(1 for crate in crates if crate.alive)
 
 
 def _expand_enemy_type_counts(level: LevelData, *, max_enemies: int) -> list[int]:
@@ -1031,6 +1245,74 @@ def _expand_enemy_type_counts(level: LevelData, *, max_enemies: int) -> list[int
             if len(requested) >= max_enemies:
                 return requested
     return requested
+
+
+def _expand_crate_type_counts(
+    level: LevelData,
+    *,
+    max_crates: int,
+) -> list[tuple[int, int]]:
+    requested: list[tuple[int, int]] = []
+
+    for type2, count in enumerate(level.normal_crate_counts.weapon_crates):
+        for _ in range(max(0, int(count))):
+            requested.append((0, type2))
+            if len(requested) >= max_crates:
+                return requested
+
+    for type2, count in enumerate(level.normal_crate_counts.bullet_crates):
+        for _ in range(max(0, int(count))):
+            requested.append((1, type2))
+            if len(requested) >= max_crates:
+                return requested
+
+    for _ in range(max(0, int(level.normal_crate_counts.energy_crates))):
+        requested.append((2, 0))
+        if len(requested) >= max_crates:
+            return requested
+
+    return requested
+
+
+def _spawn_crates_from_positions(
+    crate_info: Sequence[CrateInfo],
+    *,
+    max_crates: int,
+) -> tuple[CrateState, ...]:
+    crates: list[CrateState] = []
+    for crate_id, info in enumerate(crate_info[:max_crates]):
+        crates.append(
+            CrateState(
+                crate_id=crate_id,
+                type1=max(0, info.type1),
+                type2=max(0, info.type2),
+                x=float(info.x),
+                y=float(info.y),
+                health=CRATE_HEALTH,
+                max_health=CRATE_HEALTH,
+            ),
+        )
+    return tuple(crates)
+
+
+def _pick_crate_spawn_tile(
+    candidates: Sequence[tuple[int, int]],
+    used: set[tuple[int, int]],
+    *,
+    index: int,
+    stride: int,
+) -> tuple[int, int] | None:
+    if not candidates:
+        return None
+
+    probe = index
+    for _ in range(len(candidates)):
+        tile = candidates[probe]
+        probe = (probe + stride) % len(candidates)
+        if tile in used:
+            continue
+        return tile
+    return None
 
 
 def _collect_floor_spawn_tiles(

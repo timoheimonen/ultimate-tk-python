@@ -31,6 +31,8 @@ Implemented:
   - Added weapon-specific enemy pellet volleys (shotgun/auto-shotgun spread) for more legacy-like fire behavior.
   - Added explosive near-miss splash damage for grenade-class enemy shots and low tick-damage handling for flamethrower shots.
   - Added enemy projectile entities with travel-time simulation, wall impact handling, splash falloff, and per-frame projectile updates.
+  - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
+  - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
@@ -39,8 +41,9 @@ Implemented:
   - Event handling now updates held input actions.
   - Player state is updated each simulation tick from held actions.
   - Camera follows the player and aiming direction.
-  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, and enemy counters.
+  - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, enemy counters, and crate counters.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
+  - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
   - Added player death -> game-over flow with countdown and automatic return to main menu.
   - Game-over return path now disables menu autostart to avoid immediate gameplay re-entry loops.
 
@@ -66,6 +69,6 @@ Verification:
 
 Remaining work for Phase 4:
 
-- Extend combat behavior with richer projectile/explosive weapon parity, crate interactions, and enemy behavior tuning.
-- Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior), crate interactions, and enemy behavior tuning.
+- Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior) and additional enemy behavior tuning.
+- Add first-pass crate reward/pickup behavior after crate destruction.
 - Continue parity tuning for collision feel and camera response.

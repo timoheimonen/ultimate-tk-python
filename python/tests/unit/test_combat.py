@@ -16,15 +16,20 @@ from ultimatetk.formats.lev import (
     DIFF_WEAPONS,
     Block,
     CrateCounts,
+    CrateInfo,
     GeneralLevelInfo,
     LevelData,
 )
 from ultimatetk.systems.combat import (
+    CrateState,
     EnemyState,
+    alive_crate_count,
+    advance_crate_effects,
     advance_enemy_effects,
     alive_enemy_count,
     resolve_enemy_attack_against_player,
     resolve_shot_against_enemies,
+    spawn_crates_for_level,
     spawn_enemies_for_level,
     update_enemy_behavior,
     update_enemy_projectiles,
@@ -39,6 +44,8 @@ def _build_level(
     walls: set[tuple[int, int]] | None = None,
     start: tuple[int, int] = (2, 2),
     enemies: tuple[int, ...] | None = None,
+    normal_crate_counts: CrateCounts | None = None,
+    normal_crate_info: tuple[CrateInfo, ...] = (),
 ) -> LevelData:
     wall_tiles = walls or set()
     blocks = []
@@ -47,10 +54,14 @@ def _build_level(
             block_type = 1 if (x, y) in wall_tiles else 0
             blocks.append(Block(type=block_type, num=0, shadow=0))
 
-    crate_counts = CrateCounts(
-        weapon_crates=tuple(0 for _ in range(DIFF_WEAPONS)),
-        bullet_crates=tuple(0 for _ in range(DIFF_BULLETS)),
-        energy_crates=0,
+    crate_counts = (
+        normal_crate_counts
+        if normal_crate_counts is not None
+        else CrateCounts(
+            weapon_crates=tuple(0 for _ in range(DIFF_WEAPONS)),
+            bullet_crates=tuple(0 for _ in range(DIFF_BULLETS)),
+            energy_crates=0,
+        )
     )
     enemy_counts = enemies or tuple(0 for _ in range(DIFF_ENEMIES))
     return LevelData(
@@ -65,7 +76,7 @@ def _build_level(
         general_info=GeneralLevelInfo(comment="", time_limit=0, enemies=enemy_counts),
         normal_crate_counts=crate_counts,
         deathmatch_crate_counts=crate_counts,
-        normal_crate_info=(),
+        normal_crate_info=normal_crate_info,
         deathmatch_crate_info=(),
     )
 
@@ -79,6 +90,65 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(len(spawned), 1)
         self.assertEqual(spawned[0].type_index, 0)
         self.assertEqual((int(spawned[0].x), int(spawned[0].y)), (40, 80))
+
+    def test_spawn_crates_uses_level_crate_info_positions(self) -> None:
+        crate_info = (
+            CrateInfo(type1=2, type2=0, x=70, y=90),
+            CrateInfo(type1=0, type2=3, x=110, y=90),
+        )
+        level = _build_level(normal_crate_info=crate_info)
+
+        spawned = spawn_crates_for_level(level, player_x=40.0, player_y=40.0)
+
+        self.assertEqual(len(spawned), 2)
+        self.assertEqual(spawned[0].type1, 2)
+        self.assertEqual(spawned[0].type2, 0)
+        self.assertEqual((int(spawned[0].x), int(spawned[0].y)), (70, 90))
+        self.assertEqual(spawned[1].type1, 0)
+        self.assertEqual(spawned[1].type2, 3)
+
+    def test_spawn_crates_expands_counts_when_positions_missing(self) -> None:
+        crate_counts = CrateCounts(
+            weapon_crates=(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            bullet_crates=(1, 0, 0, 0, 0, 0, 0, 0, 0),
+            energy_crates=1,
+        )
+        level = _build_level(width=12, height=12, normal_crate_counts=crate_counts)
+
+        spawned = spawn_crates_for_level(level, player_x=40.0, player_y=40.0)
+
+        self.assertEqual(len(spawned), 4)
+        self.assertEqual(sum(1 for crate in spawned if crate.type1 == 0), 2)
+        self.assertEqual(sum(1 for crate in spawned if crate.type1 == 1), 1)
+        self.assertEqual(sum(1 for crate in spawned if crate.type1 == 2), 1)
+
+    def test_crate_effect_progression_and_alive_count(self) -> None:
+        crates = [
+            CrateState(
+                crate_id=0,
+                type1=0,
+                type2=0,
+                x=30.0,
+                y=30.0,
+                health=0.0,
+                max_health=12.0,
+                alive=False,
+            ),
+            CrateState(
+                crate_id=1,
+                type1=1,
+                type2=0,
+                x=50.0,
+                y=50.0,
+                health=8.0,
+                max_health=12.0,
+                hit_flash_ticks=2,
+            ),
+        ]
+
+        self.assertEqual(alive_crate_count(crates), 1)
+        advance_crate_effects(crates)
+        self.assertEqual(crates[1].hit_flash_ticks, 1)
 
     def test_resolve_shot_applies_damage_when_enemy_hit(self) -> None:
         level = _build_level(height=12)
@@ -121,6 +191,64 @@ class CombatSystemTests(unittest.TestCase):
         self.assertTrue(result.enemy_killed)
         self.assertFalse(enemy.alive)
         self.assertEqual(enemy.health, 0.0)
+
+    def test_resolve_shot_hits_crate_before_enemy(self) -> None:
+        level = _build_level(height=12)
+        enemy = EnemyState(enemy_id=0, type_index=0, x=40.0, y=120.0, health=18.0, max_health=18.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=84.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=170,
+            weapon_slot=1,
+            impact_x=54,
+            impact_y=130,
+        )
+
+        result = resolve_shot_against_enemies(level, [enemy], shot, crates=[crate])
+
+        self.assertIsNone(result.enemy_id)
+        self.assertEqual(result.crate_id, 0)
+        self.assertFalse(result.crate_destroyed)
+        self.assertEqual(enemy.health, 18.0)
+        self.assertEqual(crate.health, 7.0)
+
+    def test_resolve_shot_can_destroy_crate(self) -> None:
+        level = _build_level(height=12)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=84.0,
+            health=4.0,
+            max_health=12.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=170,
+            weapon_slot=1,
+            impact_x=54,
+            impact_y=130,
+        )
+
+        result = resolve_shot_against_enemies(level, [], shot, crates=[crate])
+
+        self.assertEqual(result.crate_id, 0)
+        self.assertTrue(result.crate_destroyed)
+        self.assertFalse(crate.alive)
+        self.assertEqual(crate.health, 0.0)
 
     def test_resolve_shot_stops_at_wall_before_enemy(self) -> None:
         level = _build_level(height=12, walls={(2, 4)})
@@ -289,6 +417,52 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(total_damage, 0.0)
         self.assertEqual(player.health, 100.0)
         self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_hits_crate_before_player(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=48.0,
+            y=84.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(report.projectiles_spawned, 1)
+
+        total_hits = 0
+        total_damage = 0.0
+        total_crate_hits = 0
+        for _ in range(10):
+            projectile_report = update_enemy_projectiles(level, projectiles, player, crates=[crate])
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            total_crate_hits += projectile_report.crates_hit
+            if not projectiles:
+                break
+
+        self.assertEqual(total_hits, 0)
+        self.assertEqual(total_damage, 0.0)
+        self.assertEqual(total_crate_hits, 1)
+        self.assertEqual(player.health, 100.0)
+        self.assertEqual(crate.health, 7.0)
+        self.assertTrue(crate.alive)
 
     def test_enemy_shotgun_attack_can_hit_with_multiple_pellets(self) -> None:
         level = _build_level(height=12)
