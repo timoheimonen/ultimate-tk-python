@@ -996,35 +996,49 @@ class GameplayScene(BaseScene):
 
     def _weapon_shop_icon_kind(self, weapon_slot: int) -> str:
         if weapon_slot == 1:
-            return "pistol"
-        if weapon_slot in (2, 8):
-            return "shotgun"
+            return "w_pistol"
+        if weapon_slot == 2:
+            return "w_shotgun"
         if weapon_slot == 3:
-            return "smg"
+            return "w_uzi"
         if weapon_slot == 4:
-            return "rifle"
-        if weapon_slot in (5, 6, 7):
-            return "launcher"
+            return "w_rifle"
+        if weapon_slot == 5:
+            return "w_gl"
+        if weapon_slot == 6:
+            return "w_ag"
+        if weapon_slot == 7:
+            return "w_hl"
+        if weapon_slot == 8:
+            return "w_as"
         if weapon_slot == 9:
-            return "charge"
+            return "w_c4"
         if weapon_slot == 10:
-            return "flame"
+            return "w_flame"
         if weapon_slot == 11:
-            return "mine"
-        return "gun"
+            return "w_mine"
+        return "w_generic"
 
     def _ammo_shop_icon_kind(self, ammo_type: int) -> str:
-        if ammo_type in (0, 1, 2):
-            return "rounds"
-        if ammo_type in (3, 4, 5):
-            return "grenade"
+        if ammo_type == 0:
+            return "a_9mm"
+        if ammo_type == 1:
+            return "a_12mm"
+        if ammo_type == 2:
+            return "a_shell"
+        if ammo_type == 3:
+            return "a_lg"
+        if ammo_type == 4:
+            return "a_mg"
+        if ammo_type == 5:
+            return "a_hg"
         if ammo_type == 6:
-            return "charge"
+            return "a_c4"
         if ammo_type == 7:
-            return "gas"
+            return "a_gas"
         if ammo_type == 8:
-            return "mine"
-        return "rounds"
+            return "a_mine"
+        return "a_9mm"
 
     def _draw_shop_cell_icon(self, pixels: bytearray, *, x: int, y: int, kind: str, color: int) -> None:
         if not kind:
@@ -1032,69 +1046,245 @@ class GameplayScene(BaseScene):
         if color < 0 or color > 255:
             return
 
-        if kind == "pistol":
-            self._fill_rect(pixels, x + 1, y + 2, 5, 1, color)
-            self._fill_rect(pixels, x + 4, y + 3, 1, 2, color)
+        icon_bitmaps: dict[str, tuple[str, ...]] = {
+            "w_pistol": (
+                "..####.",
+                "..#....",
+                ".#####.",
+                "...#...",
+                "...#...",
+                ".......",
+                ".......",
+            ),
+            "w_shotgun": (
+                ".######",
+                ".#.....",
+                "######.",
+                ".....#.",
+                ".......",
+                ".......",
+                ".......",
+            ),
+            "w_uzi": (
+                ".#####.",
+                ".#...#.",
+                ".####..",
+                "...#...",
+                "..##...",
+                ".......",
+                ".......",
+            ),
+            "w_rifle": (
+                "#######",
+                "#.....#",
+                "#####..",
+                "..#....",
+                ".##....",
+                ".......",
+                ".......",
+            ),
+            "w_gl": (
+                ".#####.",
+                ".#...#.",
+                "######.",
+                "....##.",
+                "...##..",
+                ".......",
+                ".......",
+            ),
+            "w_ag": (
+                ".#####.",
+                ".#.#.#.",
+                "#######",
+                "...###.",
+                "..###..",
+                ".......",
+                ".......",
+            ),
+            "w_hl": (
+                "#######",
+                "##...##",
+                "#######",
+                "...###.",
+                "..###..",
+                ".......",
+                ".......",
+            ),
+            "w_as": (
+                "#######",
+                "#.#.#.#",
+                "#######",
+                "..#.#..",
+                ".##.##.",
+                ".......",
+                ".......",
+            ),
+            "w_c4": (
+                ".#####.",
+                ".#...#.",
+                ".#.###.",
+                ".#...#.",
+                ".#####.",
+                "...#...",
+                ".......",
+            ),
+            "w_flame": (
+                "...#...",
+                "..###..",
+                ".#####.",
+                "..###..",
+                "..##...",
+                "...#...",
+                ".......",
+            ),
+            "w_mine": (
+                "..###..",
+                ".#####.",
+                "##.#.##",
+                ".#####.",
+                "..###..",
+                "...#...",
+                ".......",
+            ),
+            "w_generic": (
+                ".#####.",
+                ".#...#.",
+                ".#####.",
+                "...#...",
+                "..###..",
+                ".......",
+                ".......",
+            ),
+            "a_9mm": (
+                ".#.#...",
+                ".#.#...",
+                ".#.#...",
+                ".#.#...",
+                "..#....",
+                ".......",
+                ".......",
+            ),
+            "a_12mm": (
+                ".##.##.",
+                ".##.##.",
+                ".##.##.",
+                "..#.#..",
+                "...#...",
+                ".......",
+                ".......",
+            ),
+            "a_shell": (
+                ".#####.",
+                ".#...#.",
+                ".#...#.",
+                ".#####.",
+                "..###..",
+                ".......",
+                ".......",
+            ),
+            "a_lg": (
+                "..###..",
+                ".#####.",
+                ".#####.",
+                "..###..",
+                "...#...",
+                "...#...",
+                ".......",
+            ),
+            "a_mg": (
+                "..###..",
+                ".#####.",
+                "#######",
+                ".#####.",
+                "..###..",
+                "...#...",
+                ".......",
+            ),
+            "a_hg": (
+                ".#####.",
+                "#######",
+                "#######",
+                ".#####.",
+                "..###..",
+                "...#...",
+                ".......",
+            ),
+            "a_c4": (
+                ".#####.",
+                ".#...#.",
+                ".#.###.",
+                ".#...#.",
+                ".#####.",
+                ".......",
+                ".......",
+            ),
+            "a_gas": (
+                "..###..",
+                ".#...#.",
+                ".#...#.",
+                ".#####.",
+                ".#...#.",
+                ".#####.",
+                ".......",
+            ),
+            "a_mine": (
+                "..###..",
+                ".#####.",
+                "##.#.##",
+                ".#####.",
+                "..###..",
+                ".......",
+                ".......",
+            ),
+            "shield": (
+                ".#####.",
+                ".#...#.",
+                ".#####.",
+                "..###..",
+                "..###..",
+                "...#...",
+                ".......",
+            ),
+            "target": (
+                ".#####.",
+                ".#...#.",
+                ".#.#.#.",
+                ".#...#.",
+                ".#####.",
+                "...#...",
+                ".......",
+            ),
+        }
+
+        pattern = icon_bitmaps.get(kind)
+        if pattern is None:
             return
-        if kind == "shotgun":
-            self._fill_rect(pixels, x, y + 2, 7, 1, color)
-            self._fill_rect(pixels, x + 5, y + 3, 2, 1, color)
-            return
-        if kind == "smg":
-            self._fill_rect(pixels, x + 1, y + 2, 5, 1, color)
-            self._fill_rect(pixels, x + 2, y + 3, 1, 2, color)
-            self._fill_rect(pixels, x + 5, y + 3, 1, 1, color)
-            return
-        if kind == "rifle":
-            self._fill_rect(pixels, x, y + 2, 7, 1, color)
-            self._fill_rect(pixels, x + 1, y + 3, 2, 1, color)
-            self._fill_rect(pixels, x + 4, y + 1, 2, 1, color)
-            return
-        if kind == "launcher":
-            self._fill_rect(pixels, x, y + 2, 7, 2, color)
-            self._fill_rect(pixels, x + 6, y + 1, 1, 1, color)
-            return
-        if kind == "charge":
-            self._stroke_rect(pixels, x + 1, y + 1, 5, 5, color)
-            self._fill_rect(pixels, x + 3, y + 3, 1, 1, color)
-            return
-        if kind == "flame":
-            self._fill_rect(pixels, x + 3, y, 1, 1, color)
-            self._fill_rect(pixels, x + 2, y + 1, 2, 1, color)
-            self._fill_rect(pixels, x + 1, y + 2, 3, 2, color)
-            self._fill_rect(pixels, x + 2, y + 4, 1, 1, color)
-            return
-        if kind == "mine":
-            self._fill_rect(pixels, x + 1, y + 2, 5, 2, color)
-            self._fill_rect(pixels, x + 2, y + 1, 3, 1, color)
-            self._fill_rect(pixels, x + 2, y + 4, 3, 1, color)
-            return
-        if kind == "shield":
-            self._stroke_rect(pixels, x + 1, y + 1, 5, 5, color)
-            self._fill_rect(pixels, x + 2, y + 4, 3, 2, self._SHOP_CELL_COLOR)
-            return
-        if kind == "target":
-            self._stroke_rect(pixels, x + 1, y + 1, 5, 5, color)
-            self._fill_rect(pixels, x + 3, y + 1, 1, 5, color)
-            self._fill_rect(pixels, x + 1, y + 3, 5, 1, color)
-            self._fill_rect(pixels, x + 3, y + 3, 1, 1, self._SHOP_CELL_COLOR)
-            return
-        if kind == "grenade":
-            self._fill_rect(pixels, x + 2, y + 1, 3, 1, color)
-            self._fill_rect(pixels, x + 1, y + 2, 5, 3, color)
-            self._fill_rect(pixels, x + 2, y + 5, 3, 1, color)
-            return
-        if kind == "gas":
-            self._stroke_rect(pixels, x + 2, y + 1, 3, 5, color)
-            self._fill_rect(pixels, x + 2, y + 3, 3, 1, color)
-            return
-        if kind == "rounds":
-            self._fill_rect(pixels, x + 1, y + 1, 1, 4, color)
-            self._fill_rect(pixels, x + 3, y + 1, 1, 4, color)
-            self._fill_rect(pixels, x + 5, y + 1, 1, 4, color)
+        self._draw_shop_icon_bitmap(pixels, x=x, y=y, pattern=pattern, color=color)
+
+    def _draw_shop_icon_bitmap(
+        self,
+        pixels: bytearray,
+        *,
+        x: int,
+        y: int,
+        pattern: tuple[str, ...],
+        color: int,
+    ) -> None:
+        if color < 0 or color > 255:
             return
 
-        self._fill_rect(pixels, x + 1, y + 2, 5, 1, color)
+        for row_index, row in enumerate(pattern):
+            for column_index, marker in enumerate(row):
+                if marker != "#":
+                    continue
+                self._fill_rect(
+                    pixels,
+                    x + column_index,
+                    y + row_index,
+                    1,
+                    1,
+                    color,
+                )
 
     def _fit_shop_cell_text(self, text: str, *, max_chars: int) -> str:
         trimmed = text.strip().upper()

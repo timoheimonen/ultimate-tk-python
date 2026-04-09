@@ -51,6 +51,7 @@ Implemented:
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
   - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
   - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
+  - Added additional scripted-obstruction parity hooks for mine/C4 micro-cases (diagonal graze and one-tile choke variants).
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
@@ -72,7 +73,7 @@ Implemented:
   - Runtime metadata now includes shop-active flag, shop selection row/column, and latest transaction outcome fields including blocked-reason text.
   - Added first-pass visual shop overlay panel (selection grid, per-cell short labels + owned/stock counters, selected-item legacy names, buy/sell info, and transaction feedback text with blocked reason) rendered on top of gameplay while shop mode is active.
   - Added first-pass gameplay HUD overlay (weapon/ammo/health status bars, cash/shield/target text, and shop-open control hint) while shop mode is closed.
-  - Shop overlay cell rendering now includes icon-like pixel glyphs for weapon/ammo/other categories with highlighted selected-state icon color.
+  - Shop overlay cell rendering now includes icon-like pixel glyphs with per-weapon/per-ammo identity (distinct silhouettes for each weapon slot and ammo type) plus highlighted selected-state icon color.
   - HUD layout/styling updated with multi-meter bars (health/ammo/reload), denser status readout, and explicit active mine/C4 counters.
   - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
   - Enemy projectile entities are now updated each tick and rendered as world markers.
@@ -103,12 +104,15 @@ Verification:
   - Added enemy shotgun corner-graze coverage so wall-edge obstruction reduces leaked pellet hits.
   - Added player shot corner-graze coverage so wall-edge obstruction blocks leaked hitscan enemy hits.
   - Added enemy projectile corner-graze coverage so wall-edge obstruction blocks leaked travel-time projectile hits.
+  - Added mine proximity-trigger LOS coverage plus enemy projectile wall-impact crate-splash coverage.
 - Added integration test:
   - `python/tests/integration/test_headless_input_script_runtime.py`
   - Added scripted mine/C4 runtime telemetry integration coverage (pre-seeded loadout + `--input-script` weapon/shoot sequence).
   - Added scripted C4 corner-obstruction scenario asserting open-lane crate destruction versus blocked-corner survival.
   - Added scripted C4 side-wall leakage scenario asserting damped partial crate damage for side-only obstruction and zero damage for fully blocked lanes.
+  - Added scripted C4 micro-obstruction scenarios for diagonal-corner damping and one-tile choke blocking behavior.
   - Added scripted mine corridor obstruction scenario (enemy-triggered mine detonation with open-lane versus blocked-lane crate/enemy outcomes).
+  - Added scripted mine micro-obstruction scenarios for diagonal and one-tile choke variants.
   - Added scripted enemy grenade obstruction scenario asserting partial-damage lane behavior versus fully blocked lane behavior.
   - Added scripted enemy LOS corner-graze scenario asserting open-lane enemy fire versus blocked wall-edge no-fire behavior.
   - Added scripted enemy direct-shot corner-graze scenario asserting open-lane hits versus blocked wall-graze no-hit behavior.

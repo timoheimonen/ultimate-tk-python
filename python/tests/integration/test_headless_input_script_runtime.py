@@ -233,7 +233,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self,
         *,
         wall_tiles: set[tuple[int, int]],
-    ) -> tuple[int, int, int, int]:
+        enemy_x: float = 40.0,
+        enemy_y: float = 50.0,
+        crate_x: float = 51.0,
+        crate_y: float = 62.0,
+        crate_health: float = 12.0,
+    ) -> tuple[float, bool, int, int, int, int]:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
             self.skipTest("python/game_data not migrated yet")
@@ -296,8 +301,8 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             combat.EnemyState(
                 enemy_id=0,
                 type_index=0,
-                x=40.0,
-                y=50.0,
+                x=enemy_x,
+                y=enemy_y,
                 health=18.0,
                 max_health=18.0,
                 angle=180,
@@ -310,10 +315,10 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
                 crate_id=0,
                 type1=0,
                 type2=0,
-                x=51.0,
-                y=62.0,
-                health=12.0,
-                max_health=12.0,
+                x=crate_x,
+                y=crate_y,
+                health=crate_health,
+                max_health=crate_health,
             ),
         )
 
@@ -342,7 +347,10 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             exit_code = app.run()
 
         self.assertEqual(exit_code, 0)
+        crate = crates[0]
         return (
+            crate.health,
+            crate.alive,
             app.context.runtime.crates_destroyed_by_player,
             app.context.runtime.player_explosive_detonations_total,
             app.context.runtime.player_shots_fired_total,
@@ -799,10 +807,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked_hp, 12.0)
 
     def test_scripted_mine_corridor_obstruction_blocks_crate_damage(self) -> None:
-        open_destroyed, open_detonations, open_shots, open_kills = self._run_scripted_mine_corridor_scenario(
-            wall_tiles=set(),
+        open_hp, open_alive, open_destroyed, open_detonations, open_shots, open_kills = (
+            self._run_scripted_mine_corridor_scenario(
+                wall_tiles=set(),
+            )
         )
-        blocked_destroyed, blocked_detonations, blocked_shots, blocked_kills = (
+        blocked_hp, blocked_alive, blocked_destroyed, blocked_detonations, blocked_shots, blocked_kills = (
             self._run_scripted_mine_corridor_scenario(wall_tiles={(2, 3)})
         )
 
@@ -810,10 +820,79 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(blocked_shots, 1)
         self.assertGreaterEqual(open_detonations, 1)
         self.assertGreaterEqual(blocked_detonations, 1)
+        self.assertFalse(open_alive)
+        self.assertEqual(open_hp, 0.0)
         self.assertGreaterEqual(open_destroyed, 1)
+        self.assertTrue(blocked_alive)
+        self.assertEqual(blocked_hp, 12.0)
         self.assertEqual(blocked_destroyed, 0)
         self.assertGreaterEqual(open_kills, 1)
         self.assertEqual(blocked_kills, 0)
+
+    def test_scripted_c4_diagonal_and_one_tile_choke_microcases(self) -> None:
+        open_hp, open_alive, open_destroyed, open_shots = self._run_scripted_c4_side_leak_scenario(
+            wall_tiles=set(),
+            crate_health=12.0,
+        )
+        diagonal_hp, diagonal_alive, diagonal_destroyed, diagonal_shots = self._run_scripted_c4_side_leak_scenario(
+            wall_tiles={(3, 5)},
+            crate_health=12.0,
+        )
+        choke_hp, choke_alive, choke_destroyed, choke_shots = self._run_scripted_c4_side_leak_scenario(
+            wall_tiles={(2, 4), (3, 5)},
+            crate_health=12.0,
+        )
+
+        self.assertGreaterEqual(open_shots, 1)
+        self.assertGreaterEqual(diagonal_shots, 1)
+        self.assertGreaterEqual(choke_shots, 1)
+        self.assertFalse(open_alive)
+        self.assertEqual(open_hp, 0.0)
+        self.assertGreaterEqual(open_destroyed, 1)
+
+        self.assertTrue(diagonal_alive)
+        self.assertGreater(diagonal_hp, 0.0)
+        self.assertLess(diagonal_hp, 12.0)
+        self.assertEqual(diagonal_destroyed, 0)
+
+        self.assertTrue(choke_alive)
+        self.assertGreaterEqual(choke_hp, diagonal_hp)
+        self.assertEqual(choke_destroyed, 0)
+
+    def test_scripted_mine_diagonal_and_one_tile_choke_microcases(self) -> None:
+        open_hp, open_alive, open_destroyed, open_detonations, open_shots, open_kills = (
+            self._run_scripted_mine_corridor_scenario(wall_tiles=set())
+        )
+        diagonal_hp, diagonal_alive, diagonal_destroyed, diagonal_detonations, diagonal_shots, diagonal_kills = (
+            self._run_scripted_mine_corridor_scenario(wall_tiles={(3, 3)})
+        )
+        choke_hp, choke_alive, choke_destroyed, choke_detonations, choke_shots, choke_kills = (
+            self._run_scripted_mine_corridor_scenario(wall_tiles={(2, 2)})
+        )
+
+        self.assertGreaterEqual(open_shots, 1)
+        self.assertGreaterEqual(diagonal_shots, 1)
+        self.assertGreaterEqual(choke_shots, 1)
+        self.assertGreaterEqual(open_detonations, 1)
+        self.assertGreaterEqual(diagonal_detonations, 1)
+        self.assertGreaterEqual(choke_detonations, 1)
+        self.assertFalse(open_alive)
+        self.assertEqual(open_hp, 0.0)
+
+        self.assertGreaterEqual(diagonal_hp, open_hp)
+        self.assertLessEqual(diagonal_destroyed, open_destroyed)
+        self.assertLessEqual(diagonal_kills, open_kills)
+
+        self.assertGreaterEqual(choke_hp, diagonal_hp)
+        self.assertLessEqual(choke_destroyed, diagonal_destroyed)
+        self.assertLessEqual(choke_kills, diagonal_kills)
+
+        self.assertTrue(
+            diagonal_destroyed < open_destroyed or diagonal_kills < open_kills,
+        )
+        self.assertTrue(
+            choke_destroyed < open_destroyed or choke_kills < open_kills,
+        )
 
     def test_scripted_enemy_grenade_obstruction_partial_vs_blocked(self) -> None:
         partial_shots, partial_hits, partial_damage = self._run_scripted_enemy_grenade_obstruction_scenario(
