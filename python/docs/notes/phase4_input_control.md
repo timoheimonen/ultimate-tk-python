@@ -20,10 +20,12 @@ Implemented:
   - Legacy-style rotation steps (`9` degrees per tick).
   - Legacy movement behavior for forward/backward, strafe modifier, and dedicated strafe keys.
   - Wall collision checks based on floor-vs-wall level blocks.
+  - Refined collision probe checks (triple-point edge probes) for less edge-graze clipping and improved corner stability.
   - Weapon slot cycling and direct slot selection.
   - Initial shoot/reload cadence based on legacy weapon loading times.
   - Simple shot tracing to wall impact points for first combat plumbing.
   - Camera follow behavior adapted from legacy `Player::move_scr`.
+  - Camera response smoothing tuned with look-ahead dead-zones and minimum step catch-up so small look-offset deltas no longer stall.
   - Added first-pass shop trading helpers with legacy-aligned buy/sell behavior for ammo, weapons, shield, and target system.
   - Added seeded shop sell-price generation matching legacy formulas and player-side shield/target state tracking.
   - Added shop selection/navigation helpers plus normalized buy/sell transaction event helpers for row/column-driven shop flow.
@@ -44,6 +46,11 @@ Implemented:
   - Tightened enemy direct-shot trace sampling to reduce wall-graze pellet leakage in hitscan/non-projectile enemy fire.
   - Tightened player shot trace sampling to reduce wall-graze leakage when resolving hitscan shots against enemies/crates.
   - Tightened enemy projectile sub-step sampling to reduce corner-graze wall leakage in travel-time projectile hits.
+  - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
+  - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
+  - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
+  - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
+  - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
   - Added first-pass crate entity spawning from level crate metadata (explicit positions or deterministic count-based placement).
   - Added destructible crate hitboxes and hit-flash effect ticks for player shots and enemy projectile collisions.
   - Added first-pass player crate collection + rewards (weapon unlock crates, bullet-pack crates, and energy restore crates).
@@ -65,6 +72,8 @@ Implemented:
   - Runtime metadata now includes shop-active flag, shop selection row/column, and latest transaction outcome fields including blocked-reason text.
   - Added first-pass visual shop overlay panel (selection grid, per-cell short labels + owned/stock counters, selected-item legacy names, buy/sell info, and transaction feedback text with blocked reason) rendered on top of gameplay while shop mode is active.
   - Added first-pass gameplay HUD overlay (weapon/ammo/health status bars, cash/shield/target text, and shop-open control hint) while shop mode is closed.
+  - Shop overlay cell rendering now includes icon-like pixel glyphs for weapon/ammo/other categories with highlighted selected-state icon color.
+  - HUD layout/styling updated with multi-meter bars (health/ammo/reload), denser status readout, and explicit active mine/C4 counters.
   - HUD/runtime telemetry now exposes active player explosive state (active count plus mine/C4 split and detonation counter).
   - Enemy projectile entities are now updated each tick and rendered as world markers.
   - Crate entities are rendered from `CRATES.EFP` frames and removed from scene rendering when destroyed.
@@ -109,7 +118,7 @@ Verification:
 
 Remaining work for Phase 4:
 
-- Extend combat behavior with richer projectile/explosive parity details and additional enemy behavior tuning.
-- Continue mine/C4 parity refinement (detonation feel and blast-model tuning versus legacy explosive rays, including more nuanced obstruction edge cases).
-- Continue refining visual shop/HUD parity toward legacy presentation (icon-like cell glyphs, color/layout polish, and HUD styling/detail parity).
-- Continue parity tuning for collision feel and camera response.
+- Continue expanding combat parity details (projectile/explosive interactions, enemy cadence/movement tuning, and additional edge-case coverage).
+- Continue mine/C4 tuning against legacy feel (arming/trigger timing and obstruction-model micro-cases in tight corners/corridors).
+- Continue visual shop/HUD parity polish (legacy icon/detail fidelity, spacing, and color treatment passes).
+- Continue movement/collision/camera parity tuning from side-by-side legacy play-feel checks.

@@ -27,6 +27,7 @@ ENEMY_LINE_OF_SIGHT_TRACE_STEP = 2
 ENEMY_SHOT_TRACE_STEP = 2
 ENEMY_PROJECTILE_TRACE_STEP = 2
 PLAYER_SHOT_TRACE_STEP = 2
+ENEMY_EXPLOSIVE_MIN_SAFE_RADIUS_RATIO = 0.2
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -174,6 +175,12 @@ PLAYER_EXPLOSIVE_MIN_SPREAD_SCALE = 0.35
 PLAYER_EXPLOSIVE_SIDE_ONLY_DISTANCE_RATIO = 0.5
 PLAYER_EXPLOSIVE_SIDE_ONLY_DAMAGE_SCALE = 0.65
 PLAYER_EXPLOSIVE_RAY_TRACE_STEP = 2
+PLAYER_EXPLOSIVE_NARROW_LANE_CLEAR_RATIO = 0.72
+PLAYER_EXPLOSIVE_NARROW_LANE_DAMAGE_SCALE = 0.6
+
+PLAYER_C4_FALLOFF_EXPONENT = 1.05
+PLAYER_MINE_FALLOFF_EXPONENT = 1.1
+PLAYER_MINE_TRIGGER_RADIUS = 14
 
 
 @dataclass(slots=True)
@@ -301,6 +308,8 @@ class PlayerExplosive:
     arming_ticks: int
     radius: int
     damage: float
+    falloff_exponent: float = 1.0
+    trigger_radius: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -679,6 +688,19 @@ def update_enemy_behavior(
                     enemies=enemies,
                     player=player,
                 )
+            elif _enemy_should_strafe(
+                enemy,
+                weapon_slot=weapon_slot,
+                distance_to_player=distance_to_player,
+            ):
+                _move_enemy_with_collision(
+                    enemy,
+                    level,
+                    angle=_enemy_strafe_angle(enemy),
+                    speed=enemy_speed_for_type(enemy.type_index) * 0.7,
+                    enemies=enemies,
+                    player=player,
+                )
 
             if _can_enemy_fire(enemy, weapon_slot=weapon_slot, distance_to_player=distance_to_player):
                 shots_fired += 1
@@ -923,6 +945,7 @@ def deploy_player_explosive_from_shot(shot: ShotEvent) -> PlayerExplosive | None
             arming_ticks=0,
             radius=PLAYER_C4_EXPLOSION_RADIUS,
             damage=PLAYER_EXPLOSIVE_BASE_DAMAGE,
+            falloff_exponent=PLAYER_C4_FALLOFF_EXPONENT,
         )
 
     if shot.weapon_slot == PLAYER_WEAPON_MINE_SLOT:
@@ -935,6 +958,8 @@ def deploy_player_explosive_from_shot(shot: ShotEvent) -> PlayerExplosive | None
             arming_ticks=PLAYER_MINE_SLEEP_TICKS + 1,
             radius=PLAYER_MINE_EXPLOSION_RADIUS,
             damage=PLAYER_EXPLOSIVE_BASE_DAMAGE,
+            falloff_exponent=PLAYER_MINE_FALLOFF_EXPONENT,
+            trigger_radius=PLAYER_MINE_TRIGGER_RADIUS,
         )
 
     return None
@@ -967,11 +992,12 @@ def update_player_explosives(
 
         should_detonate = explosive.fuse_ticks <= 0
         if not should_detonate and explosive.kind == "mine" and explosive.arming_ticks <= 0:
-            trigger_x = int(explosive.x)
-            trigger_y = int(explosive.y)
-            should_detonate = _enemy_at_point(enemies, x=trigger_x, y=trigger_y) is not None
-            if not should_detonate:
-                should_detonate = _player_at_point(player, x=trigger_x, y=trigger_y)
+            should_detonate = _mine_contact_triggered(
+                explosive,
+                enemies,
+                player,
+                level=level,
+            )
 
         if not should_detonate:
             active.append(explosive)
@@ -1038,6 +1064,7 @@ def _detonate_player_explosive(
             impact_y=blast_y,
             max_damage=explosive.damage,
             radius=explosive.radius,
+            falloff_exponent=explosive.falloff_exponent,
         )
         if damage <= 0:
             continue
@@ -1062,6 +1089,7 @@ def _detonate_player_explosive(
                 impact_y=blast_y,
                 max_damage=explosive.damage,
                 radius=explosive.radius,
+                falloff_exponent=explosive.falloff_exponent,
             )
             if damage <= 0:
                 continue
@@ -1079,6 +1107,7 @@ def _detonate_player_explosive(
         impact_y=blast_y,
         max_damage=explosive.damage,
         radius=explosive.radius,
+        falloff_exponent=explosive.falloff_exponent,
     )
     if player_damage > 0:
         apply_player_damage(player, player_damage)
@@ -1100,6 +1129,42 @@ def _player_explosive_blast_center(explosive: PlayerExplosive) -> tuple[float, f
     )
 
 
+def _mine_contact_triggered(
+    explosive: PlayerExplosive,
+    enemies: Sequence[EnemyState],
+    player: PlayerState,
+    *,
+    level: LevelData | None,
+) -> bool:
+    del player
+
+    trigger_radius = max(0, explosive.trigger_radius)
+    if trigger_radius <= 0:
+        trigger_x = int(explosive.x)
+        trigger_y = int(explosive.y)
+        return _enemy_at_point(enemies, x=trigger_x, y=trigger_y) is not None
+
+    for enemy in enemies:
+        if not enemy.alive:
+            continue
+
+        distance = math.hypot(enemy.center_x - explosive.x, enemy.center_y - explosive.y)
+        if distance > trigger_radius:
+            continue
+
+        if level is not None and not _line_of_sight_clear(
+            level,
+            start_x=explosive.x,
+            start_y=explosive.y,
+            end_x=enemy.center_x,
+            end_y=enemy.center_y,
+            step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
+        ):
+            continue
+        return True
+    return False
+
+
 def _player_explosive_damage(
     *,
     level: LevelData | None,
@@ -1109,6 +1174,7 @@ def _player_explosive_damage(
     impact_y: float,
     max_damage: float,
     radius: int,
+    falloff_exponent: float,
 ) -> float:
     damage = _radial_damage(
         target_x=target_x,
@@ -1117,6 +1183,7 @@ def _player_explosive_damage(
         impact_y=impact_y,
         max_damage=max_damage,
         radius=radius,
+        falloff_exponent=falloff_exponent,
     )
     if damage <= 0:
         return 0.0
@@ -1169,6 +1236,7 @@ def _explosive_ray_coverage(
         )
 
     clear_weight = 0.0
+    largest_clear_weight = 0.0
     center_ray_clear = False
 
     for lateral, weight in zip(PLAYER_EXPLOSIVE_RAY_OFFSETS, PLAYER_EXPLOSIVE_RAY_WEIGHTS):
@@ -1189,6 +1257,8 @@ def _explosive_ray_coverage(
             step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
         ):
             clear_weight += weight
+            if weight > largest_clear_weight:
+                largest_clear_weight = weight
             if abs(lateral) < 0.5:
                 center_ray_clear = True
 
@@ -1198,6 +1268,11 @@ def _explosive_ray_coverage(
 
     if not center_ray_clear and radius > 0 and distance > (float(radius) * PLAYER_EXPLOSIVE_SIDE_ONLY_DISTANCE_RATIO):
         coverage *= PLAYER_EXPLOSIVE_SIDE_ONLY_DAMAGE_SCALE
+
+    if not center_ray_clear and clear_weight > 0.0:
+        dominant_share = largest_clear_weight / clear_weight
+        if dominant_share >= PLAYER_EXPLOSIVE_NARROW_LANE_CLEAR_RATIO:
+            coverage *= PLAYER_EXPLOSIVE_NARROW_LANE_DAMAGE_SCALE
 
     return coverage
 
@@ -1210,6 +1285,7 @@ def _radial_damage(
     impact_y: float,
     max_damage: float,
     radius: int,
+    falloff_exponent: float = 1.0,
 ) -> float:
     if radius <= 0 or max_damage <= 0:
         return 0.0
@@ -1221,7 +1297,9 @@ def _radial_damage(
     falloff = 1.0 - (distance / radius)
     if falloff <= 0:
         return 0.0
-    return max_damage * falloff
+
+    exponent = max(0.1, falloff_exponent)
+    return max_damage * (falloff**exponent)
 
 
 def _can_enemy_fire(
@@ -1237,7 +1315,39 @@ def _can_enemy_fire(
         return False
     if distance_to_player > weapon_range_for_slot(weapon_slot):
         return False
+
+    splash_radius = weapon_explosive_splash_radius_for_slot(weapon_slot)
+    if splash_radius > 0:
+        min_safe_distance = max(8.0, float(splash_radius) * ENEMY_EXPLOSIVE_MIN_SAFE_RADIUS_RATIO)
+        if distance_to_player < min_safe_distance:
+            return False
     return True
+
+
+def _enemy_should_strafe(
+    enemy: EnemyState,
+    *,
+    weapon_slot: int,
+    distance_to_player: float,
+) -> bool:
+    if distance_to_player < 28.0:
+        return False
+    if distance_to_player > weapon_range_for_slot(weapon_slot) * 0.85:
+        return False
+
+    loading_time = weapon_profile_for_slot(weapon_slot).loading_time
+    if enemy.load_count >= loading_time:
+        return False
+    if weapon_slot in (0, PLAYER_WEAPON_C4_SLOT, PLAYER_WEAPON_MINE_SLOT):
+        return False
+    return True
+
+
+def _enemy_strafe_angle(enemy: EnemyState) -> int:
+    seed = enemy.enemy_id * 37 + enemy.shoot_count * 17 + enemy.load_count * 11
+    if seed % 2 == 0:
+        return (enemy.angle + 90) % 360
+    return (enemy.angle + 270) % 360
 
 
 def _advance_enemy_reload(enemy: EnemyState, *, weapon_slot: int) -> None:
@@ -1528,34 +1638,70 @@ def _advance_enemy_projectile(
                 crate.hit_flash_ticks = CRATE_FLASH_TICKS
                 destroyed = crate.apply_damage(projectile.damage)
                 damage = _projectile_splash_damage(level, projectile, player)
+                _, splash_crate_destroyed = _projectile_splash_against_crates(
+                    level,
+                    projectile,
+                    crates,
+                    ignore_crate_id=crate.crate_id,
+                )
                 return EnemyProjectileAdvance(
                     keep_alive=False,
                     damage_to_player=damage,
                     crate_hit=True,
-                    crate_destroyed=destroyed,
+                    crate_destroyed=destroyed or splash_crate_destroyed,
                 )
 
         if _projectile_hits_wall(level, projectile):
             damage = _projectile_splash_damage(level, projectile, player)
+            crate_hit = False
+            crate_destroyed = False
+            if crates is not None:
+                crate_hit, crate_destroyed = _projectile_splash_against_crates(
+                    level,
+                    projectile,
+                    crates,
+                )
             return EnemyProjectileAdvance(
                 keep_alive=False,
                 damage_to_player=damage,
+                crate_hit=crate_hit,
+                crate_destroyed=crate_destroyed,
             )
 
         if _player_hit_by_projectile(player, projectile):
             direct_damage = projectile.damage
+            crate_hit = False
+            crate_destroyed = False
             if projectile.splash_radius > 0:
                 direct_damage = max(direct_damage, _projectile_splash_damage(level, projectile, player))
+                if crates is not None:
+                    crate_hit, crate_destroyed = _projectile_splash_against_crates(
+                        level,
+                        projectile,
+                        crates,
+                    )
             return EnemyProjectileAdvance(
                 keep_alive=False,
                 damage_to_player=direct_damage,
+                crate_hit=crate_hit,
+                crate_destroyed=crate_destroyed,
             )
 
     projectile.remaining_ticks -= 1
     if projectile.remaining_ticks <= 0:
+        crate_hit = False
+        crate_destroyed = False
+        if crates is not None:
+            crate_hit, crate_destroyed = _projectile_splash_against_crates(
+                level,
+                projectile,
+                crates,
+            )
         return EnemyProjectileAdvance(
             keep_alive=False,
             damage_to_player=_projectile_splash_damage(level, projectile, player),
+            crate_hit=crate_hit,
+            crate_destroyed=crate_destroyed,
         )
     return EnemyProjectileAdvance(keep_alive=True)
 
@@ -1611,6 +1757,47 @@ def _projectile_splash_damage(
         radius=projectile.splash_radius,
         level=level,
     )
+
+
+def _projectile_splash_against_crates(
+    level: LevelData,
+    projectile: EnemyProjectile,
+    crates: Sequence[CrateState],
+    *,
+    ignore_crate_id: int | None = None,
+) -> tuple[bool, bool]:
+    if projectile.splash_radius <= 0:
+        return False, False
+
+    crate_hit = False
+    crate_destroyed = False
+    impact_x = int(projectile.x)
+    impact_y = int(projectile.y)
+    for crate in crates:
+        if not crate.alive:
+            continue
+        if ignore_crate_id is not None and crate.crate_id == ignore_crate_id:
+            continue
+
+        damage = _player_explosive_damage(
+            level=level,
+            target_x=crate.center_x,
+            target_y=crate.center_y,
+            impact_x=float(impact_x),
+            impact_y=float(impact_y),
+            max_damage=projectile.damage,
+            radius=projectile.splash_radius,
+            falloff_exponent=1.0,
+        )
+        if damage <= 0.0:
+            continue
+
+        crate.hit_flash_ticks = CRATE_FLASH_TICKS
+        crate_hit = True
+        if crate.apply_damage(damage):
+            crate_destroyed = True
+
+    return crate_hit, crate_destroyed
 
 
 def _crate_at_projectile(

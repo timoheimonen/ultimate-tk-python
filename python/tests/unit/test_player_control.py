@@ -203,6 +203,23 @@ class PlayerControlTests(unittest.TestCase):
         )
         self.assertGreater(next_camera_x, start_camera_x)
 
+    def test_follow_camera_small_offset_still_advances(self) -> None:
+        level = _build_level(width=40, height=30, start=(12, 8))
+        player = spawn_player_from_level(level)
+        player.angle = 90
+
+        base_camera_x = int(player.center_x) - 160
+        start_camera_x = base_camera_x + 18
+        start_camera_y = int(player.center_y) - 100
+        next_camera_x, _ = follow_player_camera(
+            camera_x=start_camera_x,
+            camera_y=start_camera_y,
+            player=player,
+            max_camera_x=(level.level_x_size * 20) - 320,
+            max_camera_y=(level.level_y_size * 20) - 200,
+        )
+        self.assertGreater(next_camera_x, start_camera_x)
+
     def test_aim_point_tracks_player_angle(self) -> None:
         level = _build_level()
         player = spawn_player_from_level(level)

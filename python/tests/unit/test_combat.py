@@ -22,6 +22,7 @@ from ultimatetk.formats.lev import (
 )
 from ultimatetk.systems.combat import (
     CrateState,
+    EnemyProjectile,
     EnemyState,
     alive_crate_count,
     advance_crate_effects,
@@ -842,6 +843,28 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(second.hits_on_player, 0)
         self.assertEqual(second.damage_to_player, 0.0)
 
+    def test_enemy_explosive_weapon_holds_fire_at_point_blank_distance(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=72.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=30,
+        )
+
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertEqual(player.health, 100.0)
+
     def test_grenade_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
         player = PlayerState(x=20.0, y=64.0)
@@ -960,6 +983,44 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(total_damage, 0.0)
         self.assertEqual(player.health, 100.0)
 
+    def test_grenade_projectile_wall_impact_splash_can_damage_nearby_crate(self) -> None:
+        level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=68.0,
+            y=68.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=20.0,
+                remaining_ticks=8,
+                radius=3,
+                splash_radius=48,
+            ),
+        ]
+
+        total_crate_hits = 0
+        for _ in range(10):
+            projectile_report = update_enemy_projectiles(level, projectiles, player, crates=[crate])
+            total_crate_hits += projectile_report.crates_hit
+            if not projectiles:
+                break
+
+        self.assertGreaterEqual(total_crate_hits, 1)
+        self.assertLess(crate.health, 12.0)
+
     def test_enemy_flamer_deals_low_tick_damage(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)
@@ -1049,11 +1110,14 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(c4.fuse_ticks, 100)
         self.assertEqual(c4.arming_ticks, 0)
         self.assertEqual(c4.radius, 80)
+        self.assertAlmostEqual(c4.falloff_exponent, 1.05)
 
         self.assertEqual(mine.kind, "mine")
         self.assertEqual(mine.fuse_ticks, 2000)
         self.assertEqual(mine.arming_ticks, 26)
         self.assertEqual(mine.radius, 20)
+        self.assertAlmostEqual(mine.falloff_exponent, 1.1)
+        self.assertEqual(mine.trigger_radius, 14)
 
     def test_player_c4_fuse_explosion_damages_enemy_and_crate(self) -> None:
         level = _build_level(height=12)
@@ -1367,6 +1431,70 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.enemies_killed, 1)
         self.assertEqual(len(explosives), 0)
         self.assertFalse(enemy.alive)
+
+    def test_player_mine_proximity_trigger_respects_wall_obstruction(self) -> None:
+        open_level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=0.0, y=0.0)
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=84.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        enemy_blocked = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=84.0,
+            health=18.0,
+            max_health=18.0,
+        )
+        shot = ShotEvent(
+            origin_x=54.0,
+            origin_y=64.0,
+            angle=0,
+            max_distance=34,
+            weapon_slot=11,
+            impact_x=54,
+            impact_y=98,
+        )
+
+        open_explosive = deploy_player_explosive_from_shot(shot)
+        blocked_explosive = deploy_player_explosive_from_shot(shot)
+        self.assertIsNotNone(open_explosive)
+        self.assertIsNotNone(blocked_explosive)
+        assert open_explosive is not None
+        assert blocked_explosive is not None
+
+        open_explosive.arming_ticks = 1
+        open_explosive.fuse_ticks = 5
+        open_explosive.trigger_radius = 40
+        blocked_explosive.arming_ticks = 1
+        blocked_explosive.fuse_ticks = 5
+        blocked_explosive.trigger_radius = 40
+
+        open_explosives = [open_explosive]
+        blocked_explosives = [blocked_explosive]
+        open_report = update_player_explosives(
+            open_explosives,
+            [enemy_open],
+            player,
+            level=open_level,
+        )
+        blocked_report = update_player_explosives(
+            blocked_explosives,
+            [enemy_blocked],
+            player,
+            level=blocked_level,
+        )
+
+        self.assertEqual(open_report.detonations, 1)
+        self.assertEqual(len(open_explosives), 0)
+        self.assertEqual(blocked_report.detonations, 0)
+        self.assertEqual(len(blocked_explosives), 1)
 
     def test_enemy_behavior_corner_graze_line_of_sight_is_blocked(self) -> None:
         level = _build_level(width=10, height=10, walls={(3, 3)})

@@ -18,12 +18,20 @@ PLAYER_WEAPON_SLOTS = 12
 PLAYER_MAX_HEALTH = 100.0
 PLAYER_HIT_FLASH_TICKS = 6
 CAMERA_LOOK_AHEAD_DISTANCE = 25.0
+CAMERA_WALK_LOOK_BOOST = 4.0
+CAMERA_DEAD_ZONE_X = 6
+CAMERA_DEAD_ZONE_Y = 4
+CAMERA_CATCHUP_DIVISOR = 4
+CAMERA_MAX_STEP = 16
 DEFAULT_AIM_DISTANCE = 10.0
 FIRE_ANIMATION_TICKS = 3
 SHOT_EFFECT_TICKS = 3
 DEFAULT_SHOT_TRACE_DISTANCE = 170
 MELEE_SHOT_TRACE_DISTANCE = 34
 SHOT_TRACE_STEP = 4
+
+PLAYER_COLLISION_EDGE = 6
+PLAYER_COLLISION_CENTER_INSET = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -943,46 +951,54 @@ def move_player_with_collision(
 
     rnx = int(new_x)
     rny = int(new_y)
-    edge = 6
-    edge2 = 4
+    edge = PLAYER_COLLISION_EDGE
+    center_inset = PLAYER_COLLISION_CENTER_INSET
 
     if new_y < player.y:
-        if _is_floor_pair(
+        if _is_floor_triplet(
             level,
-            x1=rnx + 14 - edge2,
+            x1=rnx + 14 - center_inset,
             y1=rny + edge,
-            x2=rnx + 14 + edge2,
+            x2=rnx + 14 + center_inset,
             y2=rny + edge,
+            x3=rnx + 14,
+            y3=rny + edge,
         ):
             player.y = new_y
 
     if new_y > player.y:
-        if _is_floor_pair(
+        if _is_floor_triplet(
             level,
-            x1=rnx + 14 - edge2,
+            x1=rnx + 14 - center_inset,
             y1=rny + 28 - edge,
-            x2=rnx + 14 + edge2,
+            x2=rnx + 14 + center_inset,
             y2=rny + 28 - edge,
+            x3=rnx + 14,
+            y3=rny + 28 - edge,
         ):
             player.y = new_y
 
     if new_x < player.x:
-        if _is_floor_pair(
+        if _is_floor_triplet(
             level,
             x1=rnx + edge,
-            y1=rny + 14 - edge2,
+            y1=rny + 14 - center_inset,
             x2=rnx + edge,
-            y2=rny + 14 + edge2,
+            y2=rny + 14 + center_inset,
+            x3=rnx + edge,
+            y3=rny + 14,
         ):
             player.x = new_x
 
     if new_x > player.x:
-        if _is_floor_pair(
+        if _is_floor_triplet(
             level,
             x1=rnx + 28 - edge,
-            y1=rny + 14 - edge2,
+            y1=rny + 14 - center_inset,
             x2=rnx + 28 - edge,
-            y2=rny + 14 + edge2,
+            y2=rny + 14 + center_inset,
+            x3=rnx + 28 - edge,
+            y3=rny + 14,
         ):
             player.x = new_x
 
@@ -1001,26 +1017,26 @@ def follow_player_camera(
     half_height = SCREEN_HEIGHT // 2
     angle_radians = math.radians(player.angle)
 
-    if abs((camera_x + half_width) - center_x) > half_width:
-        camera_x = int(player.x) - half_width
+    look_distance = CAMERA_LOOK_AHEAD_DISTANCE
+    if player.walking:
+        look_distance += CAMERA_WALK_LOOK_BOOST
 
-    look_x = center_x + (CAMERA_LOOK_AHEAD_DISTANCE * math.sin(angle_radians))
-    speed_x = int(abs((camera_x + half_width) - look_x) / 4)
-    if camera_x + half_width < look_x:
-        camera_x += speed_x
-    if camera_x + half_width > look_x:
-        camera_x -= speed_x
+    look_x = center_x + (look_distance * math.sin(angle_radians))
+    look_y = center_y + (look_distance * math.cos(angle_radians))
+    target_camera_x = int(look_x) - half_width
+    target_camera_y = int(look_y) - half_height
+
+    if abs(camera_x - target_camera_x) > half_width:
+        camera_x = target_camera_x
+    else:
+        camera_x = _approach_camera_axis(camera_x, target_camera_x, dead_zone=CAMERA_DEAD_ZONE_X)
+
+    if abs(camera_y - target_camera_y) > 120:
+        camera_y = target_camera_y
+    else:
+        camera_y = _approach_camera_axis(camera_y, target_camera_y, dead_zone=CAMERA_DEAD_ZONE_Y)
+
     camera_x = _clamp(camera_x, 0, max_camera_x)
-
-    if abs((camera_y + half_height) - center_y) > 120:
-        camera_y = int(player.y) - half_height
-
-    look_y = center_y + (CAMERA_LOOK_AHEAD_DISTANCE * math.cos(angle_radians))
-    speed_y = int(abs((camera_y + half_height) - look_y) / 4)
-    if camera_y + half_height < look_y:
-        camera_y += speed_y
-    if camera_y + half_height > look_y:
-        camera_y -= speed_y
     camera_y = _clamp(camera_y, 0, max_camera_y)
 
     return camera_x, camera_y
@@ -1031,6 +1047,32 @@ def aim_point_from_player(player: PlayerState, distance: float = DEFAULT_AIM_DIS
     x = player.center_x + (distance * math.sin(angle_radians))
     y = player.center_y + (distance * math.cos(angle_radians))
     return int(x), int(y)
+
+
+def _approach_camera_axis(current: int, target: int, *, dead_zone: int) -> int:
+    delta = target - current
+    abs_delta = abs(delta)
+    if abs_delta <= max(0, dead_zone):
+        return current
+
+    step = max(1, abs_delta // max(1, CAMERA_CATCHUP_DIVISOR))
+    step = min(step, CAMERA_MAX_STEP)
+    if delta > 0:
+        return current + step
+    return current - step
+
+
+def _is_floor_triplet(
+    level: LevelData,
+    *,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    x3: int,
+    y3: int,
+) -> bool:
+    return _is_floor_pair(level, x1=x1, y1=y1, x2=x2, y2=y2) and _is_floor_pixel(level, x3, y3)
 
 
 def _is_floor_pair(level: LevelData, *, x1: int, y1: int, x2: int, y2: int) -> bool:

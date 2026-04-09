@@ -73,6 +73,7 @@ from ultimatetk.systems.player_control import (
     weapon_shop_short_label_for_slot,
     spawn_player_from_level,
     weapon_bullet_type_index_for_slot,
+    weapon_profile_for_slot,
     weapon_sell_price_for_slot,
     weapon_shop_cost_for_slot,
 )
@@ -92,20 +93,23 @@ class GameplayScene(BaseScene):
     _SHOP_GRID_ORIGIN_Y = 132
     _SHOP_CELL_SIZE = 16
     _SHOP_CELL_GAP = 2
-    _SHOP_TEXT_COLOR = 115
+    _SHOP_TEXT_COLOR = 113
     _SHOP_VALUE_COLOR = 126
-    _SHOP_MUTED_COLOR = 78
+    _SHOP_MUTED_COLOR = 76
     _SHOP_PANEL_COLOR = 13
     _SHOP_CELL_COLOR = 8
     _SHOP_BORDER_COLOR = 98
     _SHOP_SELECTED_COLOR = 96
+    _SHOP_ICON_COLOR = 117
+    _SHOP_ICON_SELECTED_COLOR = 126
     _SHOP_SUCCESS_COLOR = 112
     _SHOP_ERROR_COLOR = 28
     _HUD_PANEL_COLOR = 13
     _HUD_CELL_COLOR = 8
     _HUD_BORDER_COLOR = 98
-    _HUD_TEXT_COLOR = 115
+    _HUD_TEXT_COLOR = 113
     _HUD_VALUE_COLOR = 126
+    _HUD_MUTED_COLOR = 76
     _HUD_WARN_COLOR = 28
     _HUD_OK_COLOR = 112
 
@@ -867,6 +871,17 @@ class GameplayScene(BaseScene):
                         self._SHOP_BORDER_COLOR,
                     )
 
+                icon_kind = self._shop_cell_icon_kind(row, column)
+                if icon_kind:
+                    icon_color = self._SHOP_ICON_SELECTED_COLOR if selected else self._SHOP_ICON_COLOR
+                    self._draw_shop_cell_icon(
+                        pixels,
+                        x=cell_x + 2,
+                        y=row_y + 2,
+                        kind=icon_kind,
+                        color=icon_color,
+                    )
+
                 cell_label = self._fit_shop_cell_text(self._shop_cell_label_text(row, column), max_chars=2)
                 if cell_label:
                     label_x = cell_x + max(0, (self._SHOP_CELL_SIZE - (len(cell_label) * 8)) // 2)
@@ -875,7 +890,7 @@ class GameplayScene(BaseScene):
                         label_x,
                         row_y + 1,
                         cell_label,
-                        self._SHOP_TEXT_COLOR,
+                        self._SHOP_VALUE_COLOR if selected else self._SHOP_TEXT_COLOR,
                     )
 
                 counter_text = self._shop_cell_counter_text(row, column)
@@ -966,6 +981,121 @@ class GameplayScene(BaseScene):
             return "TG"
         return ""
 
+    def _shop_cell_icon_kind(self, row: int, column: int) -> str:
+        if row == SHOP_ROW_WEAPONS:
+            return self._weapon_shop_icon_kind(column + 1)
+
+        if row == SHOP_ROW_AMMO:
+            return self._ammo_shop_icon_kind(column)
+
+        if row == SHOP_ROW_OTHER and column == 0:
+            return "shield"
+        if row == SHOP_ROW_OTHER and column == 1:
+            return "target"
+        return ""
+
+    def _weapon_shop_icon_kind(self, weapon_slot: int) -> str:
+        if weapon_slot == 1:
+            return "pistol"
+        if weapon_slot in (2, 8):
+            return "shotgun"
+        if weapon_slot == 3:
+            return "smg"
+        if weapon_slot == 4:
+            return "rifle"
+        if weapon_slot in (5, 6, 7):
+            return "launcher"
+        if weapon_slot == 9:
+            return "charge"
+        if weapon_slot == 10:
+            return "flame"
+        if weapon_slot == 11:
+            return "mine"
+        return "gun"
+
+    def _ammo_shop_icon_kind(self, ammo_type: int) -> str:
+        if ammo_type in (0, 1, 2):
+            return "rounds"
+        if ammo_type in (3, 4, 5):
+            return "grenade"
+        if ammo_type == 6:
+            return "charge"
+        if ammo_type == 7:
+            return "gas"
+        if ammo_type == 8:
+            return "mine"
+        return "rounds"
+
+    def _draw_shop_cell_icon(self, pixels: bytearray, *, x: int, y: int, kind: str, color: int) -> None:
+        if not kind:
+            return
+        if color < 0 or color > 255:
+            return
+
+        if kind == "pistol":
+            self._fill_rect(pixels, x + 1, y + 2, 5, 1, color)
+            self._fill_rect(pixels, x + 4, y + 3, 1, 2, color)
+            return
+        if kind == "shotgun":
+            self._fill_rect(pixels, x, y + 2, 7, 1, color)
+            self._fill_rect(pixels, x + 5, y + 3, 2, 1, color)
+            return
+        if kind == "smg":
+            self._fill_rect(pixels, x + 1, y + 2, 5, 1, color)
+            self._fill_rect(pixels, x + 2, y + 3, 1, 2, color)
+            self._fill_rect(pixels, x + 5, y + 3, 1, 1, color)
+            return
+        if kind == "rifle":
+            self._fill_rect(pixels, x, y + 2, 7, 1, color)
+            self._fill_rect(pixels, x + 1, y + 3, 2, 1, color)
+            self._fill_rect(pixels, x + 4, y + 1, 2, 1, color)
+            return
+        if kind == "launcher":
+            self._fill_rect(pixels, x, y + 2, 7, 2, color)
+            self._fill_rect(pixels, x + 6, y + 1, 1, 1, color)
+            return
+        if kind == "charge":
+            self._stroke_rect(pixels, x + 1, y + 1, 5, 5, color)
+            self._fill_rect(pixels, x + 3, y + 3, 1, 1, color)
+            return
+        if kind == "flame":
+            self._fill_rect(pixels, x + 3, y, 1, 1, color)
+            self._fill_rect(pixels, x + 2, y + 1, 2, 1, color)
+            self._fill_rect(pixels, x + 1, y + 2, 3, 2, color)
+            self._fill_rect(pixels, x + 2, y + 4, 1, 1, color)
+            return
+        if kind == "mine":
+            self._fill_rect(pixels, x + 1, y + 2, 5, 2, color)
+            self._fill_rect(pixels, x + 2, y + 1, 3, 1, color)
+            self._fill_rect(pixels, x + 2, y + 4, 3, 1, color)
+            return
+        if kind == "shield":
+            self._stroke_rect(pixels, x + 1, y + 1, 5, 5, color)
+            self._fill_rect(pixels, x + 2, y + 4, 3, 2, self._SHOP_CELL_COLOR)
+            return
+        if kind == "target":
+            self._stroke_rect(pixels, x + 1, y + 1, 5, 5, color)
+            self._fill_rect(pixels, x + 3, y + 1, 1, 5, color)
+            self._fill_rect(pixels, x + 1, y + 3, 5, 1, color)
+            self._fill_rect(pixels, x + 3, y + 3, 1, 1, self._SHOP_CELL_COLOR)
+            return
+        if kind == "grenade":
+            self._fill_rect(pixels, x + 2, y + 1, 3, 1, color)
+            self._fill_rect(pixels, x + 1, y + 2, 5, 3, color)
+            self._fill_rect(pixels, x + 2, y + 5, 3, 1, color)
+            return
+        if kind == "gas":
+            self._stroke_rect(pixels, x + 2, y + 1, 3, 5, color)
+            self._fill_rect(pixels, x + 2, y + 3, 3, 1, color)
+            return
+        if kind == "rounds":
+            self._fill_rect(pixels, x + 1, y + 1, 1, 4, color)
+            self._fill_rect(pixels, x + 3, y + 1, 1, 4, color)
+            self._fill_rect(pixels, x + 5, y + 1, 1, 4, color)
+            return
+
+        self._fill_rect(pixels, x + 1, y + 2, 5, 1, color)
+
     def _fit_shop_cell_text(self, text: str, *, max_chars: int) -> str:
         trimmed = text.strip().upper()
         if not trimmed:
@@ -1012,7 +1142,7 @@ class GameplayScene(BaseScene):
             return
 
         panel_x = 0
-        panel_height = 24
+        panel_height = 28
         panel_y = SCREEN_HEIGHT - panel_height
         panel_width = SCREEN_WIDTH
 
@@ -1023,6 +1153,14 @@ class GameplayScene(BaseScene):
             panel_width,
             panel_height,
             self._HUD_PANEL_COLOR,
+        )
+        self._fill_rect(
+            pixels,
+            panel_x + 1,
+            panel_y + 1,
+            panel_width - 2,
+            10,
+            self._HUD_CELL_COLOR,
         )
         self._stroke_rect(
             pixels,
@@ -1036,16 +1174,17 @@ class GameplayScene(BaseScene):
         weapon_slot = self._player.current_weapon
         weapon_name = weapon_shop_name_for_slot(weapon_slot)
         ammo_type, ammo_units, ammo_capacity = current_weapon_ammo_snapshot(self._player)
+        weapon_profile = weapon_profile_for_slot(weapon_slot)
 
         ammo_packs = 0
         ammo_ratio = 0.0
-        ammo_label = "AM INF"
+        ammo_label = "INF"
         if ammo_type >= 0:
             units_per_pack = max(1, bullet_shop_units_for_type(ammo_type))
             ammo_packs = ammo_units // units_per_pack
             if ammo_units > 0 and ammo_packs < 1:
                 ammo_packs = 1
-            ammo_label = f"AM {ammo_packs:02d}"
+            ammo_label = f"{ammo_packs:02d}"
             if ammo_capacity > 0:
                 ammo_ratio = max(0.0, min(1.0, ammo_units / ammo_capacity))
 
@@ -1053,15 +1192,20 @@ class GameplayScene(BaseScene):
         if self._player.max_health > 0.0:
             health_ratio = max(0.0, min(1.0, self._player.health / self._player.max_health))
 
+        reload_ratio = 1.0
+        if weapon_profile.loading_time > 0:
+            reload_ratio = max(0.0, min(1.0, self._player.load_count / weapon_profile.loading_time))
+
         hp_color = self._HUD_OK_COLOR if health_ratio > 0.3 else self._HUD_WARN_COLOR
         am_color = self._HUD_OK_COLOR if ammo_ratio > 0.2 or ammo_type < 0 else self._HUD_WARN_COLOR
+        load_color = self._HUD_OK_COLOR if reload_ratio >= 1.0 else self._HUD_TEXT_COLOR
 
         self._draw_meter(
             pixels,
             x=4,
             y=panel_y + 2,
-            width=88,
-            height=3,
+            width=72,
+            height=4,
             ratio=health_ratio,
             fill_color=hp_color,
             border_color=self._HUD_BORDER_COLOR,
@@ -1069,28 +1213,43 @@ class GameplayScene(BaseScene):
         )
         self._draw_meter(
             pixels,
-            x=96,
+            x=80,
             y=panel_y + 2,
-            width=88,
-            height=3,
+            width=72,
+            height=4,
             ratio=ammo_ratio if ammo_type >= 0 else 1.0,
             fill_color=am_color,
             border_color=self._HUD_BORDER_COLOR,
             background_color=self._HUD_CELL_COLOR,
         )
+        self._draw_meter(
+            pixels,
+            x=156,
+            y=panel_y + 2,
+            width=56,
+            height=4,
+            ratio=reload_ratio,
+            fill_color=load_color,
+            border_color=self._HUD_BORDER_COLOR,
+            background_color=self._HUD_CELL_COLOR,
+        )
+
+        weapon_label = weapon_name.upper()
+        if len(weapon_label) > 12:
+            weapon_label = weapon_label[:12]
 
         self._draw_shop_text(
             pixels,
             4,
             panel_y + 8,
-            f"W{weapon_slot:02d} {weapon_name}",
+            f"W{weapon_slot:02d} {weapon_label}",
             self._HUD_VALUE_COLOR,
         )
         self._draw_shop_text(
             pixels,
             4,
-            panel_y + 16,
-            f"{ammo_label} HP {int(max(0.0, self._player.health)):03d}",
+            panel_y + 18,
+            f"HP {int(max(0.0, self._player.health)):03d} AM {ammo_label}",
             self._HUD_TEXT_COLOR,
         )
 
@@ -1105,15 +1264,17 @@ class GameplayScene(BaseScene):
             self._HUD_VALUE_COLOR,
         )
 
-        active_explosives = len(self._player_explosives)
-        hint_text = f"R/ENT SHOP EX {active_explosives:02d}"
+        hint_text = (
+            f"LD {int(reload_ratio * 100):03d}% M{sum(1 for e in self._player_explosives if e.kind == 'mine'):02d} "
+            f"C{sum(1 for e in self._player_explosives if e.kind == 'c4'):02d} R/ENT SHOP"
+        )
         hint_x = max(4, SCREEN_WIDTH - ((len(hint_text) + 1) * 8))
         self._draw_shop_text(
             pixels,
             hint_x,
-            panel_y + 16,
+            panel_y + 18,
             hint_text,
-            self._HUD_TEXT_COLOR,
+            self._HUD_MUTED_COLOR,
         )
 
     def _draw_meter(

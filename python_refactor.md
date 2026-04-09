@@ -151,6 +151,7 @@ python/
 - Tightened enemy direct-shot tracing for corner-edge wall grazes, reducing leaked pellet hits and adding dedicated shotgun unit plus scripted direct-shot corner-graze integration coverage.
 - Tightened player shot tracing for corner-edge wall grazes, reducing leaked hitscan enemy hits and adding dedicated player-shot corner-graze unit plus scripted integration coverage.
 - Tightened enemy projectile sub-step tracing for corner-edge wall grazes, reducing leaked travel-time projectile hits and adding dedicated unit plus scripted projectile corner-graze integration coverage.
+- Continued Phase 4 parity tuning with enemy in-range strafe behavior, point-blank explosive safety gating, grenade splash-to-crate propagation, mine proximity trigger LOS gating, extra narrow-lane explosive-ray damping, kind-specific mine/C4 falloff tuning, camera smoothing dead-zones/min-step catch-up, refined collision probes, and visual shop/HUD polish including icon-like shop cell glyphs plus expanded HUD status bars/readouts.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.
