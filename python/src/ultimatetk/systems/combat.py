@@ -24,6 +24,7 @@ MAX_SPAWNED_ENEMIES = 24
 ENEMY_ROTATION_STEP_DEGREES = 9
 ENEMY_ALIGNMENT_TOLERANCE_DEGREES = 9
 ENEMY_LINE_OF_SIGHT_TRACE_STEP = 2
+ENEMY_SHOT_TRACE_STEP = 2
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -734,7 +735,7 @@ def resolve_enemy_shot_against_player(
 
     px = int(origin_x)
     py = int(origin_y)
-    for distance in range(0, trace_distance + 1, max(1, SHOT_TRACE_STEP)):
+    for distance in range(0, trace_distance + 1, max(1, ENEMY_SHOT_TRACE_STEP)):
         x = int(origin_x + (distance * math.sin(angle_radians)))
         y = int(origin_y + (distance * math.cos(angle_radians)))
 
