@@ -206,4 +206,5 @@ python/
 - Continued Phase 5 Workstream 5 with pre-lethal ordering lock coverage: added unit + scripted integration tests confirming deterministic side effects resolved before a lethal projectile are preserved, while only post-death follow-up effects are suppressed by the short-circuit.
 - Completed Phase 5 Workstream 5 (regression expansion and lock criteria): finished final lock sweep for mine trigger ordering, HUD readiness tint transitions, movement/camera micro-parity boundaries, and C4/dead-player projectile telemetry gating; verified with full phase unit + integration command set.
 - Completed Phase 5 handoff closeout: all Workstreams 1-5 are now closed and documented in `python/docs/notes/phase5_combat_entities.md`.
-- Next focus shifts to Phase 6 scope (broader UI/progression flow).
+- Phase 6 kickoff note/checklist created at `python/docs/notes/phase6_ui_progression.md` and is now the active implementation guide for UI/progression flow.
+- Next focus is Phase 6 Workstream 1 (interactive main-menu transition wiring), then Workstream 2 progression-state advancement.
