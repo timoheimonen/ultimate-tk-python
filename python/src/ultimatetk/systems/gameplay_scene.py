@@ -94,6 +94,13 @@ class GameplayScene(BaseScene):
     _SHOP_SELECTED_COLOR = 96
     _SHOP_SUCCESS_COLOR = 112
     _SHOP_ERROR_COLOR = 28
+    _HUD_PANEL_COLOR = 13
+    _HUD_CELL_COLOR = 8
+    _HUD_BORDER_COLOR = 98
+    _HUD_TEXT_COLOR = 115
+    _HUD_VALUE_COLOR = 126
+    _HUD_WARN_COLOR = 28
+    _HUD_OK_COLOR = 112
 
     def __init__(self) -> None:
         self._renderer: SoftwareRenderer | None = None
@@ -467,9 +474,13 @@ class GameplayScene(BaseScene):
             sprites=sprites,
         )
 
-        if self._shop_active and self._player is not None:
+        if self._player is not None and self._shop_active:
             overlay_pixels = bytearray(pixels)
             self._draw_shop_overlay(overlay_pixels)
+            pixels = bytes(overlay_pixels)
+        elif self._player is not None:
+            overlay_pixels = bytearray(pixels)
+            self._draw_gameplay_hud(overlay_pixels)
             pixels = bytes(overlay_pixels)
 
         context.runtime.last_render_width = SCREEN_WIDTH
@@ -949,6 +960,138 @@ class GameplayScene(BaseScene):
         if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
             return "ON"
         return ""
+
+    def _draw_gameplay_hud(self, pixels: bytearray) -> None:
+        if self._player is None:
+            return
+
+        panel_x = 0
+        panel_height = 24
+        panel_y = SCREEN_HEIGHT - panel_height
+        panel_width = SCREEN_WIDTH
+
+        self._fill_rect(
+            pixels,
+            panel_x,
+            panel_y,
+            panel_width,
+            panel_height,
+            self._HUD_PANEL_COLOR,
+        )
+        self._stroke_rect(
+            pixels,
+            panel_x,
+            panel_y,
+            panel_width,
+            panel_height,
+            self._HUD_BORDER_COLOR,
+        )
+
+        weapon_slot = self._player.current_weapon
+        weapon_name = weapon_shop_name_for_slot(weapon_slot)
+        ammo_type, ammo_units, ammo_capacity = current_weapon_ammo_snapshot(self._player)
+
+        ammo_packs = 0
+        ammo_ratio = 0.0
+        ammo_label = "AM INF"
+        if ammo_type >= 0:
+            units_per_pack = max(1, bullet_shop_units_for_type(ammo_type))
+            ammo_packs = ammo_units // units_per_pack
+            if ammo_units > 0 and ammo_packs < 1:
+                ammo_packs = 1
+            ammo_label = f"AM {ammo_packs:02d}"
+            if ammo_capacity > 0:
+                ammo_ratio = max(0.0, min(1.0, ammo_units / ammo_capacity))
+
+        health_ratio = 0.0
+        if self._player.max_health > 0.0:
+            health_ratio = max(0.0, min(1.0, self._player.health / self._player.max_health))
+
+        hp_color = self._HUD_OK_COLOR if health_ratio > 0.3 else self._HUD_WARN_COLOR
+        am_color = self._HUD_OK_COLOR if ammo_ratio > 0.2 or ammo_type < 0 else self._HUD_WARN_COLOR
+
+        self._draw_meter(
+            pixels,
+            x=4,
+            y=panel_y + 2,
+            width=88,
+            height=3,
+            ratio=health_ratio,
+            fill_color=hp_color,
+            border_color=self._HUD_BORDER_COLOR,
+            background_color=self._HUD_CELL_COLOR,
+        )
+        self._draw_meter(
+            pixels,
+            x=96,
+            y=panel_y + 2,
+            width=88,
+            height=3,
+            ratio=ammo_ratio if ammo_type >= 0 else 1.0,
+            fill_color=am_color,
+            border_color=self._HUD_BORDER_COLOR,
+            background_color=self._HUD_CELL_COLOR,
+        )
+
+        self._draw_shop_text(
+            pixels,
+            4,
+            panel_y + 8,
+            f"W{weapon_slot:02d} {weapon_name}",
+            self._HUD_VALUE_COLOR,
+        )
+        self._draw_shop_text(
+            pixels,
+            4,
+            panel_y + 16,
+            f"{ammo_label} HP {int(max(0.0, self._player.health)):03d}",
+            self._HUD_TEXT_COLOR,
+        )
+
+        target_state = "ON" if self._player.target_system_enabled else "OFF"
+        right_text = f"$ {self._player.cash} SH {self._player.shield:02d} TG {target_state}"
+        right_x = max(4, SCREEN_WIDTH - ((len(right_text) + 1) * 8))
+        self._draw_shop_text(
+            pixels,
+            right_x,
+            panel_y + 8,
+            right_text,
+            self._HUD_VALUE_COLOR,
+        )
+        self._draw_shop_text(
+            pixels,
+            right_x,
+            panel_y + 16,
+            "R/ENT SHOP",
+            self._HUD_TEXT_COLOR,
+        )
+
+    def _draw_meter(
+        self,
+        pixels: bytearray,
+        *,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        ratio: float,
+        fill_color: int,
+        border_color: int,
+        background_color: int,
+    ) -> None:
+        if width <= 2 or height <= 2:
+            return
+
+        self._fill_rect(pixels, x, y, width, height, background_color)
+        self._stroke_rect(pixels, x, y, width, height, border_color)
+
+        inner_width = width - 2
+        inner_height = height - 2
+        fill_width = int(inner_width * max(0.0, min(1.0, ratio)))
+        if fill_width <= 0:
+            return
+
+        self._fill_rect(pixels, x + 1, y + 1, fill_width, inner_height, fill_color)
 
     def _draw_shop_text(self, pixels: bytearray, x: int, y: int, text: str, color: int) -> None:
         if not text:

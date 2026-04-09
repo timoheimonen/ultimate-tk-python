@@ -297,6 +297,45 @@ class SceneFlowTests(unittest.TestCase):
 
         self.assertNotEqual(digest_without_shop, digest_with_shop)
 
+    def test_gameplay_hud_overlay_changes_render_digest_with_runtime_values(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        ui_font = getattr(gameplay_scene, "_ui_font", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+        if ui_font is None:
+            self.skipTest("gameplay scene did not load UI font")
+
+        gameplay_scene._shop_active = False
+        manager.render(0.0)
+        digest_before = context.runtime.last_render_digest
+
+        player.cash = 1337
+        player.shield = 7
+        player.health = 31.0
+        player.grant_weapon(1)
+        player.current_weapon = 1
+        gained = grant_bullet_ammo(player, 0, 11)
+        self.assertEqual(gained, 11)
+
+        manager.render(0.0)
+        digest_after = context.runtime.last_render_digest
+
+        self.assertNotEqual(digest_before, digest_after)
+
 
 if __name__ == "__main__":
     unittest.main()
