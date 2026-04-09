@@ -1304,17 +1304,87 @@ class CombatSystemTests(unittest.TestCase):
         )
 
         hold_ticks = max(1, combat_module.ENEMY_STRAFE_DIRECTION_HOLD_TICKS)
+        stagger_window = max(0, combat_module.ENEMY_STRAFE_RELOAD_STAGGER_TICKS)
+        phase_delay = 0
+        if stagger_window > 0:
+            phase_delay = (enemy.enemy_id + enemy.type_index) % (stagger_window + 1)
+
         first_block: list[int] = []
-        for load in range(hold_ticks):
-            enemy.load_count = load
+        for strafe_tick in range(phase_delay, phase_delay + hold_ticks):
+            enemy.strafe_ticks = strafe_tick
             first_block.append(combat_module._enemy_strafe_angle(enemy))
 
         self.assertTrue(all(angle == first_block[0] for angle in first_block))
 
-        enemy.load_count = hold_ticks
+        enemy.strafe_ticks = phase_delay + hold_ticks
         second_block_angle = combat_module._enemy_strafe_angle(enemy)
         self.assertIn(second_block_angle, ((enemy.angle + 90) % 360, (enemy.angle + 270) % 360))
         self.assertNotEqual(second_block_angle, first_block[0])
+
+    def test_enemy_strafe_direction_is_stable_across_shoot_count_changes(self) -> None:
+        enemy = EnemyState(
+            enemy_id=1,
+            type_index=2,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=2,
+            strafe_ticks=2,
+            shoot_count=0,
+        )
+
+        first_angle = combat_module._enemy_strafe_angle(enemy)
+        enemy.shoot_count = 7
+        second_angle = combat_module._enemy_strafe_angle(enemy)
+
+        self.assertEqual(first_angle, second_angle)
+
+    def test_enemy_strafe_switch_tick_is_staggered_between_neighbor_enemy_ids(self) -> None:
+        hold_ticks = max(1, combat_module.ENEMY_STRAFE_DIRECTION_HOLD_TICKS)
+
+        first_enemy = EnemyState(
+            enemy_id=0,
+            type_index=2,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+        )
+        second_enemy = EnemyState(
+            enemy_id=1,
+            type_index=2,
+            x=80.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+        )
+
+        def first_switch_tick(enemy: EnemyState) -> int | None:
+            enemy.strafe_ticks = 0
+            previous_angle = combat_module._enemy_strafe_angle(enemy)
+            for strafe_tick in range(1, hold_ticks * 3):
+                enemy.strafe_ticks = strafe_tick
+                angle = combat_module._enemy_strafe_angle(enemy)
+                if angle != previous_angle:
+                    return strafe_tick
+            return None
+
+        first_switch = first_switch_tick(first_enemy)
+        second_switch = first_switch_tick(second_enemy)
+
+        self.assertIsNotNone(first_switch)
+        self.assertIsNotNone(second_switch)
+        assert first_switch is not None
+        assert second_switch is not None
+        self.assertNotEqual(first_switch, second_switch)
+        self.assertGreater(second_switch, first_switch)
 
     def test_enemy_strafe_retries_opposite_direction_when_primary_lane_is_blocked(self) -> None:
         level = _build_level(height=12)

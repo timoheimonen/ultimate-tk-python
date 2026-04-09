@@ -39,6 +39,7 @@ ENEMY_PATROL_START_CHANCE_DIVISOR = 100
 ENEMY_PATROL_BURST_BASE_TICKS = 20
 ENEMY_PATROL_BURST_EXTRA_TICKS = 40
 ENEMY_STRAFE_DIRECTION_HOLD_TICKS = 4
+ENEMY_STRAFE_RELOAD_STAGGER_TICKS = 1
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -212,6 +213,7 @@ class EnemyState:
     chase_ticks: int = 0
     load_count: int = 0
     shoot_count: int = 0
+    strafe_ticks: int = 0
     patrol_rng_state: int = 0
     sees_player: bool = False
     alive: bool = True
@@ -669,6 +671,7 @@ def update_enemy_behavior(
             enemy.pressure_ticks = 0
             enemy.chase_ticks = 0
             enemy.shoot_count = 0
+            enemy.strafe_ticks = 0
             continue
 
         if player.dead:
@@ -676,6 +679,7 @@ def update_enemy_behavior(
             enemy.pressure_ticks = 0
             enemy.chase_ticks = 0
             enemy.shoot_count = 0
+            enemy.strafe_ticks = 0
             _advance_enemy_patrol(
                 enemy,
                 level,
@@ -704,6 +708,7 @@ def update_enemy_behavior(
         ) and distance_to_player <= ENEMY_VISION_MAX_DISTANCE_PIXELS
 
         if enemy.sees_player:
+            enemy.strafe_ticks += 1
             enemy.target_angle = player_angle
         elif saw_player_last_tick:
             enemy.chase_ticks = _enemy_lost_sight_chase_ticks(
@@ -1560,8 +1565,14 @@ def _enemy_within_vision_cone(enemy: EnemyState, *, player_angle: int) -> bool:
 
 def _enemy_strafe_angle(enemy: EnemyState) -> int:
     hold_ticks = max(1, ENEMY_STRAFE_DIRECTION_HOLD_TICKS)
-    cadence_bucket = enemy.load_count // hold_ticks
-    seed = enemy.enemy_id * 37 + enemy.shoot_count * 17 + cadence_bucket * 11
+    stagger_window = max(0, ENEMY_STRAFE_RELOAD_STAGGER_TICKS)
+    phase_delay = 0
+    if stagger_window > 0:
+        phase_delay = (enemy.enemy_id + enemy.type_index) % (stagger_window + 1)
+
+    cadence_ticks = max(0, enemy.strafe_ticks - phase_delay)
+    cadence_bucket = cadence_ticks // hold_ticks
+    seed = enemy.enemy_id * 37 + enemy.type_index * 19 + cadence_bucket * 11
     if seed % 2 == 0:
         return (enemy.angle + 90) % 360
     return (enemy.angle + 270) % 360
