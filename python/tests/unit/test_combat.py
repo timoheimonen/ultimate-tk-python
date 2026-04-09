@@ -1367,6 +1367,59 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(attack.total_damage, 0.0)
         self.assertEqual(player.health, 100.0)
 
+    def test_grenade_near_miss_splash_is_reduced_by_crate_cover(self) -> None:
+        level = _build_level(height=12, walls={(2, 3)})
+        player_open = PlayerState(x=20.0, y=64.0)
+        player_cover = PlayerState(x=20.0, y=64.0)
+        enemy_open = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+        )
+        enemy_cover = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+        )
+        cover_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=22.0,
+            y=69.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        open_attack = resolve_enemy_attack_against_player(
+            level,
+            enemy=enemy_open,
+            player=player_open,
+            weapon_slot=5,
+        )
+        cover_attack = resolve_enemy_attack_against_player(
+            level,
+            enemy=enemy_cover,
+            player=player_cover,
+            weapon_slot=5,
+            crates=[cover_crate],
+        )
+
+        self.assertGreater(open_attack.total_damage, 0.0)
+        self.assertGreaterEqual(open_attack.hit_count, 1)
+        self.assertLess(cover_attack.total_damage, open_attack.total_damage)
+        self.assertGreater(player_cover.health, player_open.health)
+
     def test_grenade_projectile_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12)
         blocked_level = _build_level(height=12, walls={(2, 3)})
@@ -1460,6 +1513,79 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(total_hits, 0)
         self.assertEqual(total_damage, 0.0)
         self.assertEqual(player.health, 100.0)
+
+    def test_grenade_projectile_wall_impact_splash_is_reduced_by_crate_cover(self) -> None:
+        level = _build_level(height=12, walls={(2, 3)})
+        player_open = PlayerState(x=40.0, y=68.0)
+        player_cover = PlayerState(x=40.0, y=68.0)
+        cover_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=38.0,
+            y=71.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        open_projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=20.0,
+                remaining_ticks=8,
+                radius=3,
+                splash_radius=48,
+            ),
+        ]
+        cover_projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=20.0,
+                remaining_ticks=8,
+                radius=3,
+                splash_radius=48,
+            ),
+        ]
+
+        open_hits = 0
+        open_damage = 0.0
+        for _ in range(10):
+            report = update_enemy_projectiles(level, open_projectiles, player_open)
+            open_hits += report.hits_on_player
+            open_damage += report.damage_to_player
+            if not open_projectiles:
+                break
+
+        cover_hits = 0
+        cover_damage = 0.0
+        for _ in range(10):
+            report = update_enemy_projectiles(
+                level,
+                cover_projectiles,
+                player_cover,
+                crates=[cover_crate],
+            )
+            cover_hits += report.hits_on_player
+            cover_damage += report.damage_to_player
+            if not cover_projectiles:
+                break
+
+        self.assertGreaterEqual(open_hits, 1)
+        self.assertGreater(open_damage, 0.0)
+        self.assertLess(cover_damage, open_damage)
+        self.assertGreater(player_cover.health, player_open.health)
 
     def test_grenade_projectile_wall_impact_splash_can_damage_nearby_crate(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})

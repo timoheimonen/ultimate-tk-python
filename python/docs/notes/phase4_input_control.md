@@ -65,6 +65,7 @@ Implemented:
   - Added C4 activator follow-up behavior in gameplay flow: firing the C4 slot while a C4 charge is already active now remote-triggers existing charges instead of placing another charge.
   - Retuned C4 activator economy flow so remote-trigger follow-up shots refund the consumed C4 ammo unit when reusing already-placed charges (no extra ammo burn for trigger-only shots).
   - Retuned enemy explosive splash-to-player edge handling with collision-bounds fallback: if player-center splash miss occurs but the collision box edge is inside blast radius, apply scaled edge-contact splash damage instead of full center miss.
+  - Retuned enemy explosive splash cover handling so live crates can now attenuate/block splash rays when they sit between blast impacts and the player during enemy missed-shot and projectile wall/expiry splash cases.
   - Refined blast obstruction edge-cases with extra narrow-lane damping when only a highly dominant side ray path is open.
   - Added kind-specific player explosive falloff tuning (C4 versus mine) for closer legacy-like detonation feel.
   - Added additional scripted-obstruction parity hooks for mine/C4 micro-cases (diagonal graze and one-tile choke variants).
@@ -160,6 +161,7 @@ Verification:
   - Added mine proximity-trigger crate-obstruction unit coverage.
   - Added mine proximity-trigger edge-contact coverage for enemy collision-bounds trigger checks.
   - Added projectile splash edge-contact coverage for player collision-bounds fallback handling.
+  - Added enemy explosive crate-cover splash unit coverage for direct near-miss and projectile wall-impact cases.
   - Added C4 remote-trigger ammo-conservation scene-flow coverage.
   - Added enemy-projectile dead-player guard unit coverage so in-flight projectiles no longer count/player-damage after death.
   - Added scene-flow coverage for C4 remote-trigger behavior and new explosive readiness runtime counters.

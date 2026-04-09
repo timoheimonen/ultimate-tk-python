@@ -901,6 +901,7 @@ def resolve_enemy_attack_against_player(
         else:
             splash_radius = weapon_explosive_splash_radius_for_slot(weapon_slot)
             if splash_radius > 0:
+                splash_crates = crates if not shot.crate_hit else None
                 dealt_damage = _explosive_splash_damage(
                     player,
                     impact_x=shot.impact_x,
@@ -908,6 +909,7 @@ def resolve_enemy_attack_against_player(
                     max_damage=pellet_damage,
                     radius=splash_radius,
                     level=level,
+                    crates=splash_crates,
                 )
 
         if dealt_damage <= 0:
@@ -1331,6 +1333,7 @@ def _explosive_ray_coverage(
     target_x: float,
     target_y: float,
     radius: int,
+    crates: Sequence[CrateState] | None = None,
 ) -> float:
     dx = target_x - blast_x
     dy = target_y - blast_y
@@ -1376,6 +1379,7 @@ def _explosive_ray_coverage(
             end_x=ray_end_x,
             end_y=ray_end_y,
             step=PLAYER_EXPLOSIVE_RAY_TRACE_STEP,
+            crates=crates,
         ):
             clear_weight += weight
             if weight > largest_clear_weight:
@@ -1809,6 +1813,7 @@ def _explosive_splash_damage(
     max_damage: float,
     radius: int,
     level: LevelData | None = None,
+    crates: Sequence[CrateState] | None = None,
 ) -> float:
     damage = _radial_damage(
         target_x=player.center_x,
@@ -1850,6 +1855,7 @@ def _explosive_splash_damage(
         target_x=target_x,
         target_y=target_y,
         radius=radius,
+        crates=crates,
     )
     if ray_coverage <= 0.0:
         return 0.0
@@ -1909,7 +1915,12 @@ def _advance_enemy_projectile(
                 )
 
         if _projectile_hits_wall(level, projectile):
-            damage = _projectile_splash_damage(level, projectile, player)
+            damage = _projectile_splash_damage(
+                level,
+                projectile,
+                player,
+                crates=crates,
+            )
             crate_hit = False
             crate_destroyed = False
             if crates is not None:
@@ -1956,7 +1967,12 @@ def _advance_enemy_projectile(
             )
         return EnemyProjectileAdvance(
             keep_alive=False,
-            damage_to_player=_projectile_splash_damage(level, projectile, player),
+            damage_to_player=_projectile_splash_damage(
+                level,
+                projectile,
+                player,
+                crates=crates,
+            ),
             crate_hit=crate_hit,
             crate_destroyed=crate_destroyed,
         )
@@ -2003,6 +2019,8 @@ def _projectile_splash_damage(
     level: LevelData,
     projectile: EnemyProjectile,
     player: PlayerState,
+    *,
+    crates: Sequence[CrateState] | None = None,
 ) -> float:
     if projectile.splash_radius <= 0:
         return 0.0
@@ -2013,6 +2031,7 @@ def _projectile_splash_damage(
         max_damage=projectile.damage,
         radius=projectile.splash_radius,
         level=level,
+        crates=crates,
     )
 
 
