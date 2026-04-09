@@ -41,6 +41,8 @@ Implemented:
   - Camera follows the player and aiming direction.
   - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, and enemy counters.
   - Enemy projectile entities are now updated each tick and rendered as world markers.
+  - Added player death -> game-over flow with countdown and automatic return to main menu.
+  - Game-over return path now disables menu autostart to avoid immediate gameplay re-entry loops.
 
 Visual baseline updates:
 

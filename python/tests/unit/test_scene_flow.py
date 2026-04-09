@@ -35,6 +35,38 @@ class SceneFlowTests(unittest.TestCase):
         manager.update(0.025)
         self.assertEqual(manager.current_scene_name, "gameplay")
 
+    def test_gameplay_death_returns_to_main_menu_without_autostart_loop(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.dead = True
+        player.health = 0.0
+
+        for _ in range(120):
+            manager.update(0.025)
+            if manager.current_scene_name == "main_menu":
+                break
+
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
 
 if __name__ == "__main__":
     unittest.main()

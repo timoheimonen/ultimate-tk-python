@@ -6,7 +6,7 @@ This directory contains the Python refactor work.
 - Section 1 (architecture/runtime skeleton) is implemented.
 - Section 2 (binary format parity loaders) is implemented.
 - Section 3 rendering baseline is implemented with a software-style indexed renderer.
-- Section 4 input/player control includes movement/collision/camera/weapon switching, shoot-reload cadence, and first-pass bi-directional combat (enemy spawn/aim/move/shoot + travel-time enemy projectiles + player/enemy damage tracking).
+- Section 4 input/player control includes movement/collision/camera/weapon switching, shoot-reload cadence, and first-pass bi-directional combat (enemy spawn/aim/move/shoot + travel-time enemy projectiles + player/enemy damage tracking + game-over flow).
 - Combat and full gameplay systems are still in progress.
 
 ## Run the skeleton

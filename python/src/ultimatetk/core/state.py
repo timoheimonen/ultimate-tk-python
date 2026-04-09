@@ -8,6 +8,7 @@ class AppMode(str, Enum):
     BOOT = "boot"
     MAIN_MENU = "main_menu"
     GAMEPLAY = "gameplay"
+    GAME_OVER = "game_over"
     SHUTDOWN = "shutdown"
 
 
@@ -40,6 +41,8 @@ class RuntimeState:
     enemy_hits_total: int = 0
     enemy_damage_to_player_total: float = 0.0
     enemy_projectiles_active: int = 0
+    game_over_active: bool = False
+    game_over_ticks_remaining: int = 0
 
 
 @dataclass(slots=True)

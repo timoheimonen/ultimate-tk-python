@@ -5,7 +5,7 @@ from typing import Sequence
 from ultimatetk.assets import GameDataRepository
 from ultimatetk.core.context import GameContext
 from ultimatetk.core.events import AppEvent, EventType, InputAction
-from ultimatetk.core.scenes import BaseScene
+from ultimatetk.core.scenes import BaseScene, SceneTransition
 from ultimatetk.core.state import AppMode
 from ultimatetk.formats.efp import EfpImage
 from ultimatetk.formats.lev import LevelData
@@ -42,6 +42,7 @@ from ultimatetk.systems.player_control import (
 class GameplayScene(BaseScene):
     name = "gameplay"
 
+    _GAME_OVER_RETURN_TICKS = 80
     _PROJECTILE_MARKER_PIXELS = bytes((252, 252, 252, 252))
     _PROJECTILE_MARKER_SIZE = 2
 
@@ -73,6 +74,8 @@ class GameplayScene(BaseScene):
         self._enemy_shots_fired = 0
         self._enemy_hits_on_player = 0
         self._enemy_damage_to_player = 0.0
+        self._game_over_active = False
+        self._game_over_ticks_remaining = 0
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.GAMEPLAY
@@ -98,6 +101,8 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_hits_total = 0
         context.runtime.enemy_damage_to_player_total = 0.0
         context.runtime.enemy_projectiles_active = 0
+        context.runtime.game_over_active = False
+        context.runtime.game_over_ticks_remaining = 0
 
         self._held_actions.clear()
         self._cycle_weapon_requested = False
@@ -114,6 +119,8 @@ class GameplayScene(BaseScene):
         self._enemy_shots_fired = 0
         self._enemy_hits_on_player = 0
         self._enemy_damage_to_player = 0.0
+        self._game_over_active = False
+        self._game_over_ticks_remaining = 0
         self._static_sprites = ()
         self._spot_phase = 0
         self._render_flags = RenderFlags()
@@ -200,11 +207,16 @@ class GameplayScene(BaseScene):
         self._held_actions.clear()
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
+        self._game_over_active = False
+        self._game_over_ticks_remaining = 0
         self._enemies.clear()
         self._enemy_projectiles.clear()
 
     def handle_events(self, context: GameContext, events: Sequence[AppEvent]) -> None:
         del context
+        if self._game_over_active:
+            return None
+
         for event in events:
             if event.type == EventType.ACTION_PRESSED and event.action is not None:
                 if event.action == InputAction.NEXT_WEAPON:
@@ -223,12 +235,17 @@ class GameplayScene(BaseScene):
 
         return None
 
-    def update(self, context: GameContext, dt_seconds: float) -> None:
+    def update(self, context: GameContext, dt_seconds: float) -> SceneTransition | None:
         del dt_seconds
         if self._renderer is None or self._level is None or self._player is None:
             return None
 
-        if not self._player.dead:
+        transition = self._update_game_over_flow(context)
+        if transition is not None:
+            context.runtime.mode = AppMode.GAME_OVER
+        elif not self._game_over_active:
+            context.runtime.mode = AppMode.GAMEPLAY
+
             apply_player_controls(
                 self._player,
                 self._level,
@@ -238,21 +255,27 @@ class GameplayScene(BaseScene):
             )
             self._resolve_pending_player_shots()
 
-        report = update_enemy_behavior(
-            self._level,
-            self._enemies,
-            self._player,
-            enemy_projectiles=self._enemy_projectiles,
-        )
-        projectile_report = update_enemy_projectiles(
-            self._level,
-            self._enemy_projectiles,
-            self._player,
-        )
-        self._enemy_shots_fired += report.shots_fired
-        self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
-        self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
-        advance_enemy_effects(self._enemies)
+            report = update_enemy_behavior(
+                self._level,
+                self._enemies,
+                self._player,
+                enemy_projectiles=self._enemy_projectiles,
+            )
+            projectile_report = update_enemy_projectiles(
+                self._level,
+                self._enemy_projectiles,
+                self._player,
+            )
+            self._enemy_shots_fired += report.shots_fired
+            self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
+            self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
+            advance_enemy_effects(self._enemies)
+
+            if self._player.dead:
+                self._activate_game_over(context)
+                transition = self._update_game_over_flow(context)
+        else:
+            context.runtime.mode = AppMode.GAME_OVER
 
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
@@ -267,7 +290,7 @@ class GameplayScene(BaseScene):
         )
 
         self._publish_player_runtime_state(context)
-        return None
+        return transition
 
     def render(self, context: GameContext, alpha: float) -> None:
         del alpha
@@ -446,6 +469,38 @@ class GameplayScene(BaseScene):
             if result.enemy_killed:
                 self._enemies_killed_by_player += 1
 
+    def _activate_game_over(self, context: GameContext) -> None:
+        if self._game_over_active:
+            return
+
+        self._game_over_active = True
+        self._game_over_ticks_remaining = self._GAME_OVER_RETURN_TICKS
+        self._held_actions.clear()
+        self._cycle_weapon_requested = False
+        self._pending_weapon_slot = None
+        self._enemy_projectiles.clear()
+        context.runtime.mode = AppMode.GAME_OVER
+        context.logger.info(
+            "Player died, entering game-over flow (%d ticks)",
+            self._GAME_OVER_RETURN_TICKS,
+        )
+
+    def _update_game_over_flow(self, context: GameContext) -> SceneTransition | None:
+        if not self._game_over_active:
+            return None
+
+        if self._game_over_ticks_remaining > 0:
+            self._game_over_ticks_remaining -= 1
+        if self._game_over_ticks_remaining > 0:
+            return None
+
+        self._game_over_active = False
+        self._game_over_ticks_remaining = 0
+        context.logger.info("Game-over flow complete, returning to main menu")
+        from ultimatetk.ui.main_menu_scene import MainMenuScene
+
+        return SceneTransition(next_scene=MainMenuScene(autostart_enabled=False))
+
     def _publish_player_runtime_state(self, context: GameContext) -> None:
         if self._player is None:
             context.runtime.player_world_x = 0
@@ -467,6 +522,8 @@ class GameplayScene(BaseScene):
             context.runtime.enemy_hits_total = 0
             context.runtime.enemy_damage_to_player_total = 0.0
             context.runtime.enemy_projectiles_active = 0
+            context.runtime.game_over_active = False
+            context.runtime.game_over_ticks_remaining = 0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
@@ -488,6 +545,8 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
         context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
+        context.runtime.game_over_active = self._game_over_active
+        context.runtime.game_over_ticks_remaining = self._game_over_ticks_remaining
 
 
 def _extract_actor_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:

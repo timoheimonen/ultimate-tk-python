@@ -8,8 +8,9 @@ from ultimatetk.core.state import AppMode
 class MainMenuScene(BaseScene):
     name = "main_menu"
 
-    def __init__(self) -> None:
+    def __init__(self, *, autostart_enabled: bool = True) -> None:
         self._did_autostart = False
+        self._autostart_enabled = autostart_enabled
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.MAIN_MENU
@@ -17,6 +18,8 @@ class MainMenuScene(BaseScene):
 
     def update(self, context: GameContext, dt_seconds: float) -> SceneTransition | None:
         del dt_seconds
+        if not self._autostart_enabled:
+            return None
         if not context.config.autostart_gameplay:
             return None
         if self._did_autostart:

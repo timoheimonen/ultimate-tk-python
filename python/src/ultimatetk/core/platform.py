@@ -231,7 +231,7 @@ def _log_runtime_status(
         return
 
     context.logger.info(
-        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d load=%d fire=%d shots=%d hits=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d enemies=%d/%d kills=%d",
+        "frame=%d mode=%s scene=%s sim=%d elapsed=%.3f render=%dx%d digest=%08x player=%d,%d angle=%03d weapon=%d load=%d fire=%d shots=%d hits=%d hp=%d dead=%d ehits=%d eshots=%d edmg=%.1f proj=%d go=%d goticks=%d enemies=%d/%d kills=%d",
         frame,
         context.runtime.mode.value,
         scene_name,
@@ -254,6 +254,8 @@ def _log_runtime_status(
         context.runtime.enemy_shots_fired_total,
         context.runtime.enemy_damage_to_player_total,
         context.runtime.enemy_projectiles_active,
+        context.runtime.game_over_active,
+        context.runtime.game_over_ticks_remaining,
         context.runtime.enemies_alive,
         context.runtime.enemies_total,
         context.runtime.enemies_killed_by_player,
