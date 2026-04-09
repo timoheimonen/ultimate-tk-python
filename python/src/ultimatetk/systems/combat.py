@@ -104,6 +104,36 @@ WEAPON_EXPLOSIVE_SPLASH_RADIUS: tuple[int, ...] = (
     40,
 )
 
+WEAPON_PROJECTILE_SPEED: tuple[float, ...] = (
+    0.0,
+    14.0,
+    12.0,
+    14.0,
+    14.0,
+    8.0,
+    8.0,
+    8.0,
+    12.0,
+    0.0,
+    5.0,
+    0.0,
+)
+
+WEAPON_PROJECTILE_RADIUS: tuple[int, ...] = (
+    0,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    2,
+    0,
+    2,
+    0,
+)
+
 
 @dataclass(slots=True)
 class EnemyState:
@@ -163,12 +193,34 @@ class EnemyBehaviorReport:
     shots_fired: int = 0
     hits_on_player: int = 0
     damage_to_player: float = 0.0
+    projectiles_spawned: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class EnemyAttackResult:
     hit_count: int = 0
     total_damage: float = 0.0
+
+
+@dataclass(slots=True)
+class EnemyProjectile:
+    owner_enemy_id: int
+    weapon_slot: int
+    x: float
+    y: float
+    vx: float
+    vy: float
+    speed: float
+    damage: float
+    remaining_ticks: int
+    radius: int
+    splash_radius: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyProjectileReport:
+    hits_on_player: int = 0
+    damage_to_player: float = 0.0
 
 
 def enemy_health_for_type(type_index: int) -> float:
@@ -205,6 +257,18 @@ def weapon_explosive_splash_radius_for_slot(weapon_slot: int) -> int:
     if 0 <= weapon_slot < len(WEAPON_EXPLOSIVE_SPLASH_RADIUS):
         return WEAPON_EXPLOSIVE_SPLASH_RADIUS[weapon_slot]
     return WEAPON_EXPLOSIVE_SPLASH_RADIUS[0]
+
+
+def weapon_projectile_speed_for_slot(weapon_slot: int) -> float:
+    if 0 <= weapon_slot < len(WEAPON_PROJECTILE_SPEED):
+        return WEAPON_PROJECTILE_SPEED[weapon_slot]
+    return WEAPON_PROJECTILE_SPEED[0]
+
+
+def weapon_projectile_radius_for_slot(weapon_slot: int) -> int:
+    if 0 <= weapon_slot < len(WEAPON_PROJECTILE_RADIUS):
+        return WEAPON_PROJECTILE_RADIUS[weapon_slot]
+    return WEAPON_PROJECTILE_RADIUS[0]
 
 
 def enemy_weapon_for_type(type_index: int) -> int:
@@ -328,10 +392,13 @@ def update_enemy_behavior(
     level: LevelData,
     enemies: Sequence[EnemyState],
     player: PlayerState,
+    *,
+    enemy_projectiles: list[EnemyProjectile] | None = None,
 ) -> EnemyBehaviorReport:
     shots_fired = 0
     hits_on_player = 0
     damage_to_player = 0.0
+    projectiles_spawned = 0
 
     for enemy in enemies:
         if not enemy.alive:
@@ -382,14 +449,22 @@ def update_enemy_behavior(
                 shots_fired += 1
                 enemy.load_count = 0
                 enemy.shoot_count += 1
-                attack = resolve_enemy_attack_against_player(
-                    level,
-                    enemy=enemy,
-                    player=player,
-                    weapon_slot=weapon_slot,
-                )
-                hits_on_player += attack.hit_count
-                damage_to_player += attack.total_damage
+                if enemy_projectiles is not None and weapon_projectile_speed_for_slot(weapon_slot) > 0:
+                    spawned = spawn_enemy_projectiles(
+                        enemy,
+                        weapon_slot=weapon_slot,
+                    )
+                    enemy_projectiles.extend(spawned)
+                    projectiles_spawned += len(spawned)
+                else:
+                    attack = resolve_enemy_attack_against_player(
+                        level,
+                        enemy=enemy,
+                        player=player,
+                        weapon_slot=weapon_slot,
+                    )
+                    hits_on_player += attack.hit_count
+                    damage_to_player += attack.total_damage
         else:
             _advance_enemy_patrol(
                 enemy,
@@ -404,6 +479,7 @@ def update_enemy_behavior(
         shots_fired=shots_fired,
         hits_on_player=hits_on_player,
         damage_to_player=damage_to_player,
+        projectiles_spawned=projectiles_spawned,
     )
 
 
@@ -499,6 +575,89 @@ def resolve_enemy_attack_against_player(
             break
 
     return EnemyAttackResult(hit_count=hit_count, total_damage=total_damage)
+
+
+def spawn_enemy_projectiles(
+    enemy: EnemyState,
+    *,
+    weapon_slot: int,
+) -> tuple[EnemyProjectile, ...]:
+    projectile_speed = weapon_projectile_speed_for_slot(weapon_slot)
+    if projectile_speed <= 0:
+        return ()
+
+    pellet_count = max(1, weapon_pellet_count_for_slot(weapon_slot))
+    spread = weapon_angle_spread_for_slot(weapon_slot)
+    pellet_damage = weapon_damage_for_slot(weapon_slot) / pellet_count
+    max_distance = weapon_range_for_slot(weapon_slot)
+    splash_radius = weapon_explosive_splash_radius_for_slot(weapon_slot)
+    projectile_radius = weapon_projectile_radius_for_slot(weapon_slot)
+    remaining_ticks = max(1, int(math.ceil(max_distance / projectile_speed)))
+
+    projectiles: list[EnemyProjectile] = []
+    for pellet_index in range(pellet_count):
+        shot_angle = _enemy_shot_angle(
+            enemy,
+            weapon_slot=weapon_slot,
+            spread=spread,
+            pellet_index=pellet_index,
+        )
+        angle_radians = math.radians(shot_angle)
+        vx = math.sin(angle_radians)
+        vy = math.cos(angle_radians)
+        origin_x = enemy.center_x + (10.0 * vx)
+        origin_y = enemy.center_y + (10.0 * vy)
+        projectiles.append(
+            EnemyProjectile(
+                owner_enemy_id=enemy.enemy_id,
+                weapon_slot=weapon_slot,
+                x=origin_x,
+                y=origin_y,
+                vx=vx,
+                vy=vy,
+                speed=projectile_speed,
+                damage=pellet_damage,
+                remaining_ticks=remaining_ticks,
+                radius=projectile_radius,
+                splash_radius=splash_radius,
+            ),
+        )
+
+    return tuple(projectiles)
+
+
+def update_enemy_projectiles(
+    level: LevelData,
+    projectiles: list[EnemyProjectile],
+    player: PlayerState,
+) -> EnemyProjectileReport:
+    if not projectiles:
+        return EnemyProjectileReport()
+
+    hits_on_player = 0
+    damage_to_player = 0.0
+    active: list[EnemyProjectile] = []
+
+    for projectile in projectiles:
+        keep_alive, damage = _advance_enemy_projectile(
+            level,
+            projectile,
+            player,
+        )
+
+        if damage > 0:
+            apply_player_damage(player, damage)
+            hits_on_player += 1
+            damage_to_player += damage
+
+        if keep_alive:
+            active.append(projectile)
+
+    projectiles[:] = active
+    return EnemyProjectileReport(
+        hits_on_player=hits_on_player,
+        damage_to_player=damage_to_player,
+    )
 
 
 def _can_enemy_fire(
@@ -759,6 +918,82 @@ def _explosive_splash_damage(
     if falloff <= 0:
         return 0.0
     return max_damage * falloff
+
+
+def _advance_enemy_projectile(
+    level: LevelData,
+    projectile: EnemyProjectile,
+    player: PlayerState,
+) -> tuple[bool, float]:
+    sub_steps = max(1, int(math.ceil(projectile.speed / SHOT_TRACE_STEP)))
+    step_speed = projectile.speed / sub_steps
+
+    for _ in range(sub_steps):
+        projectile.x += projectile.vx * step_speed
+        projectile.y += projectile.vy * step_speed
+
+        if _projectile_hits_wall(level, projectile):
+            damage = _projectile_splash_damage(projectile, player)
+            return False, damage
+
+        if _player_hit_by_projectile(player, projectile):
+            direct_damage = projectile.damage
+            if projectile.splash_radius > 0:
+                direct_damage = max(direct_damage, _projectile_splash_damage(projectile, player))
+            return False, direct_damage
+
+    projectile.remaining_ticks -= 1
+    if projectile.remaining_ticks <= 0:
+        return False, _projectile_splash_damage(projectile, player)
+    return True, 0.0
+
+
+def _projectile_hits_wall(level: LevelData, projectile: EnemyProjectile) -> bool:
+    px = int(projectile.x)
+    py = int(projectile.y)
+    radius = max(0, projectile.radius)
+
+    if not _is_floor_pixel(level, px, py):
+        return True
+    if radius <= 0:
+        return False
+    if not _is_floor_pixel(level, px - radius, py):
+        return True
+    if not _is_floor_pixel(level, px + radius, py):
+        return True
+    if not _is_floor_pixel(level, px, py - radius):
+        return True
+    if not _is_floor_pixel(level, px, py + radius):
+        return True
+    return False
+
+
+def _player_hit_by_projectile(player: PlayerState, projectile: EnemyProjectile) -> bool:
+    x = projectile.x
+    y = projectile.y
+    radius = max(0, projectile.radius)
+
+    if x <= player.x + ENEMY_COLLISION_INSET - radius:
+        return False
+    if x >= player.x + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET + radius:
+        return False
+    if y <= player.y + ENEMY_COLLISION_INSET - radius:
+        return False
+    if y >= player.y + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET + radius:
+        return False
+    return True
+
+
+def _projectile_splash_damage(projectile: EnemyProjectile, player: PlayerState) -> float:
+    if projectile.splash_radius <= 0:
+        return 0.0
+    return _explosive_splash_damage(
+        player,
+        impact_x=int(projectile.x),
+        impact_y=int(projectile.y),
+        max_damage=projectile.damage,
+        radius=projectile.splash_radius,
+    )
 
 
 def _player_at_point(

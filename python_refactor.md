@@ -140,6 +140,7 @@ python/
 - Combat loop is now bi-directional: enemies can damage the player, and runtime telemetry tracks player health plus enemy shot/hit totals.
 - Added weapon-specific enemy pellet volleys for shotgun-style enemies and gated enemy fire once the player is dead.
 - Added explosive near-miss splash damage for grenade-class enemy attacks and low tick-damage behavior for flamethrower attacks.
+- Added enemy projectile entities with travel-time updates, wall/splash resolution, and active projectile tracking in gameplay runtime telemetry.
 - Headless runtime now supports scripted input event replay via `--input-script` for Phase 4 validation loops.
 - Added terminal keyboard backend selection (`--platform terminal`) with action mapping and synthetic key-release handling.
 - Terminal backend now translates player1 `options.cfg` scan-code keybinds into terminal actions where possible.

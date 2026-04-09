@@ -30,6 +30,7 @@ Implemented:
   - Weapon-slot damage table for first pass damage application.
   - Added weapon-specific enemy pellet volleys (shotgun/auto-shotgun spread) for more legacy-like fire behavior.
   - Added explosive near-miss splash damage for grenade-class enemy shots and low tick-damage handling for flamethrower shots.
+  - Added enemy projectile entities with travel-time simulation, wall impact handling, splash falloff, and per-frame projectile updates.
   - Enemy hit flash and alive/dead state bookkeeping.
   - First-pass enemy behavior loop with line-of-sight aiming, 9-degree rotate steps, movement/collision, and reload-gated enemy shooting.
   - Enemy-to-player shot resolution and player damage/health tracking for bi-directional combat.
@@ -39,6 +40,7 @@ Implemented:
   - Player state is updated each simulation tick from held actions.
   - Camera follows the player and aiming direction.
   - Runtime metadata now includes player position, angle, weapon slot, reload/fire state, shots fired, hits, and enemy counters.
+  - Enemy projectile entities are now updated each tick and rendered as world markers.
 
 Visual baseline updates:
 
@@ -63,4 +65,5 @@ Verification:
 Remaining work for Phase 4:
 
 - Extend combat behavior with richer projectile/explosive weapon parity, crate interactions, and enemy behavior tuning.
+- Extend combat behavior with richer projectile/explosive parity details (special cases like mine/C4 behavior), crate interactions, and enemy behavior tuning.
 - Continue parity tuning for collision feel and camera response.

@@ -27,6 +27,7 @@ from ultimatetk.systems.combat import (
     resolve_shot_against_enemies,
     spawn_enemies_for_level,
     update_enemy_behavior,
+    update_enemy_projectiles,
 )
 from ultimatetk.systems.player_control import PlayerState, ShotEvent
 
@@ -197,6 +198,98 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.hits_taken_total, 1)
         self.assertGreater(player.hit_flash_ticks, 0)
 
+    def test_enemy_behavior_spawns_projectiles_when_buffer_provided(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+
+        self.assertEqual(report.shots_fired, 1)
+        self.assertEqual(report.projectiles_spawned, 1)
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertEqual(len(projectiles), 1)
+
+    def test_enemy_projectile_travel_time_hits_player(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(report.projectiles_spawned, 1)
+
+        total_hits = 0
+        total_damage = 0.0
+        for _ in range(10):
+            projectile_report = update_enemy_projectiles(level, projectiles, player)
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            if not projectiles:
+                break
+
+        self.assertEqual(total_hits, 1)
+        self.assertEqual(total_damage, 5.0)
+        self.assertEqual(player.health, 95.0)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_stops_at_wall_before_player(self) -> None:
+        level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=80.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(report.projectiles_spawned, 1)
+
+        total_hits = 0
+        total_damage = 0.0
+        for _ in range(8):
+            projectile_report = update_enemy_projectiles(blocked_level, projectiles, player)
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            if not projectiles:
+                break
+
+        self.assertEqual(total_hits, 0)
+        self.assertEqual(total_damage, 0.0)
+        self.assertEqual(player.health, 100.0)
+        self.assertEqual(len(projectiles), 0)
+
     def test_enemy_shotgun_attack_can_hit_with_multiple_pellets(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)
@@ -217,6 +310,42 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.shots_fired, 1)
         self.assertEqual(report.hits_on_player, 6)
         self.assertEqual(report.damage_to_player, 18.0)
+        self.assertEqual(player.health, 82.0)
+
+    def test_enemy_shotgun_projectiles_hit_with_travel_time(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=1,
+            x=40.0,
+            y=80.0,
+            health=28.0,
+            max_health=28.0,
+            angle=180,
+            target_angle=180,
+            load_count=17,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+
+        self.assertEqual(report.shots_fired, 1)
+        self.assertEqual(report.projectiles_spawned, 6)
+        self.assertEqual(report.hits_on_player, 0)
+        self.assertEqual(report.damage_to_player, 0.0)
+
+        total_hits = 0
+        total_damage = 0.0
+        for _ in range(8):
+            projectile_report = update_enemy_projectiles(level, projectiles, player)
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            if not projectiles:
+                break
+
+        self.assertEqual(total_hits, 6)
+        self.assertEqual(total_damage, 18.0)
         self.assertEqual(player.health, 82.0)
 
     def test_dead_player_no_longer_receives_enemy_fire(self) -> None:
@@ -247,7 +376,7 @@ class CombatSystemTests(unittest.TestCase):
 
     def test_grenade_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
-        player = PlayerState(x=64.0, y=40.0)
+        player = PlayerState(x=44.0, y=40.0)
         enemy = EnemyState(
             enemy_id=0,
             type_index=4,
@@ -271,6 +400,40 @@ class CombatSystemTests(unittest.TestCase):
         self.assertLess(attack.total_damage, 20.0)
         self.assertLess(player.health, 100.0)
 
+    def test_grenade_projectile_near_miss_applies_splash_damage(self) -> None:
+        level = _build_level(height=12)
+        blocked_level = _build_level(height=12, walls={(2, 3)})
+        player = PlayerState(x=44.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=4,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=30,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(report.projectiles_spawned, 1)
+
+        total_damage = 0.0
+        total_hits = 0
+        for _ in range(10):
+            projectile_report = update_enemy_projectiles(blocked_level, projectiles, player)
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            if not projectiles:
+                break
+
+        self.assertEqual(total_hits, 1)
+        self.assertGreater(total_damage, 0.0)
+        self.assertLess(total_damage, 20.0)
+        self.assertLess(player.health, 100.0)
+
     def test_enemy_flamer_deals_low_tick_damage(self) -> None:
         level = _build_level(height=12)
         player = PlayerState(x=40.0, y=40.0)
@@ -291,6 +454,38 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(report.shots_fired, 1)
         self.assertEqual(report.hits_on_player, 1)
         self.assertAlmostEqual(report.damage_to_player, 0.4)
+        self.assertAlmostEqual(player.health, 99.6)
+
+    def test_enemy_flamer_projectile_deals_low_tick_damage(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=7,
+            x=40.0,
+            y=80.0,
+            health=100.0,
+            max_health=100.0,
+            angle=180,
+            target_angle=180,
+            load_count=1,
+        )
+        projectiles = []
+
+        report = update_enemy_behavior(level, [enemy], player, enemy_projectiles=projectiles)
+        self.assertEqual(report.projectiles_spawned, 1)
+
+        total_damage = 0.0
+        total_hits = 0
+        for _ in range(30):
+            projectile_report = update_enemy_projectiles(level, projectiles, player)
+            total_hits += projectile_report.hits_on_player
+            total_damage += projectile_report.damage_to_player
+            if total_hits > 0:
+                break
+
+        self.assertEqual(total_hits, 1)
+        self.assertAlmostEqual(total_damage, 0.4)
         self.assertAlmostEqual(player.health, 99.6)
 
     def test_enemy_behavior_does_not_shoot_through_walls(self) -> None:

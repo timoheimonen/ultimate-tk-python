@@ -19,12 +19,14 @@ from ultimatetk.rendering import (
     frame_digest,
 )
 from ultimatetk.systems.combat import (
+    EnemyProjectile,
     EnemyState,
     advance_enemy_effects,
     alive_enemy_count,
     resolve_shot_against_enemies,
     spawn_enemies_for_level,
     update_enemy_behavior,
+    update_enemy_projectiles,
 )
 from ultimatetk.systems.player_control import (
     PLAYER_CENTER_OFFSET,
@@ -39,6 +41,9 @@ from ultimatetk.systems.player_control import (
 
 class GameplayScene(BaseScene):
     name = "gameplay"
+
+    _PROJECTILE_MARKER_PIXELS = bytes((252, 252, 252, 252))
+    _PROJECTILE_MARKER_SIZE = 2
 
     def __init__(self) -> None:
         self._renderer: SoftwareRenderer | None = None
@@ -62,6 +67,7 @@ class GameplayScene(BaseScene):
         self._rambo_frames: tuple[bytes, ...] = ()
         self._enemy_frames: dict[int, tuple[bytes, ...]] = {}
         self._enemies: list[EnemyState] = []
+        self._enemy_projectiles: list[EnemyProjectile] = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._enemy_shots_fired = 0
@@ -91,6 +97,7 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_shots_fired_total = 0
         context.runtime.enemy_hits_total = 0
         context.runtime.enemy_damage_to_player_total = 0.0
+        context.runtime.enemy_projectiles_active = 0
 
         self._held_actions.clear()
         self._cycle_weapon_requested = False
@@ -101,6 +108,7 @@ class GameplayScene(BaseScene):
         self._rambo_frames = ()
         self._enemy_frames = {}
         self._enemies = []
+        self._enemy_projectiles = []
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
         self._enemy_shots_fired = 0
@@ -193,6 +201,7 @@ class GameplayScene(BaseScene):
         self._cycle_weapon_requested = False
         self._pending_weapon_slot = None
         self._enemies.clear()
+        self._enemy_projectiles.clear()
 
     def handle_events(self, context: GameContext, events: Sequence[AppEvent]) -> None:
         del context
@@ -233,10 +242,16 @@ class GameplayScene(BaseScene):
             self._level,
             self._enemies,
             self._player,
+            enemy_projectiles=self._enemy_projectiles,
+        )
+        projectile_report = update_enemy_projectiles(
+            self._level,
+            self._enemy_projectiles,
+            self._player,
         )
         self._enemy_shots_fired += report.shots_fired
-        self._enemy_hits_on_player += report.hits_on_player
-        self._enemy_damage_to_player += report.damage_to_player
+        self._enemy_hits_on_player += report.hits_on_player + projectile_report.hits_on_player
+        self._enemy_damage_to_player += report.damage_to_player + projectile_report.damage_to_player
         advance_enemy_effects(self._enemies)
 
         self._cycle_weapon_requested = False
@@ -294,6 +309,20 @@ class GameplayScene(BaseScene):
                     pixels=frames[angle_index],
                     anchor_x=PLAYER_CENTER_OFFSET,
                     anchor_y=PLAYER_CENTER_OFFSET,
+                    translucent=False,
+                ),
+            )
+
+        for projectile in self._enemy_projectiles:
+            sprites.append(
+                WorldSprite(
+                    world_x=int(projectile.x),
+                    world_y=int(projectile.y),
+                    width=self._PROJECTILE_MARKER_SIZE,
+                    height=self._PROJECTILE_MARKER_SIZE,
+                    pixels=self._PROJECTILE_MARKER_PIXELS,
+                    anchor_x=self._PROJECTILE_MARKER_SIZE // 2,
+                    anchor_y=self._PROJECTILE_MARKER_SIZE // 2,
                     translucent=False,
                 ),
             )
@@ -437,6 +466,7 @@ class GameplayScene(BaseScene):
             context.runtime.enemy_shots_fired_total = 0
             context.runtime.enemy_hits_total = 0
             context.runtime.enemy_damage_to_player_total = 0.0
+            context.runtime.enemy_projectiles_active = 0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
@@ -457,6 +487,7 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_shots_fired_total = self._enemy_shots_fired
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
+        context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
 
 
 def _extract_actor_frames(image: EfpImage, *, animation_row: int) -> tuple[bytes, ...]:
