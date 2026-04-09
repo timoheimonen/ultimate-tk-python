@@ -748,14 +748,24 @@ def update_enemy_behavior(
                 weapon_slot=weapon_slot,
                 distance_to_player=distance_to_player,
             ):
-                _move_enemy_with_collision(
+                strafe_angle = _enemy_strafe_angle(enemy)
+                moved = _move_enemy_with_collision(
                     enemy,
                     level,
-                    angle=_enemy_strafe_angle(enemy),
+                    angle=strafe_angle,
                     speed=enemy_speed_for_type(enemy.type_index) * 0.7,
                     enemies=enemies,
                     player=player,
                 )
+                if not moved:
+                    _move_enemy_with_collision(
+                        enemy,
+                        level,
+                        angle=(strafe_angle + 180) % 360,
+                        speed=enemy_speed_for_type(enemy.type_index) * 0.7,
+                        enemies=enemies,
+                        player=player,
+                    )
 
             if _can_enemy_fire(enemy, weapon_slot=weapon_slot, distance_to_player=distance_to_player):
                 shots_fired += 1

@@ -1316,6 +1316,37 @@ class CombatSystemTests(unittest.TestCase):
         self.assertIn(second_block_angle, ((enemy.angle + 90) % 360, (enemy.angle + 270) % 360))
         self.assertNotEqual(second_block_angle, first_block[0])
 
+    def test_enemy_strafe_retries_opposite_direction_when_primary_lane_is_blocked(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=2,
+            x=40.0,
+            y=80.0,
+            health=40.0,
+            max_health=40.0,
+            angle=180,
+            target_angle=180,
+            load_count=1,
+            shoot_count=0,
+        )
+
+        with patch.object(combat_module, "_enemy_strafe_angle", return_value=90), patch.object(
+            combat_module,
+            "_move_enemy_with_collision",
+            side_effect=(False, True),
+        ) as move_enemy:
+            report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(move_enemy.call_count, 2)
+
+        first_call = move_enemy.call_args_list[0]
+        second_call = move_enemy.call_args_list[1]
+        self.assertEqual(first_call.kwargs["angle"], 90)
+        self.assertEqual(second_call.kwargs["angle"], 270)
+
     def test_grenade_near_miss_applies_splash_damage(self) -> None:
         level = _build_level(height=12, walls={(2, 3)})
         player = PlayerState(x=20.0, y=64.0)
@@ -1585,6 +1616,65 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreaterEqual(open_hits, 1)
         self.assertGreater(open_damage, 0.0)
         self.assertLess(cover_damage, open_damage)
+        self.assertGreater(player_cover.health, player_open.health)
+
+    def test_grenade_projectile_expiry_splash_is_reduced_by_crate_cover(self) -> None:
+        level = _build_level(height=12)
+        player_open = PlayerState(x=40.0, y=68.0)
+        player_cover = PlayerState(x=40.0, y=68.0)
+        cover_crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=43.0,
+            y=73.0,
+            health=12.0,
+            max_health=12.0,
+        )
+
+        open_projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=1,
+                radius=0,
+                splash_radius=48,
+            ),
+        ]
+        cover_projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=0,
+                weapon_slot=5,
+                x=54.0,
+                y=84.0,
+                vx=0.0,
+                vy=0.0,
+                speed=0.0,
+                damage=20.0,
+                remaining_ticks=1,
+                radius=0,
+                splash_radius=48,
+            ),
+        ]
+
+        open_report = update_enemy_projectiles(level, open_projectiles, player_open)
+        cover_report = update_enemy_projectiles(
+            level,
+            cover_projectiles,
+            player_cover,
+            crates=[cover_crate],
+        )
+
+        self.assertEqual(open_report.hits_on_player, 1)
+        self.assertEqual(cover_report.hits_on_player, 1)
+        self.assertGreater(open_report.damage_to_player, 0.0)
+        self.assertLess(cover_report.damage_to_player, open_report.damage_to_player)
         self.assertGreater(player_cover.health, player_open.health)
 
     def test_grenade_projectile_wall_impact_splash_can_damage_nearby_crate(self) -> None:

@@ -57,6 +57,7 @@ Implemented:
   - Added legacy-style patrol idle/burst cadence for no-LOS enemies: patrol now idles until low-probability start rolls, then moves in finite bursts (matching old `walk_cnt` behavior) instead of continuously roaming.
   - Added patrol turn-lock parity while idle: random patrol retarget rolls now apply only once enemies finish rotating to their current target heading, preventing mid-rotation retarget churn.
   - Added additional enemy combat tuning while tracking player: in-range strafe repositioning during reload windows and point-blank explosive self-blast safety gating.
+  - Retuned enemy strafe edge behavior so blocked primary strafe lanes now retry the opposite strafe direction in the same tick, reducing reload-phase side-wall stalls.
   - Added richer explosive parity for enemy projectiles: blast impacts now apply wall-aware splash damage against nearby crates (not only direct crate collisions).
   - Added crate-aware enemy cover/impact handling: enemy LOS checks now treat live crates as blockers, and non-projectile enemy hitscan traces impact/damage crates instead of piercing through them.
   - Refined mine parity with configurable proximity trigger radius and wall-aware line-of-sight gating for trigger checks.
@@ -165,6 +166,7 @@ Verification:
   - Added mine proximity-trigger edge-contact coverage for enemy collision-bounds trigger checks.
   - Added projectile splash edge-contact coverage for player collision-bounds fallback handling.
   - Added enemy explosive crate-cover splash unit coverage for direct near-miss and projectile wall-impact cases.
+  - Added enemy strafe blocked-lane opposite-retry unit coverage and projectile-expiry splash crate-cover unit coverage.
   - Added player C4/mine tight-corridor crate-cover splash unit coverage.
   - Added mine trigger partial-corner near-versus-far unit coverage.
   - Added scene-flow coverage for shop cell state classification and state-driven color mapping.
