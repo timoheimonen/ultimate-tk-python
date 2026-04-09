@@ -1049,6 +1049,15 @@ def update_enemy_projectiles(
         if advance.crate_destroyed:
             crates_destroyed += 1
 
+        if player.dead:
+            projectiles.clear()
+            return EnemyProjectileReport(
+                hits_on_player=hits_on_player,
+                damage_to_player=damage_to_player,
+                crates_hit=crates_hit,
+                crates_destroyed=crates_destroyed,
+            )
+
         if advance.keep_alive:
             active.append(projectile)
 

@@ -1021,8 +1021,8 @@ class CombatSystemTests(unittest.TestCase):
             crate_id=0,
             type1=0,
             type2=0,
-            x=48.0,
-            y=56.0,
+            x=96.0,
+            y=96.0,
             health=12.0,
             max_health=12.0,
         )
@@ -1197,8 +1197,8 @@ class CombatSystemTests(unittest.TestCase):
             crate_id=0,
             type1=0,
             type2=0,
-            x=48.0,
-            y=56.0,
+            x=96.0,
+            y=96.0,
             health=12.0,
             max_health=12.0,
         )
@@ -1240,6 +1240,114 @@ class CombatSystemTests(unittest.TestCase):
         self.assertEqual(player.hits_taken_total, 0)
         self.assertEqual(player.health, 0.0)
         self.assertEqual(crate.health, crate.max_health)
+        self.assertTrue(crate.alive)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_player_death_stops_followup_projectile_crate_side_effects(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=4.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=96.0,
+            y=96.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=1,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+            EnemyProjectile(
+                owner_enemy_id=2,
+                weapon_slot=1,
+                x=102.0,
+                y=94.0,
+                vx=0.0,
+                vy=1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, crates=[crate])
+
+        self.assertTrue(player.dead)
+        self.assertEqual(player.health, 0.0)
+        self.assertEqual(player.hits_taken_total, 1)
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertEqual(report.damage_to_player, 5.0)
+        self.assertEqual(report.crates_hit, 0)
+        self.assertEqual(report.crates_destroyed, 0)
+        self.assertEqual(crate.health, crate.max_health)
+        self.assertTrue(crate.alive)
+        self.assertEqual(len(projectiles), 0)
+
+    def test_enemy_projectile_prelethal_crate_side_effects_are_preserved_before_death_short_circuit(self) -> None:
+        level = _build_level(height=12)
+        player = PlayerState(x=40.0, y=40.0, health=4.0)
+        crate = CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=96.0,
+            y=96.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        projectiles = [
+            EnemyProjectile(
+                owner_enemy_id=2,
+                weapon_slot=1,
+                x=102.0,
+                y=94.0,
+                vx=0.0,
+                vy=1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+            EnemyProjectile(
+                owner_enemy_id=1,
+                weapon_slot=1,
+                x=54.0,
+                y=66.0,
+                vx=0.0,
+                vy=-1.0,
+                speed=8.0,
+                damage=5.0,
+                remaining_ticks=10,
+                radius=1,
+                splash_radius=0,
+            ),
+        ]
+
+        report = update_enemy_projectiles(level, projectiles, player, crates=[crate])
+
+        self.assertTrue(player.dead)
+        self.assertEqual(player.health, 0.0)
+        self.assertEqual(player.hits_taken_total, 1)
+        self.assertEqual(report.hits_on_player, 1)
+        self.assertEqual(report.damage_to_player, 5.0)
+        self.assertEqual(report.crates_hit, 1)
+        self.assertEqual(report.crates_destroyed, 0)
+        self.assertEqual(crate.health, 7.0)
         self.assertTrue(crate.alive)
         self.assertEqual(len(projectiles), 0)
 

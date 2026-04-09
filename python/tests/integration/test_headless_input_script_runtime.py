@@ -1651,8 +1651,8 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             crate_id=0,
             type1=0,
             type2=0,
-            x=48.0,
-            y=56.0,
+            x=96.0,
+            y=96.0,
             health=12.0,
             max_health=12.0,
         )
@@ -1905,6 +1905,133 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             app.context.runtime.player_explosive_detonations_total,
             app.context.runtime.enemy_hits_total,
             app.context.runtime.enemy_damage_to_player_total,
+            app.context.runtime.game_over_active,
+        )
+
+    def _run_scripted_player_death_halts_followup_projectile_side_effects_scenario(
+        self,
+        *,
+        lethal_first: bool = True,
+    ) -> tuple[int, float, float, int, int, bool]:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=True,
+            max_seconds=0.2,
+            input_script="8:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+
+        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        blocks = list(level.blocks)
+
+        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
+            if tile_x < 0 or tile_x >= level.level_x_size:
+                return
+            if tile_y < 0 or tile_y >= level.level_y_size:
+                return
+            index = tile_y * level.level_x_size + tile_x
+            old = blocks[index]
+            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
+        for tile_y in range(0, 12):
+            for tile_x in range(0, 12):
+                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+
+        gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
+
+        enemies.clear()
+        crates.clear()
+        enemy_projectiles.clear()
+        player_explosives.clear()
+
+        crate = combat.CrateState(
+            crate_id=0,
+            type1=0,
+            type2=0,
+            x=96.0,
+            y=96.0,
+            health=12.0,
+            max_health=12.0,
+        )
+        crates.append(crate)
+        lethal_projectile = combat.EnemyProjectile(
+            owner_enemy_id=1,
+            weapon_slot=1,
+            x=54.0,
+            y=66.0,
+            vx=0.0,
+            vy=-1.0,
+            speed=8.0,
+            damage=5.0,
+            remaining_ticks=10,
+            radius=1,
+            splash_radius=0,
+        )
+        crate_projectile = combat.EnemyProjectile(
+            owner_enemy_id=2,
+            weapon_slot=1,
+            x=102.0,
+            y=94.0,
+            vx=0.0,
+            vy=1.0,
+            speed=8.0,
+            damage=5.0,
+            remaining_ticks=10,
+            radius=1,
+            splash_radius=0,
+        )
+        if lethal_first:
+            enemy_projectiles.append(lethal_projectile)
+            enemy_projectiles.append(crate_projectile)
+        else:
+            enemy_projectiles.append(crate_projectile)
+            enemy_projectiles.append(lethal_projectile)
+
+        player.x = 40.0
+        player.y = 40.0
+        player.health = 4.0
+        player.dead = False
+        player.hits_taken_total = 0
+        player.damage_taken_total = 0.0
+
+        with patch.object(
+            gameplay_scene_module,
+            "update_enemy_behavior",
+            return_value=combat.EnemyBehaviorReport(),
+        ):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        return (
+            app.context.runtime.enemy_hits_total,
+            app.context.runtime.enemy_damage_to_player_total,
+            crate.health,
+            app.context.runtime.enemy_projectiles_active,
+            app.context.runtime.player_hits_taken_total,
             app.context.runtime.game_over_active,
         )
 
@@ -3230,6 +3357,30 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(detonations, 0)
         self.assertEqual(enemy_hits, 0)
         self.assertEqual(enemy_damage, 0.0)
+        self.assertTrue(game_over_active)
+
+    def test_scripted_player_death_halts_followup_projectile_crate_side_effects(self) -> None:
+        enemy_hits, enemy_damage, crate_health, active_projectiles, player_hits_taken, game_over_active = (
+            self._run_scripted_player_death_halts_followup_projectile_side_effects_scenario()
+        )
+
+        self.assertEqual(enemy_hits, 1)
+        self.assertEqual(enemy_damage, 5.0)
+        self.assertEqual(crate_health, 12.0)
+        self.assertEqual(active_projectiles, 0)
+        self.assertEqual(player_hits_taken, 1)
+        self.assertTrue(game_over_active)
+
+    def test_scripted_prelethal_projectile_side_effects_remain_before_death_short_circuit(self) -> None:
+        enemy_hits, enemy_damage, crate_health, active_projectiles, player_hits_taken, game_over_active = (
+            self._run_scripted_player_death_halts_followup_projectile_side_effects_scenario(lethal_first=False)
+        )
+
+        self.assertEqual(enemy_hits, 1)
+        self.assertEqual(enemy_damage, 5.0)
+        self.assertEqual(crate_health, 7.0)
+        self.assertEqual(active_projectiles, 0)
+        self.assertEqual(player_hits_taken, 1)
         self.assertTrue(game_over_active)
 
     def test_scripted_multi_enemy_strafe_switches_are_staggered_during_reload(self) -> None:

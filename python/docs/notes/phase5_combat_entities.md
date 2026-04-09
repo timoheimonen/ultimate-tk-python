@@ -127,6 +127,20 @@ Current baseline already implemented:
   - Verified with the full phase command set:
     - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Continued Workstream 5 with in-update death ordering hardening in `python/src/ultimatetk/systems/combat.py`:
+  - `update_enemy_projectiles` now short-circuits immediately when a projectile hit kills the player, clearing any remaining in-flight projectiles before follow-up entries can apply late crate/player side effects in the same update pass.
+  - Added unit lock coverage `test_enemy_projectile_player_death_stops_followup_projectile_crate_side_effects` in `python/tests/unit/test_combat.py`.
+  - Added scripted headless runtime lock coverage `test_scripted_player_death_halts_followup_projectile_crate_side_effects` in `python/tests/integration/test_headless_input_script_runtime.py`.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Continued Workstream 5 by locking pre-lethal ordering preservation for the same in-update boundary:
+  - Added unit lock coverage `test_enemy_projectile_prelethal_crate_side_effects_are_preserved_before_death_short_circuit` in `python/tests/unit/test_combat.py`.
+  - Extended scripted runtime lock coverage with `test_scripted_prelethal_projectile_side_effects_remain_before_death_short_circuit` in `python/tests/integration/test_headless_input_script_runtime.py`.
+  - These tests ensure the death short-circuit blocks only post-death follow-up side effects, while preserving deterministic side effects from projectiles resolved before the lethal hit in the same pass.
+  - Verified with the full phase command set:
+    - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
 
 ## Verification plan
 
