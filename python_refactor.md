@@ -1,53 +1,52 @@
 # Python Refactor Plan (No Multiplayer)
 
 ## Objective
-Port The Ultimate TK from DOS C/C++ to Python while preserving gameplay feel and data compatibility, with multiplayer/IPX removed from scope and all runtime data packaged inside `python/`.
+Port The Ultimate TK from DOS C/C++ to Python while preserving gameplay feel and data compatibility, with multiplayer/IPX removed from scope and all runtime data packaged in root-native runtime folders.
 
 ## Scope
 - In scope:
   - Single-player gameplay loop
   - Existing level/content formats (`.LEV`, `.EFP`, `.FNT`, `palette.tab`, `options.cfg`)
   - Menus, options, shop, combat, enemies, effects, rendering
-  - Self-contained Python runtime and assets under `python/` only
+  - Self-contained Python runtime and assets under root-local runtime paths (`src/`, `game_data/`, `runs/`)
 - Out of scope:
   - IPX networking, lobby/join flow, chat, server/client sync
   - Any code under legacy network transport modules
 
-## Python Folder Layout
-The following structure has been created under `python/`:
+## Project Folder Layout
+The project now uses a root-native layout:
 
 ```text
-python/
-  game_data/            # runtime assets bundled for Python version
-    efps/               # migrated image assets
-    fnts/               # migrated font assets
-    levs/               # migrated level/episode assets
-    music/              # migrated module music assets
-    wavs/               # migrated sound effects
-    palette.tab         # migrated lighting/palette tables
-    options.cfg         # migrated/default runtime options (or generated on first run)
-  src/
-    ultimatetk/
-      core/         # bootstrap, timing, constants, shared utilities
-      formats/      # binary format readers/writers (.lev, .efp, .fnt, cfg, palette)
-      assets/       # asset registry and runtime resource management
-      world/        # map state, level state, spatial helpers
-      entities/     # player, enemy, bullet, crate, effect models/behavior
-      systems/      # game loop systems: input, movement, combat, progression
-      rendering/    # software-style render pipeline and lighting compositing
-      ui/           # menu flow, HUD, shop, option screens
-      audio/        # music/sfx playback facade and mixer behavior
-      debug/        # profiling hooks, frame metrics, capture tools
-  tests/
-    unit/           # isolated parser and logic tests
-    integration/    # subsystem interaction tests
-    regression/     # golden checks for behavior/visual parity
-  tools/            # one-off converters, inspectors, validation scripts
-  docs/
-    notes/          # implementation notes and parity findings
-  runs/
-    screenshots/    # captured outputs for visual comparison
-    profiles/       # perf traces and timing reports
+game_data/            # runtime assets bundled for Python version
+  efps/               # migrated image assets
+  fnts/               # migrated font assets
+  levs/               # migrated level/episode assets
+  music/              # migrated module music assets
+  wavs/               # migrated sound effects
+  palette.tab         # migrated lighting/palette tables
+  options.cfg         # migrated/default runtime options (or generated on first run)
+src/
+  ultimatetk/
+    core/         # bootstrap, timing, constants, shared utilities
+    formats/      # binary format readers/writers (.lev, .efp, .fnt, cfg, palette)
+    assets/       # asset registry and runtime resource management
+    world/        # map state, level state, spatial helpers
+    entities/     # player, enemy, bullet, crate, effect models/behavior
+    systems/      # game loop systems: input, movement, combat, progression
+    rendering/    # software-style render pipeline and lighting compositing
+    ui/           # menu flow, HUD, shop, option screens
+    audio/        # music/sfx playback facade and mixer behavior
+    debug/        # profiling hooks, frame metrics, capture tools
+tests/
+  unit/           # isolated parser and logic tests
+  integration/    # subsystem interaction tests
+  regression/     # golden checks for behavior/visual parity
+tools/            # one-off converters, inspectors, validation scripts
+docs/
+  notes/          # implementation notes and parity findings
+runs/
+  screenshots/    # captured outputs for visual comparison
+  profiles/       # perf traces and timing reports
 ```
 
 ## Legacy-to-Python Mapping
@@ -74,9 +73,9 @@ python/
 
 ## Asset Packaging Requirement
 - Final Python game must not depend on `EFPS/`, `FNTS/`, `LEVS/`, `MUSIC/`, `WAVS/`, or other data from repository root.
-- All required runtime data must exist under `python/game_data/`.
+- All required runtime data must exist under `game_data/`.
 - End state: original legacy file structure is not needed anymore for the Python build.
-- Asset path resolution in Python code must be relative to `python/`.
+- Asset path resolution in Python code must be relative to repository root runtime paths.
 - Keep a migration checklist/manifest so required files are verifiable before release.
 
 ## Milestones
@@ -97,10 +96,10 @@ python/
 8. Regression suite (completed)
    - Golden snapshots and behavior checks from known scenarios
 9. Data colocation and release hardening (completed)
-   - Migrate all required runtime assets into `python/game_data/`
-   - Ensure all graphical and sound assets are readable/migrated from original legacy files into `python/game_data/`
+   - Migrate all required runtime assets into `game_data/`
+   - Ensure all graphical and sound assets are readable/migrated from original legacy files into `game_data/`
    - Verify the game launches and runs without reading root-level legacy data paths
-10. Root flatten and legacy cleanup (planned)
+10. Root flatten and legacy cleanup (completed)
    - Make legacy-root compare checks optional (off by default)
    - Move Python project layout from `python/` to repository root
    - Remove original root-level legacy game-data directories after flatten verification
@@ -115,7 +114,7 @@ python/
 - Timing parity:
   - Keep fixed-step target equivalent to original 40 FPS behavior
 - Isolation parity:
-  - Validate startup/gameplay works when only `python/` data paths are available
+  - Validate startup/gameplay works when only root-local runtime data paths are available
 
 ## Risks and Watch Items
 - Palette/shadow/light math must match legacy table behavior
@@ -125,7 +124,7 @@ python/
 
 ## Definition of Done (Single-Player)
 - Player can launch, choose episode, play through levels, fight enemies, use shop, and complete progression without network code.
-- All runtime content required by Python build exists inside `python/`.
+- All runtime content required by Python build exists in root-local runtime folders (`src/`, `game_data/`, `runs/`).
 - Python build runs correctly without reading root-level DOS asset directories.
 - Gameplay and visuals are close enough to legacy behavior for practical parity.
 
@@ -244,3 +243,17 @@ python/
 - Added post-Phase-9 release runbook automation: `python/tools/release_verification.py` now runs the manifest + unit + integration release bundle from one command, and `python/docs/release_verification.md` documents usage plus artifact hygiene (`python3 python/tools/release_verification.py` and `python3 python/tools/release_verification.py --skip-integration` validated successfully).
 - Added Phase 10 execution checklist plan at `python/docs/notes/phase10_root_flatten_cleanup.md` for optional legacy-compare mode, root flattening, and legacy data cleanup sequencing.
 - Started Phase 10 Workstream 2 conflict-prep move: archived original DOS-era payload (`SRC`, `BAK`, root asset directories, binaries/docs/config files) under `ARCHIVE/` to remove root-level naming collisions ahead of flattening, with unit matrix verification (`181 passed`).
+- Completed Phase 10 Workstream 1 (optional legacy-compare mode): manifest generation and release verification now run in default python-only mode without legacy root directories, while strict parity checks remain available via explicit legacy-root flags/environment (`python3 python/tools/release_verification.py --skip-integration` passed; strict mode `python3 python/tools/release_verification.py --legacy-compare-root ARCHIVE --skip-unit` passed).
+- Completed Phase 10 Workstream 3 (root flatten): moved project runtime/docs/tooling from `python/` to repository root (`src/`, `tests/`, `tools/`, `docs/`, `game_data/`, `runs/`, `pyproject.toml`, root `.gitignore`), removed the wrapper directory, and verified root-layout execution (`python3 tools/release_verification.py` -> `181 passed`, plus integration matrix `47 passed, 1 skipped` default mode).
+- Continued Phase 10 Workstream 4 cleanup: root legacy asset/source trees remain archived under `ARCHIVE/` and strict parity mode remains available via `python3 tools/release_verification.py --legacy-compare-root ARCHIVE --skip-unit` (`48 passed`).
+- Historical references above that use `python/...` paths reflect pre-flatten commit history and are kept for traceability.
+- Completed Phase 10 closeout: root-native project layout is finalized, legacy payload is archived under `ARCHIVE/`, default release verification is legacy-independent, strict legacy parity checks remain opt-in, and `docs/notes/phase10_root_flatten_cleanup.md` now records full completion.
+- Started and completed Phase 11 Workstream 1 (optional pygame runtime selection/lazy import guardrails): added `--platform pygame` wiring with default headless unchanged, added lazy pygame import in a dedicated backend (`src/ultimatetk/core/platform_pygame.py`) with clear missing-dependency install hint, and verified with focused platform/CLI/pygame unit tests (`10 passed`) plus headless and pygame-startup smoke checks.
+- Completed Phase 11 Workstream 2 (frame handoff for visual backend presentation): runtime state now publishes latest gameplay indexed frame payload and palette bytes (`last_render_pixels`, `last_render_palette`) alongside existing digest/size telemetry, with scene-flow assertions and focused verification (`python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `48 passed`).
+- Completed Phase 11 Workstream 3 (pygame backend implementation): replaced the initial backend stub with startup/poll/present/shutdown flow, added keyboard/action parity mapping and direct weapon-slot handling, and added mocked-pygame unit coverage for event mapping plus frame presentation (`python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `48 passed`).
+- Completed Phase 11 Workstream 4 (scaling policy and CLI controls): added `--window-scale` CLI support with positive-integer validation, wired `pygame_window_scale` through runtime config into backend selection, added non-positive scale guard in app creation, and extended CLI/platform unit coverage (`python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `52 passed`).
+- Completed Phase 11 Workstream 5 (packaging/tests/docs): added optional `pygame` dependency extra in `pyproject.toml`, updated `README.md` with pygame launch/install guidance and scale examples, and re-verified non-pygame release flow with `python3 tools/release_verification.py` (`181` unit passed, integration `47 passed, 1 skipped`).
+- Completed Phase 11 closeout validation: expanded pygame backend unit coverage for default/custom window sizing, quit-event mapping, and duplicate-keydown suppression, then re-ran focused phase-11 unit matrix (`python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `56 passed`) and marked phase checklist completion in `docs/notes/phase11_pygame_runtime_frontend.md`.
+- Completed post-closeout live pygame smoke verification after installing local dependency: `PYTHONPATH=src python3 -m ultimatetk --platform pygame --autostart-gameplay --window-scale 2 --max-seconds 1` successfully exercised boot -> menu -> gameplay -> clean shutdown.
+- Added post-closeout pygame control discoverability follow-up: expanded pygame weapon-selection input mappings with numpad (`KP0..KP9`, `KP-`, `KP+`) and `F1..F12`, added mouse-wheel and `PageUp/PageDown` cycling support, and extended focused unit verification (`python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `59 passed`).
+- Added post-closeout Phase 11 UI-visibility follow-up: implemented software-rendered main-menu and progression scene overlays so pygame no longer shows black screens in those states, added scene-flow render payload coverage, and re-verified (`python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `61 passed`; `python3 tools/release_verification.py` -> `183` unit passed, integration `47 passed, 1 skipped`).
