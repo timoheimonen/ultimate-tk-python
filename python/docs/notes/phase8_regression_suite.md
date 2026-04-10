@@ -66,10 +66,22 @@ Current baseline already implemented:
 - Camera/movement micro-feel checks keep monotonic and minimum-delta assertions (no broad tolerance widening).
 - Render/parser smoke checks remain deterministic pass/fail gates in baseline matrix until dedicated golden artifact policy lands.
 
+## Workstream 2 behavior-golden slice 1
+
+- Added an explicit runtime behavior digest assertion to the scripted manual progression-loop integration path:
+  - `test_scripted_manual_progression_loop_reaches_run_complete_and_returns_to_menu`
+- The behavior digest now locks a deterministic tuple of scene/session/progression/economy/runtime counters at scenario completion.
+- Locked fields include:
+  - scene + session endpoint (`main_menu`, level reset),
+  - progression metadata (`run_complete`, from/to indices, hold ticks),
+  - player/economy baseline (`health`, `cash`, `shots`),
+  - active enemy/crate snapshot counts,
+  - shop/game-over state flags.
+
 ## Kickoff checklist
 
 - [x] Define canonical Phase 8 golden scenario catalog.
-- [ ] Implement first behavior-golden regression slice.
+- [x] Implement first behavior-golden regression slice.
 - [ ] Implement first render-golden regression slice.
 - [ ] Publish Phase 8 command bundles and artifact policy.
 - [x] Re-run full verification matrix after each closed workstream.
@@ -81,7 +93,11 @@ Current baseline already implemented:
 - Captured initial Phase 8 baseline verification snapshot:
   - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
-- Next immediate action: start Workstream 2 by adding the first explicit behavior-golden aggregate assertion slice.
+- Completed Workstream 2 behavior-golden slice 1 by adding deterministic runtime digest assertions for the scripted manual progression-loop endpoint.
+- Re-ran Phase 8 verification matrix post-slice:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
+- Next immediate action: start Workstream 3 render-golden slice 1 with digest policy and first golden capture targets.
 
 ## Verification plan
 

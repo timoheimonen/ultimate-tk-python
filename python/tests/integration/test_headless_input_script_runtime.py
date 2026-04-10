@@ -3676,6 +3676,46 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(app.context.runtime.progression_event, "run_complete")
         self.assertFalse(app.context.runtime.progression_has_next_level)
 
+        behavior_digest = (
+            app.scene_manager.current_scene_name,
+            app.context.session.level_index,
+            app.context.runtime.progression_event,
+            app.context.runtime.progression_from_level_index,
+            app.context.runtime.progression_to_level_index,
+            app.context.runtime.progression_has_next_level,
+            app.context.runtime.progression_ticks_remaining,
+            app.context.runtime.player_health,
+            app.context.runtime.player_cash,
+            app.context.runtime.player_shots_fired_total,
+            app.context.runtime.enemies_total,
+            app.context.runtime.enemies_alive,
+            app.context.runtime.crates_total,
+            app.context.runtime.crates_alive,
+            app.context.runtime.shop_active,
+            app.context.runtime.game_over_active,
+        )
+        self.assertEqual(
+            behavior_digest,
+            (
+                "main_menu",
+                0,
+                "run_complete",
+                9,
+                0,
+                False,
+                0,
+                100,
+                0,
+                0,
+                0,
+                0,
+                11,
+                11,
+                False,
+                False,
+            ),
+        )
+
     def test_scripted_manual_progression_loop_reaches_run_complete_and_returns_to_menu(self) -> None:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
