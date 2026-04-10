@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+import unittest
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    np = None
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+if np is not None:
+    from ultimatetk.ai.gym_env import UltimateTKEnv, gym_available
+    from ultimatetk.systems.gameplay_scene import GameplayScene
+else:
+    def gym_available() -> bool:
+        return False
+
+
+@unittest.skipUnless(np is not None and gym_available(), "gymnasium/numpy optional dependencies are not installed")
+class GymEnvTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not (PROJECT_ROOT / "game_data" / "palette.tab").exists():
+            self.skipTest("game_data assets not available")
+
+    def test_reset_returns_observation_shapes(self) -> None:
+        env = UltimateTKEnv(project_root=str(PROJECT_ROOT), enforce_asset_manifest=True)
+        try:
+            observation, info = env.reset(seed=123)
+            self.assertEqual(observation["rays"].shape, (32, 8))
+            self.assertEqual(observation["state"].shape, (16,))
+            self.assertEqual(info["level_index"], 0)
+            self.assertFalse(info["game_completed"])
+        finally:
+            env.close()
+
+    def test_death_marks_episode_terminated(self) -> None:
+        env = UltimateTKEnv(project_root=str(PROJECT_ROOT), enforce_asset_manifest=True)
+        try:
+            env.reset(seed=5)
+
+            assert env._driver is not None
+            scene = env._driver.scene_manager.current_scene
+            if not isinstance(scene, GameplayScene) or scene._player is None:  # type: ignore[attr-defined]
+                self.skipTest("gameplay scene did not initialize")
+
+            scene._player.dead = True  # type: ignore[attr-defined]
+
+            action = {
+                "hold": np.zeros((8,), dtype=np.int8),
+                "trigger": np.zeros((2,), dtype=np.int8),
+                "weapon_select": 0,
+            }
+            _, _, terminated, truncated, info = env.step(action)
+            self.assertTrue(terminated)
+            self.assertFalse(truncated)
+            self.assertEqual(info["terminal_reason"], "death")
+        finally:
+            env.close()
+
+    def test_run_complete_marks_game_completed(self) -> None:
+        env = UltimateTKEnv(project_root=str(PROJECT_ROOT), enforce_asset_manifest=True)
+        try:
+            env.reset(seed=7)
+
+            assert env._driver is not None
+            scene = env._driver.scene_manager.current_scene
+            if not isinstance(scene, GameplayScene) or scene._player is None:  # type: ignore[attr-defined]
+                self.skipTest("gameplay scene did not initialize")
+
+            env._driver.context.session.level_index = 999
+            scene._enemies.clear()  # type: ignore[attr-defined]
+
+            action = {
+                "hold": np.zeros((8,), dtype=np.int8),
+                "trigger": np.zeros((2,), dtype=np.int8),
+                "weapon_select": 0,
+            }
+            _, _, terminated, truncated, info = env.step(action)
+            self.assertTrue(terminated)
+            self.assertFalse(truncated)
+            self.assertTrue(info["game_completed"])
+            self.assertEqual(info["terminal_reason"], "game_completed")
+        finally:
+            env.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

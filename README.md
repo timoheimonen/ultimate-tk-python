@@ -8,10 +8,14 @@ This repository hosts the Python refactor at root level.
   - root-level project layout is active (no `python/` wrapper directory),
   - legacy DOS-era payload is archived under `ARCHIVE/`,
   - legacy parity checks are optional (default verification works without legacy root asset folders).
-- Phase 11 is in progress:
+- Phase 11 is completed:
   - optional pygame runtime backend is wired behind `--platform pygame`,
-  - gameplay render payload handoff is available for window presentation,
+  - gameplay/menu/progression visual frames are available for window presentation,
   - pygame dependency remains optional.
+- Phase 12 is in progress:
+  - Gymnasium training env scaffold is available under `ultimatetk.ai`,
+  - headless gameplay-first reset starts directly at level 1,
+  - shop controls and multi-level progression are wired for AI runs.
 
 ## Run
 
@@ -63,6 +67,45 @@ Install pygame extras (if needed):
 ```bash
 python3 -m pip install -e ".[pygame]"
 ```
+
+Install AI/Gymnasium extras (optional):
+
+```bash
+python3 -m pip install -e ".[ai]"
+```
+
+## Gymnasium training env (Phase 12)
+
+Run random-policy smoke check:
+
+```bash
+python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 300
+```
+
+Minimal usage example:
+
+```python
+from ultimatetk.ai.gym_env import UltimateTKEnv
+
+env = UltimateTKEnv(max_episode_steps=6000)
+obs, info = env.reset(seed=123)
+done = False
+while not done:
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+    done = terminated or truncated
+env.close()
+```
+
+Training-mode contract:
+
+- Environment starts headless directly in gameplay at level 1.
+- Shop controls are enabled for policy actions (`toggle_shop`, buy/sell via gameplay controls).
+- Level progression continues through subsequent levels.
+- Terminal signals:
+  - player death -> `terminated=True`, `info["terminal_reason"] == "death"`
+  - run completion -> `terminated=True`, `info["game_completed"] == True`
+  - max step cap -> `truncated=True`, `info["terminal_reason"] == "time_limit"`
 
 ## Release verification
 
