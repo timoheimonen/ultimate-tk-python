@@ -137,7 +137,7 @@ python3 tools/ppo_train.py --total-timesteps 200000 --resume-from runs/ai/ppo/<r
 ### Evaluate a saved model
 
 ```bash
-python3 tools/ppo_eval.py --model runs/ai/ppo/<run>/final_model.zip --episodes 5 --deterministic --device auto
+python3 tools/ppo_eval.py --model runs/ai/ppo/<run>/final_model.zip --episodes 5 --device auto
 ```
 
 ### Play a saved AI model in pygame (normal FPS cap)
@@ -151,6 +151,7 @@ Useful playback flags:
 - `--max-seconds 30` limit playback wall time
 - `--max-steps 2000` limit simulation steps
 - `--allow-manual-input` mix keyboard input with AI actions for debugging
+- `--stochastic` enable sampling mode (default playback/eval is deterministic)
 
 ### TensorBoard
 

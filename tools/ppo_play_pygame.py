@@ -32,7 +32,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=123, help="Reserved for future deterministic hooks")
     parser.add_argument("--max-steps", type=int, default=0, help="Optional step cap (0 disables)")
     parser.add_argument("--max-seconds", type=float, default=0.0, help="Optional wall-clock cap (0 disables)")
-    parser.add_argument("--deterministic", action="store_true", help="Use deterministic policy actions")
+    parser.add_argument(
+        "--deterministic",
+        dest="deterministic",
+        action="store_true",
+        default=True,
+        help="Use deterministic policy actions (default)",
+    )
+    parser.add_argument(
+        "--stochastic",
+        dest="deterministic",
+        action="store_false",
+        help="Use stochastic policy sampling instead of deterministic actions",
+    )
     parser.add_argument(
         "--allow-manual-input",
         action="store_true",

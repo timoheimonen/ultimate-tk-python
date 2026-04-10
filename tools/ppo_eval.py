@@ -21,7 +21,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=5, help="Evaluation episodes")
     parser.add_argument("--seed", type=int, default=123, help="Base random seed")
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "mps", "cuda"))
-    parser.add_argument("--deterministic", action="store_true", help="Use deterministic policy actions")
+    parser.add_argument(
+        "--deterministic",
+        dest="deterministic",
+        action="store_true",
+        default=True,
+        help="Use deterministic policy actions (default)",
+    )
+    parser.add_argument(
+        "--stochastic",
+        dest="deterministic",
+        action="store_false",
+        help="Use stochastic policy sampling instead of deterministic actions",
+    )
     parser.add_argument("--max-episode-steps", type=int, default=6000, help="Max steps per episode")
     parser.add_argument("--target-tick-rate", type=int, default=40, help="Fixed simulation tick rate")
     parser.add_argument(
