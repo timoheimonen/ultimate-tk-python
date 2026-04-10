@@ -30,7 +30,7 @@ class SB3ActionWrapperTests(unittest.TestCase):
         env = _DummyGymEnv()
         wrapped = SB3ActionWrapper(env)
         self.assertEqual(int(wrapped.action_space.nvec.shape[0]), ACTION_VECTOR_SIZE)
-        self.assertEqual(tuple(int(v) for v in wrapped.action_space.nvec), (2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 13))
+        self.assertEqual(tuple(int(v) for v in wrapped.action_space.nvec), (2, 2, 2, 2, 2, 2, 2, 2, 2, 13))
         wrapped.close()
 
     def test_step_translates_vector_to_env_dict_action(self) -> None:
@@ -38,12 +38,12 @@ class SB3ActionWrapperTests(unittest.TestCase):
         wrapped = SB3ActionWrapper(env)
         wrapped.reset(seed=7)
 
-        action = np.asarray((1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 12), dtype=np.int64)
+        action = np.asarray((1, 0, 1, 0, 0, 1, 1, 0, 1, 12), dtype=np.int64)
         wrapped.step(action)
 
         assert env.last_action is not None
         self.assertEqual(tuple(int(v) for v in env.last_action["hold"]), (1, 0, 1, 0, 0, 1, 1, 0))
-        self.assertEqual(tuple(int(v) for v in env.last_action["trigger"]), (0, 1))
+        self.assertEqual(tuple(int(v) for v in env.last_action["trigger"]), (1,))
         self.assertEqual(int(env.last_action["weapon_select"]), 12)
         wrapped.close()
 
@@ -66,13 +66,13 @@ if gym is not None and spaces is not None:
             self.observation_space = spaces.Dict(
                 {
                     "rays": spaces.Box(low=0.0, high=1.0, shape=(32, 8), dtype=np.float32),
-                    "state": spaces.Box(low=0.0, high=1.0, shape=(16,), dtype=np.float32),
+                    "state": spaces.Box(low=0.0, high=1.0, shape=(15,), dtype=np.float32),
                 },
             )
             self.action_space = spaces.Dict(
                 {
                     "hold": spaces.MultiBinary(8),
-                    "trigger": spaces.MultiBinary(2),
+                    "trigger": spaces.MultiBinary(1),
                     "weapon_select": spaces.Discrete(13),
                 },
             )
@@ -83,7 +83,7 @@ if gym is not None and spaces is not None:
             del options
             observation = {
                 "rays": np.ones((32, 8), dtype=np.float32),
-                "state": np.zeros((16,), dtype=np.float32),
+                "state": np.zeros((15,), dtype=np.float32),
             }
             return observation, {}
 
@@ -91,7 +91,7 @@ if gym is not None and spaces is not None:
             self.last_action = action
             observation = {
                 "rays": np.ones((32, 8), dtype=np.float32),
-                "state": np.zeros((16,), dtype=np.float32),
+                "state": np.zeros((15,), dtype=np.float32),
             }
             return observation, 0.0, False, False, {}
 

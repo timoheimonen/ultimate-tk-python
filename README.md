@@ -24,7 +24,7 @@ This project exposes the game as a Gymnasium environment for reinforcement learn
 - Environment wrapper lives under `src/ultimatetk/ai/`.
 - `reset()` starts a fresh headless gameplay episode (default flow starts from level 1) and returns the first observation.
 - `step(action)` applies AI controls to the same core gameplay simulation used by the normal game runtime.
-- Supported control dimensions include movement, turning, strafing, shooting, shop interactions, and weapon selection.
+- Supported control dimensions include movement, turning, strafing, shooting, and weapon selection.
 
 ### Observation Model
 

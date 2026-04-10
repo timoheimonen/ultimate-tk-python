@@ -95,7 +95,6 @@ class RewardTracker:
 
         if (
             not runtime.player_dead
-            and not runtime.shop_active
             and moved <= cfg.idle_distance_epsilon
             and shooting_active
             and delta_hits == 0
@@ -106,7 +105,7 @@ class RewardTracker:
         else:
             self._stationary_shoot_no_hit_ticks = 0
 
-        if runtime.player_dead or runtime.shop_active or runtime.player_shoot_hold_active:
+        if runtime.player_dead or runtime.player_shoot_hold_active:
             self._stationary_ticks = 0
         elif moved <= cfg.idle_distance_epsilon:
             self._stationary_ticks += 1

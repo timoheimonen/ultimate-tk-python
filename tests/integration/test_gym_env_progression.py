@@ -26,7 +26,7 @@ else:
 def _noop_action() -> dict[str, np.ndarray | int]:
     return {
         "hold": np.zeros((8,), dtype=np.int8),
-        "trigger": np.zeros((2,), dtype=np.int8),
+        "trigger": np.zeros((1,), dtype=np.int8),
         "weapon_select": 0,
     }
 
@@ -58,7 +58,7 @@ class GymEnvProgressionIntegrationTests(unittest.TestCase):
             self.assertFalse(truncated)
 
             confirm = _noop_action()
-            confirm["trigger"] = np.array([1, 0], dtype=np.int8)
+            confirm["trigger"] = np.array([1], dtype=np.int8)
             env.step(confirm)
 
             env.step(_noop_action())

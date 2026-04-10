@@ -21,7 +21,6 @@ HOLD_ACTIONS: tuple[InputAction, ...] = (
 
 TRIGGER_ACTIONS: tuple[InputAction, ...] = (
     InputAction.NEXT_WEAPON,
-    InputAction.TOGGLE_SHOP,
 )
 
 WEAPON_SELECT_SIZE = 13

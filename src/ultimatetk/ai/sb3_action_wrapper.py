@@ -13,8 +13,8 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     spaces = None
 
 
-ACTION_VECTOR_SIZE = 11
-_ACTION_NVECS = np.asarray((2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 13), dtype=np.int64)
+ACTION_VECTOR_SIZE = 10
+_ACTION_NVECS = np.asarray((2, 2, 2, 2, 2, 2, 2, 2, 2, 13), dtype=np.int64)
 
 
 def build_sb3_action_space() -> Any:
@@ -31,8 +31,8 @@ def sb3_vector_to_env_action(action: Any) -> dict[str, Any]:
         )
 
     hold = (vector[0:8] != 0).astype(np.int8, copy=False)
-    trigger = (vector[8:10] != 0).astype(np.int8, copy=False)
-    weapon_select = int(np.clip(vector[10], 0, 12))
+    trigger = (vector[8:9] != 0).astype(np.int8, copy=False)
+    weapon_select = int(np.clip(vector[9], 0, 12))
 
     return {
         "hold": hold,
