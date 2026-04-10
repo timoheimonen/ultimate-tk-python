@@ -149,27 +149,30 @@ python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 300
 ### Train PPO
 
 ```bash
-python3 tools/ppo_train.py --total-timesteps 5000000 --n-envs 1 --device auto
+python3 tools/ppo_train.py
 ```
 
-Learning-rate schedule defaults to linear decay from `3e-4` -> `5e-5` over the first `80%` of total timesteps.
-Tune with `--learning-rate-start`, `--learning-rate`, `--decay-ratio`, and `--learning-rate-decay-steps`.
+Uses default training settings from `tools/ppo_train.py`.
 
-Exploration schedule defaults to entropy coefficient linear decay from `0.05` -> `0.01` over the first `80%` of total timesteps.
-Tune with `--ent-coef-start`, `--ent-coef`, `--decay-ratio`, and `--ent-coef-decay-steps`.
+### PPO training parameters (`tools/ppo_train.py`)
 
-Core PPO defaults: `n_steps=2048`, `batch_size=128`, `gamma=0.99`, `gae_lambda=0.95`, `clip_range=0.2`.
+- Quick defaults: `total_timesteps=5000000`, `n_envs=1`, `device=auto`, `seed=123`
+- PPO defaults: `n_steps=2048`, `batch_size=128`, `gamma=0.99`, `gae_lambda=0.95`, `clip_range=0.2`
+- Learning-rate decay defaults: `0.0003` -> `0.00005` over first `80%` of training (`--learning-rate-start`, `--learning-rate`, `--learning-rate-decay-steps`, `--decay-ratio`)
+- Entropy decay defaults: `0.05` -> `0.01` over first `80%` of training (`--ent-coef-start`, `--ent-coef`, `--ent-coef-decay-steps`, `--decay-ratio`)
+- Runtime/checkpoint defaults: `max_episode_steps=6000`, `target_tick_rate=40`, `checkpoint_freq=1000000`, `eval_freq=25000`, `eval_episodes=5`
+- Run management flags: `--run-name`, `--runs-root`, `--resume-from`, `--disable-asset-manifest-check`, `--render-training-scenes`
 
 ### Max-throughput training mode (uncapped training loop)
 
 ```bash
-python3 tools/ppo_train.py --total-timesteps 5000000 --device auto --eval-freq 0 --checkpoint-freq 0
+python3 tools/ppo_train.py --eval-freq 0 --checkpoint-freq 0
 ```
 
 ### Resume training from checkpoint
 
 ```bash
-python3 tools/ppo_train.py --total-timesteps 5000000 --resume-from runs/ai/ppo/<run>/checkpoints/ppo_model_50000_steps.zip --device auto
+python3 tools/ppo_train.py --resume-from runs/ai/ppo/<run>/checkpoints/ppo_model_50000_steps.zip
 ```
 
 ### Evaluate a saved model
