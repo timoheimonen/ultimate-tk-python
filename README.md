@@ -191,13 +191,12 @@ python3 tools/release_verification.py
 Strict legacy parity against archived root:
 
 ```bash
-python3 tools/release_verification.py --legacy-compare-root ARCHIVE
+python3 tools/release_verification.py --legacy-compare-root /path/to/original/legacy-root
 ```
 
 ## Project Paths
 
 - Runtime assets: `game_data/`
-- Archived original payload: `ARCHIVE/`
 - Runtime outputs and artifacts: `runs/`
 - Phase notes: `docs/notes/`
 - Refactor roadmap/progress log: `python_refactor.md`
@@ -213,7 +212,7 @@ python3 tools/asset_manifest_report.py
 Copy archived legacy assets into `game_data/`:
 
 ```bash
-python3 tools/migrate_legacy_data.py
+python3 tools/migrate_legacy_data.py --legacy-root /path/to/original/legacy-root
 ```
 
 Probe format loaders:

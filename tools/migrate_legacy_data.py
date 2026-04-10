@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--legacy-root",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "ARCHIVE",
+        default=None,
         help="Path containing legacy EFPS/FNTS/LEVS/MUSIC/WAVS folders",
     )
     parser.add_argument(
@@ -73,6 +73,11 @@ def _copy_file(src: Path, dst: Path, dry_run: bool) -> None:
 
 def main() -> int:
     args = parse_args()
+    if args.legacy_root is None:
+        raise ValueError(
+            "--legacy-root is required. Provide path to original legacy data root "+
+            "containing EFPS/FNTS/LEVS/MUSIC/WAVS",
+        )
     legacy_root = args.legacy_root.expanduser().resolve()
     project_root = args.project_root.expanduser().resolve()
     game_data_root = project_root / "game_data"
