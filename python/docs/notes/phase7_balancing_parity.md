@@ -148,6 +148,14 @@ Current baseline already implemented:
   - `python3 -m pytest tests/unit/test_combat.py -k "strafe_switch_tick_is_staggered_between_neighbor_enemy_ids or strafe_direction_holds_across_short_reload_windows"` -> `2 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k multi_enemy_strafe_switches_are_staggered_during_reload` -> `1 passed`.
 
+## Workstream 5 lock-expansion slice (camera action-idle catch-up)
+
+- Added runtime-level camera lock coverage in scene-flow tests:
+  - `test_gameplay_action_idle_camera_catchup_is_faster_than_idle` asserts action-active, non-walking camera catch-up advances at least `2` pixels faster than pure idle from identical baseline camera offsets.
+- Validation focus for this slice:
+  - `python3 -m pytest tests/unit/test_scene_flow.py -k gameplay_action_idle_camera_catchup_is_faster_than_idle` -> `1 passed`.
+  - `python3 -m pytest tests/unit/test_player_control.py -k turn_in_place_firing_catches_up_faster_than_idle` -> `1 passed`.
+
 ## Progress log
 
 - Created Phase 7 kickoff plan and workstream structure in `python/docs/notes/phase7_balancing_parity.md`.
@@ -200,7 +208,15 @@ Current baseline already implemented:
   - Re-ran phase verification command set after this lock slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `177 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: continue Workstream 5 with lock additions for tuned camera action-idle catch-up behavior in runtime-level scenarios.
+- Continued Workstream 5 lock expansion with runtime-level camera catch-up locks:
+  - Added scene-flow assertion that action-idle camera behavior preserves the tuned minimum `>= 2` pixel catch-up lead over pure idle in gameplay runtime updates.
+  - Focused lock runs:
+    - `python3 -m pytest tests/unit/test_scene_flow.py -k gameplay_action_idle_camera_catchup_is_faster_than_idle` -> `1 passed`.
+    - `python3 -m pytest tests/unit/test_player_control.py -k turn_in_place_firing_catches_up_faster_than_idle` -> `1 passed`.
+  - Re-ran phase verification command set after this lock slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `178 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: continue Workstream 5 by evaluating whether additional economy pacing lock assertions are needed after reduced progression hold windows.
 
 ## Kickoff checklist
 

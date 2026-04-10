@@ -366,6 +366,58 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(manager.current_scene_name, "main_menu")
         self.assertEqual(context.session.level_index, 0)
 
+    def test_gameplay_action_idle_camera_catchup_is_faster_than_idle(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        if player is None or enemies is None or enemy_projectiles is None:
+            self.skipTest("gameplay scene did not initialize combat state")
+
+        enemies.clear()
+        enemy_projectiles.clear()
+
+        player.angle = 90
+        player.walking = False
+        player.strafing = False
+        player.turning = False
+        player.moving_forward = False
+        player.moving_backward = False
+
+        target_camera_x = int(player.center_x + 25.0) - 160
+        start_camera_x = target_camera_x - 14
+        start_camera_y = int(player.center_y) - 100
+
+        gameplay_scene._camera_x = start_camera_x  # type: ignore[attr-defined]
+        gameplay_scene._camera_y = start_camera_y  # type: ignore[attr-defined]
+        player.shoot_hold_count = 0
+        player.fire_animation_ticks = 0
+        manager.update(0.025)
+        idle_camera_x = gameplay_scene._camera_x  # type: ignore[attr-defined]
+
+        gameplay_scene._camera_x = start_camera_x  # type: ignore[attr-defined]
+        gameplay_scene._camera_y = start_camera_y  # type: ignore[attr-defined]
+        player.shoot_hold_count = 0
+        player.fire_animation_ticks = 2
+        manager.update(0.025)
+        action_camera_x = gameplay_scene._camera_x  # type: ignore[attr-defined]
+
+        self.assertGreater(action_camera_x, idle_camera_x)
+        self.assertGreaterEqual(action_camera_x - idle_camera_x, 2)
+
     def test_manual_menu_progression_loop_returns_to_menu_and_restarts_from_level_one(self) -> None:
         config = RuntimeConfig(autostart_gameplay=False)
         paths = GamePaths(
