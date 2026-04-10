@@ -128,6 +128,15 @@ Current baseline already implemented:
   - `python3 -m pytest tests/unit/test_scene_flow.py` -> `31 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "run_complete_fallback_returns_to_main_menu_with_reset_index or manual_progression_loop_reaches_run_complete_and_returns_to_menu"` -> `2 passed`.
 
+## Workstream 5 lock-expansion slice (progression confirm timing)
+
+- Added explicit scene-flow lock coverage that progression confirm input immediately zeroes hold countdown metadata before scene transition update:
+  - `test_level_completion_advances_session_index_and_reloads_gameplay_when_progression_enabled`
+  - `test_level_completion_fallback_returns_to_menu_when_next_level_is_missing`
+- Validation focus for this slice:
+  - `python3 -m pytest tests/unit/test_scene_flow.py -k "level_completion_advances_session_index_and_reloads_gameplay_when_progression_enabled or level_completion_fallback_returns_to_menu_when_next_level_is_missing"` -> `2 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "level_completion_advances_session_index_for_manual_progression_flow or run_complete_fallback_returns_to_main_menu_with_reset_index"` -> `2 passed`.
+
 ## Progress log
 
 - Created Phase 7 kickoff plan and workstream structure in `python/docs/notes/phase7_balancing_parity.md`.
@@ -164,7 +173,15 @@ Current baseline already implemented:
   - Re-ran phase verification command set post-slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `177 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: start Workstream 5 lock expansion for Phase 7 tuning deltas.
+- Started Workstream 5 lock expansion for Phase 7 tuning deltas with progression confirm-timing locks:
+  - Added explicit assertions that confirm input sets `progression_ticks_remaining` to `0` before transition update in both level-complete and run-complete paths.
+  - Focused lock runs:
+    - `python3 -m pytest tests/unit/test_scene_flow.py -k "level_completion_advances_session_index_and_reloads_gameplay_when_progression_enabled or level_completion_fallback_returns_to_menu_when_next_level_is_missing"` -> `2 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "level_completion_advances_session_index_for_manual_progression_flow or run_complete_fallback_returns_to_main_menu_with_reset_index"` -> `2 passed`.
+  - Re-ran phase verification command set after this lock slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `177 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: continue Workstream 5 with additional lock coverage around tuned camera/cadence/progression boundaries.
 
 ## Kickoff checklist
 

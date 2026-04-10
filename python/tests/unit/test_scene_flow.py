@@ -262,6 +262,7 @@ class SceneFlowTests(unittest.TestCase):
         self.assertGreater(context.runtime.progression_ticks_remaining, 0)
 
         manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(context.runtime.progression_ticks_remaining, 0)
         manager.update(0.025)
 
         self.assertEqual(manager.current_scene_name, "gameplay")
@@ -314,6 +315,7 @@ class SceneFlowTests(unittest.TestCase):
         self.assertGreater(context.runtime.progression_ticks_remaining, 0)
 
         manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(context.runtime.progression_ticks_remaining, 0)
         manager.update(0.025)
 
         self.assertEqual(manager.current_scene_name, "main_menu")
