@@ -34,7 +34,7 @@ class GymEnvTests(unittest.TestCase):
         try:
             observation, info = env.reset(seed=123)
             self.assertEqual(observation["rays"].shape, (32, 8))
-            self.assertEqual(observation["state"].shape, (16,))
+            self.assertEqual(observation["state"].shape, (15,))
             self.assertEqual(info["level_index"], 0)
             self.assertFalse(info["game_completed"])
         finally:
@@ -54,7 +54,7 @@ class GymEnvTests(unittest.TestCase):
 
             action = {
                 "hold": np.zeros((8,), dtype=np.int8),
-                "trigger": np.zeros((2,), dtype=np.int8),
+                "trigger": np.zeros((1,), dtype=np.int8),
                 "weapon_select": 0,
             }
             _, _, terminated, truncated, info = env.step(action)
@@ -79,7 +79,7 @@ class GymEnvTests(unittest.TestCase):
 
             action = {
                 "hold": np.zeros((8,), dtype=np.int8),
-                "trigger": np.zeros((2,), dtype=np.int8),
+                "trigger": np.zeros((1,), dtype=np.int8),
                 "weapon_select": 0,
             }
             _, _, terminated, truncated, info = env.step(action)
@@ -94,22 +94,22 @@ class GymEnvTests(unittest.TestCase):
         action_sequence = [
             {
                 "hold": np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
             {
                 "hold": np.array([1, 0, 1, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
             {
                 "hold": np.array([0, 0, 0, 0, 1, 0, 1, 0], dtype=np.int8),
-                "trigger": np.array([1, 0], dtype=np.int8),
+                "trigger": np.array([1], dtype=np.int8),
                 "weapon_select": 0,
             },
             {
                 "hold": np.zeros((8,), dtype=np.int8),
-                "trigger": np.zeros((2,), dtype=np.int8),
+                "trigger": np.zeros((1,), dtype=np.int8),
                 "weapon_select": 2,
             },
         ]

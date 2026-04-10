@@ -24,7 +24,7 @@ CHANNEL_CRATE_ENERGY = 5
 CHANNEL_MINE = 6
 CHANNEL_C4 = 7
 
-STATE_FEATURE_COUNT = 16
+STATE_FEATURE_COUNT = 15
 
 _RAY_TRACE_STEP = 2
 _PROJECTILE_TTI_CAP = 120.0
@@ -59,8 +59,7 @@ def build_observation_space() -> Any:
 def blank_observation(runtime: RuntimeState) -> dict[str, np.ndarray]:
     rays = np.ones((RAY_SECTOR_COUNT, RAY_CHANNEL_COUNT), dtype=np.float32)
     state = np.zeros((STATE_FEATURE_COUNT,), dtype=np.float32)
-    state[8] = 1.0 if runtime.shop_active else 0.0
-    state[15] = 1.0 if runtime.player_target_system_enabled else 0.0
+    state[14] = 1.0 if runtime.player_target_system_enabled else 0.0
     return {
         "rays": rays,
         "state": state,
@@ -178,14 +177,13 @@ def extract_observation(view: GameplayStateView | None, runtime: RuntimeState) -
     state[5] = _unit(float(player.load_count) / float(loading_time))
     state[6] = _unit(float(runtime.enemies_alive) / max(1.0, float(runtime.enemies_total)))
     state[7] = _unit(float(runtime.crates_alive) / max(1.0, float(runtime.crates_total)))
-    state[8] = 1.0 if view.shop_active else 0.0
-    state[9] = 1.0 if player.moving_forward else 0.0
-    state[10] = 1.0 if player.moving_backward else 0.0
-    state[11] = 1.0 if player.strafing else 0.0
-    state[12] = 1.0 if player.turning else 0.0
-    state[13] = _unit(closest_projectile_distance / max_distance)
-    state[14] = _unit(closest_projectile_tti / _PROJECTILE_TTI_CAP)
-    state[15] = 1.0 if player.target_system_enabled else 0.0
+    state[8] = 1.0 if player.moving_forward else 0.0
+    state[9] = 1.0 if player.moving_backward else 0.0
+    state[10] = 1.0 if player.strafing else 0.0
+    state[11] = 1.0 if player.turning else 0.0
+    state[12] = _unit(closest_projectile_distance / max_distance)
+    state[13] = _unit(closest_projectile_tti / _PROJECTILE_TTI_CAP)
+    state[14] = 1.0 if player.target_system_enabled else 0.0
 
     return {
         "rays": rays,

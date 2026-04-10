@@ -26,7 +26,7 @@ class GymRewardTests(unittest.TestCase):
 
         observation = {
             "rays": np.ones((32, 8), dtype=np.float32),
-            "state": np.zeros((16,), dtype=np.float32),
+            "state": np.zeros((15,), dtype=np.float32),
         }
         observation["rays"][4, 1] = 0.4
 
@@ -42,7 +42,7 @@ class GymRewardTests(unittest.TestCase):
 
         observation = {
             "rays": np.ones((32, 8), dtype=np.float32),
-            "state": np.zeros((16,), dtype=np.float32),
+            "state": np.zeros((15,), dtype=np.float32),
         }
 
         step = tracker.step(runtime, observation)

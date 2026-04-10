@@ -29,7 +29,7 @@ class GymActionCodecTests(unittest.TestCase):
         pressed = codec.decode(
             {
                 "hold": np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
         )
@@ -38,7 +38,7 @@ class GymActionCodecTests(unittest.TestCase):
         held = codec.decode(
             {
                 "hold": np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
         )
@@ -47,7 +47,7 @@ class GymActionCodecTests(unittest.TestCase):
         released = codec.decode(
             {
                 "hold": np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
         )
@@ -58,13 +58,12 @@ class GymActionCodecTests(unittest.TestCase):
         events = codec.decode(
             {
                 "hold": np.zeros((8,), dtype=np.int8),
-                "trigger": np.array([1, 1], dtype=np.int8),
+                "trigger": np.array([1], dtype=np.int8),
                 "weapon_select": 3,
             },
         )
 
         self.assertIn(AppEvent.action_pressed(InputAction.NEXT_WEAPON), events)
-        self.assertIn(AppEvent.action_pressed(InputAction.TOGGLE_SHOP), events)
         self.assertIn(AppEvent.weapon_select(2), events)
 
     def test_reset_clears_hold_diff_state(self) -> None:
@@ -72,7 +71,7 @@ class GymActionCodecTests(unittest.TestCase):
         codec.decode(
             {
                 "hold": np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
         )
@@ -81,7 +80,7 @@ class GymActionCodecTests(unittest.TestCase):
         events = codec.decode(
             {
                 "hold": np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
-                "trigger": np.array([0, 0], dtype=np.int8),
+                "trigger": np.array([0], dtype=np.int8),
                 "weapon_select": 0,
             },
         )
