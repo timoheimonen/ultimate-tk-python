@@ -22,6 +22,8 @@ class RewardConfig:
     idle_ticks_threshold: int = 60
     idle_penalty: float = 0.02
     idle_distance_epsilon: float = 1.5
+    stationary_shoot_no_hit_penalty: float = 0.03
+    stationary_shoot_no_hit_grace_ticks: int = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,9 +45,11 @@ class RewardTracker:
             self._prev_damage_taken = 0.0
             self._prev_dead = False
             self._prev_progression_event = ""
+            self._prev_shots_fired = 0
             self._prev_x = 0
             self._prev_y = 0
             self._stationary_ticks = 0
+            self._stationary_shoot_no_hit_ticks = 0
             return
 
         self._prev_kills = runtime.enemies_killed_by_player
@@ -54,9 +58,11 @@ class RewardTracker:
         self._prev_damage_taken = runtime.player_damage_taken_total
         self._prev_dead = runtime.player_dead
         self._prev_progression_event = runtime.progression_event
+        self._prev_shots_fired = runtime.player_shots_fired_total
         self._prev_x = runtime.player_world_x
         self._prev_y = runtime.player_world_y
         self._stationary_ticks = 0
+        self._stationary_shoot_no_hit_ticks = 0
 
     def step(self, runtime: RuntimeState, observation: dict[str, Any] | None = None) -> RewardStep:
         cfg = self._config
@@ -65,6 +71,7 @@ class RewardTracker:
         delta_kills = max(0, runtime.enemies_killed_by_player - self._prev_kills)
         delta_hits = max(0, runtime.player_hits_total - self._prev_hits)
         delta_crates = max(0, runtime.crates_collected_by_player - self._prev_crates)
+        delta_shots = max(0, runtime.player_shots_fired_total - self._prev_shots_fired)
         delta_damage = max(0.0, runtime.player_damage_taken_total - self._prev_damage_taken)
 
         reward += cfg.kill_reward * float(delta_kills)
@@ -84,6 +91,21 @@ class RewardTracker:
             reward -= cfg.death_penalty
 
         moved = abs(runtime.player_world_x - self._prev_x) + abs(runtime.player_world_y - self._prev_y)
+        shooting_active = runtime.player_shoot_hold_active or delta_shots > 0
+
+        if (
+            not runtime.player_dead
+            and not runtime.shop_active
+            and moved <= cfg.idle_distance_epsilon
+            and shooting_active
+            and delta_hits == 0
+        ):
+            self._stationary_shoot_no_hit_ticks += 1
+            if self._stationary_shoot_no_hit_ticks >= cfg.stationary_shoot_no_hit_grace_ticks:
+                reward -= cfg.stationary_shoot_no_hit_penalty
+        else:
+            self._stationary_shoot_no_hit_ticks = 0
+
         if runtime.player_dead or runtime.shop_active or runtime.player_shoot_hold_active:
             self._stationary_ticks = 0
         elif moved <= cfg.idle_distance_epsilon:
@@ -99,6 +121,7 @@ class RewardTracker:
         self._prev_damage_taken = runtime.player_damage_taken_total
         self._prev_dead = runtime.player_dead
         self._prev_progression_event = runtime.progression_event
+        self._prev_shots_fired = runtime.player_shots_fired_total
         self._prev_x = runtime.player_world_x
         self._prev_y = runtime.player_world_y
 

@@ -72,6 +72,50 @@ class GymRewardTests(unittest.TestCase):
         self.assertAlmostEqual(second.value, 0.0, places=6)
         self.assertAlmostEqual(third.value, 0.0, places=6)
 
+    def test_stationary_shooting_without_hits_gets_penalty_after_grace(self) -> None:
+        cfg = RewardConfig(
+            step_penalty=0.0,
+            look_at_enemy_reward=0.0,
+            stationary_shoot_no_hit_penalty=0.25,
+            stationary_shoot_no_hit_grace_ticks=2,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+        runtime.player_shoot_hold_active = True
+
+        first = tracker.step(runtime, None)
+        second = tracker.step(runtime, None)
+        third = tracker.step(runtime, None)
+
+        self.assertAlmostEqual(first.value, 0.0, places=6)
+        self.assertAlmostEqual(second.value, -0.25, places=6)
+        self.assertAlmostEqual(third.value, -0.25, places=6)
+
+    def test_stationary_shooting_penalty_resets_when_hit_occurs(self) -> None:
+        cfg = RewardConfig(
+            step_penalty=0.0,
+            hit_reward=0.5,
+            look_at_enemy_reward=0.0,
+            stationary_shoot_no_hit_penalty=0.25,
+            stationary_shoot_no_hit_grace_ticks=2,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+        runtime.player_shoot_hold_active = True
+
+        first = tracker.step(runtime, None)
+        runtime.player_hits_total = 1
+        second = tracker.step(runtime, None)
+        third = tracker.step(runtime, None)
+
+        self.assertAlmostEqual(first.value, 0.0, places=6)
+        self.assertAlmostEqual(second.value, 0.5, places=6)
+        self.assertAlmostEqual(third.value, 0.0, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()
