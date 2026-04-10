@@ -10,23 +10,38 @@ Python port of **Ultimate Tapan kaikki**, with Gymnasium/PPO tooling for AI trai
 
 ## Scope
 
-- This is not a 100% finished parity port, differs many ways, for example enemy AI behaviour.
+- This is not a 100% finished port, differs many ways, for example enemy AI behaviour.
 - Playable runtime is available (headless, terminal, pygame).
 - AI modules are implemented for Gymnasium environment usage, PPO training/evaluation, and saved-model pygame playback.
 - For transparency, development phase plans and progress notes are kept in-repo under `docs/notes/` and `python_refactor.md`.
-- Focus on port was AI-GYM
 
 ## AI Interface
 
-- The game is wrapped as a Gymnasium environment under `src/ultimatetk/ai/`.
-- Reset starts a headless gameplay run (level 1) and returns an observation snapshot.
-- Each `step(action)` applies AI controls (move/turn/strafe/shoot/shop/weapon selection) to the game tick loop.
-- The environment advances the same core gameplay simulation used by normal runtime scenes.
-- Observation core uses a 360-degree scan split into 32 equal angular segments around the player.
-- Each segment encodes nearest directional context (for example enemy/block/projectile presence and distance-style signals), then is combined with player/runtime telemetry into a compact PPO-ready vector.
-- Rewards are shaped for useful behavior (survival, combat progress, forward run progression) and exposed per step - not finished.
-- Episode termination maps to gameplay outcomes (`death`, `game_completed`) or max-step timeout.
-- PPO tooling (`tools/ppo_train.py`, `tools/ppo_eval.py`, `tools/ppo_play_pygame.py`) sits on top of this interface.
+This project exposes the game as a Gymnasium environment for reinforcement learning experiments.
+
+- Environment wrapper lives under `src/ultimatetk/ai/`.
+- `reset()` starts a fresh headless gameplay episode (default flow starts from level 1) and returns the first observation.
+- `step(action)` applies AI controls to the same core gameplay simulation used by the normal game runtime.
+- Supported control dimensions include movement, turning, strafing, shooting, shop interactions, and weapon selection.
+
+### Observation Model
+
+- The core spatial observation is a full `360°` scan split into `32` equal angular segments around the player.
+- Each segment encodes nearest directional context (for example obstacle/enemy/projectile presence and distance-style signals).
+- Segment features are combined with player/runtime telemetry into a compact PPO-friendly state vector.
+
+### Rewards and Episode End
+
+- Reward is shaped for learning-oriented behavior (survival, combat effectiveness, progression momentum).
+- Reward shaping is still evolving and should be treated as an experiment surface, not a finalized benchmark setup.
+- Episodes terminate on player death (`death`), successful run completion (`game_completed`), or configured step/time limits.
+
+### Important Expectations
+
+- This repository does **not** ship guaranteed "win-the-game" hyperparameters.
+- There are no official one-click training presets that reliably solve the game out of the box.
+- The AI stack is a sandbox for experimentation, iteration, and learning-oriented RL workflows.
+- PPO tools (`tools/ppo_train.py`, `tools/ppo_eval.py`, `tools/ppo_play_pygame.py`) are provided as practical baselines.
 
 ## Requirements
 
