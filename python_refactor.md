@@ -1,53 +1,52 @@
 # Python Refactor Plan (No Multiplayer)
 
 ## Objective
-Port The Ultimate TK from DOS C/C++ to Python while preserving gameplay feel and data compatibility, with multiplayer/IPX removed from scope and all runtime data packaged inside `python/`.
+Port The Ultimate TK from DOS C/C++ to Python while preserving gameplay feel and data compatibility, with multiplayer/IPX removed from scope and all runtime data packaged in root-native runtime folders.
 
 ## Scope
 - In scope:
   - Single-player gameplay loop
   - Existing level/content formats (`.LEV`, `.EFP`, `.FNT`, `palette.tab`, `options.cfg`)
   - Menus, options, shop, combat, enemies, effects, rendering
-  - Self-contained Python runtime and assets under `python/` only
+  - Self-contained Python runtime and assets under root-local runtime paths (`src/`, `game_data/`, `runs/`)
 - Out of scope:
   - IPX networking, lobby/join flow, chat, server/client sync
   - Any code under legacy network transport modules
 
-## Python Folder Layout
-The following structure has been created under `python/`:
+## Project Folder Layout
+The project now uses a root-native layout:
 
 ```text
-python/
-  game_data/            # runtime assets bundled for Python version
-    efps/               # migrated image assets
-    fnts/               # migrated font assets
-    levs/               # migrated level/episode assets
-    music/              # migrated module music assets
-    wavs/               # migrated sound effects
-    palette.tab         # migrated lighting/palette tables
-    options.cfg         # migrated/default runtime options (or generated on first run)
-  src/
-    ultimatetk/
-      core/         # bootstrap, timing, constants, shared utilities
-      formats/      # binary format readers/writers (.lev, .efp, .fnt, cfg, palette)
-      assets/       # asset registry and runtime resource management
-      world/        # map state, level state, spatial helpers
-      entities/     # player, enemy, bullet, crate, effect models/behavior
-      systems/      # game loop systems: input, movement, combat, progression
-      rendering/    # software-style render pipeline and lighting compositing
-      ui/           # menu flow, HUD, shop, option screens
-      audio/        # music/sfx playback facade and mixer behavior
-      debug/        # profiling hooks, frame metrics, capture tools
-  tests/
-    unit/           # isolated parser and logic tests
-    integration/    # subsystem interaction tests
-    regression/     # golden checks for behavior/visual parity
-  tools/            # one-off converters, inspectors, validation scripts
-  docs/
-    notes/          # implementation notes and parity findings
-  runs/
-    screenshots/    # captured outputs for visual comparison
-    profiles/       # perf traces and timing reports
+game_data/            # runtime assets bundled for Python version
+  efps/               # migrated image assets
+  fnts/               # migrated font assets
+  levs/               # migrated level/episode assets
+  music/              # migrated module music assets
+  wavs/               # migrated sound effects
+  palette.tab         # migrated lighting/palette tables
+  options.cfg         # migrated/default runtime options (or generated on first run)
+src/
+  ultimatetk/
+    core/         # bootstrap, timing, constants, shared utilities
+    formats/      # binary format readers/writers (.lev, .efp, .fnt, cfg, palette)
+    assets/       # asset registry and runtime resource management
+    world/        # map state, level state, spatial helpers
+    entities/     # player, enemy, bullet, crate, effect models/behavior
+    systems/      # game loop systems: input, movement, combat, progression
+    rendering/    # software-style render pipeline and lighting compositing
+    ui/           # menu flow, HUD, shop, option screens
+    audio/        # music/sfx playback facade and mixer behavior
+    debug/        # profiling hooks, frame metrics, capture tools
+tests/
+  unit/           # isolated parser and logic tests
+  integration/    # subsystem interaction tests
+  regression/     # golden checks for behavior/visual parity
+tools/            # one-off converters, inspectors, validation scripts
+docs/
+  notes/          # implementation notes and parity findings
+runs/
+  screenshots/    # captured outputs for visual comparison
+  profiles/       # perf traces and timing reports
 ```
 
 ## Legacy-to-Python Mapping
@@ -74,9 +73,9 @@ python/
 
 ## Asset Packaging Requirement
 - Final Python game must not depend on `EFPS/`, `FNTS/`, `LEVS/`, `MUSIC/`, `WAVS/`, or other data from repository root.
-- All required runtime data must exist under `python/game_data/`.
+- All required runtime data must exist under `game_data/`.
 - End state: original legacy file structure is not needed anymore for the Python build.
-- Asset path resolution in Python code must be relative to `python/`.
+- Asset path resolution in Python code must be relative to repository root runtime paths.
 - Keep a migration checklist/manifest so required files are verifiable before release.
 
 ## Milestones
