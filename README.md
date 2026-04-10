@@ -2,6 +2,8 @@
 
 Python port of **Ultimate Tapan kaikki**, with Gymnasium/PPO tooling for AI training and visible model playback.
 
+![game](screenshots/game_pygame.png)
+
 ## Origin, Credits, License
 
 - This project is based on the original repository: `https://github.com/hkroger/ultimatetapankaikki`.
