@@ -1,4 +1,4 @@
-# Phase 7: Balancing and Parity Pass (Kickoff)
+# Phase 7: Balancing and Parity Pass (Completed)
 
 This phase shifts focus from feature-complete flow to gameplay-feel parity: timing, pacing, and tuning across movement, camera, combat, and progression.
 
@@ -250,7 +250,9 @@ Current baseline already implemented:
   - Re-ran phase verification command set after this lock slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: finalize Workstream 5 closeout notes and prepare explicit Phase 7 handoff summary for Phase 8.
+- Closed Workstream 5 lock expansion after the progression-confirm, strafe-cadence, camera-catch-up, progression auto-return, and post-progression shop/economy stability lock slices all landed with passing full verification.
+- Decided no additional economy/shop pacing locks are required for Phase 7 handoff at current scope: tuned progression windows are now covered by unit + scene-flow + scripted runtime paths.
+- Phase 7 completion criteria are now satisfied; handoff target moves to Phase 8 regression-suite expansion/golden checks.
 
 ## Kickoff checklist
 

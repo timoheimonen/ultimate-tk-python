@@ -92,9 +92,9 @@ python/
    - Bullets, enemies, crates, effects, damage/death flow
 6. UI and progression (completed)
    - Main menu, options, episode/level flow, shop, HUD
-7. Balancing and parity pass (active)
+7. Balancing and parity pass (completed)
    - Timing adjustments, camera behavior, spawn and effect cadence
-8. Regression suite
+8. Regression suite (active)
    - Golden snapshots and behavior checks from known scenarios
 9. Data colocation and release hardening
    - Migrate all required runtime assets into `python/game_data/`
@@ -224,3 +224,4 @@ python/
 - Continued Phase 7 Workstream 5 lock expansion with runtime-level camera catch-up coverage: added scene-flow assertions that action-idle camera updates keep the tuned minimum catch-up lead over idle (`>= 2` pixels) and re-verified focused + full phase suites.
 - Continued Phase 7 Workstream 5 lock expansion with progression auto-return timing coverage: added scene-flow assertions that `level_complete` and `run_complete` auto-return only on the final tuned hold tick, with updated full phase verification (`180` unit tests + `44` integration tests passing).
 - Continued Phase 7 Workstream 5 lock expansion with post-progression shop/economy stability coverage: added scene-flow assertions that shop open/buy/close and blocked-purchase cash invariants remain stable after manual progression-loop restart, with updated full phase verification (`181` unit tests + `44` integration tests passing).
+- Completed Phase 7 closeout: all five workstreams are now closed and documented in `python/docs/notes/phase7_balancing_parity.md`; next focus moves to Phase 8 regression-suite expansion and golden-check handoff prep.
