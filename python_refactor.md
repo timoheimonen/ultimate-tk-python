@@ -100,6 +100,10 @@ python/
    - Migrate all required runtime assets into `python/game_data/`
    - Ensure all graphical and sound assets are readable/migrated from original legacy files into `python/game_data/`
    - Verify the game launches and runs without reading root-level legacy data paths
+10. Root flatten and legacy cleanup (planned)
+   - Make legacy-root compare checks optional (off by default)
+   - Move Python project layout from `python/` to repository root
+   - Remove original root-level legacy game-data directories after flatten verification
 
 ## Validation Strategy
 - Data parity:
@@ -238,3 +242,5 @@ python/
 - Completed first Phase 9 Workstream 4 release-workflow/docs slice: documented release verification command bundles and runtime artifact expectations in phase notes, hardened `python/.gitignore` for runtime screenshot/profile artifacts while preserving tracked `.gitkeep` placeholders, and re-ran full phase verification matrix (`181` phase unit tests + `48` phase integration tests passing).
 - Completed Phase 9 closeout: all five workstreams are closed, final hardened-path verification matrix is passing (`181` phase unit tests + `48` phase integration tests), and release-readiness handoff documentation is finalized in `python/docs/notes/phase9_data_release_hardening.md`.
 - Added post-Phase-9 release runbook automation: `python/tools/release_verification.py` now runs the manifest + unit + integration release bundle from one command, and `python/docs/release_verification.md` documents usage plus artifact hygiene (`python3 python/tools/release_verification.py` and `python3 python/tools/release_verification.py --skip-integration` validated successfully).
+- Added Phase 10 execution checklist plan at `python/docs/notes/phase10_root_flatten_cleanup.md` for optional legacy-compare mode, root flattening, and legacy data cleanup sequencing.
+- Started Phase 10 Workstream 2 conflict-prep move: archived original DOS-era payload (`SRC`, `BAK`, root asset directories, binaries/docs/config files) under `ARCHIVE/` to remove root-level naming collisions ahead of flattening, with unit matrix verification (`181 passed`).
