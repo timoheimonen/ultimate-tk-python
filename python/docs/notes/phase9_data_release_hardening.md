@@ -52,6 +52,19 @@ Current baseline already implemented:
    - Document runtime artifact expectations (`python/runs/`, logs, profiles, screenshots).
    - Ensure machine-specific and secret-bearing artifacts remain excluded from commits.
 
+## Workstream 4 slice: release workflow + artifact hygiene
+
+- Published release verification command bundle:
+  - `python3 python/tools/asset_manifest_report.py`
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py`
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py`
+- Runtime artifact expectations for release validation:
+  - Keep `python/runs/screenshots/` as local diagnostics (not golden baseline source of truth).
+  - Keep `python/runs/profiles/session.json` local and uncommitted.
+  - Keep `.gitkeep` placeholders in `python/runs/` directories to preserve structure.
+- Git hygiene hardening:
+  - Added `python/.gitignore` patterns for runtime screenshot and profile artifacts while retaining `.gitkeep` files.
+
 5. Phase closeout and final handoff
    - Re-run full verification matrix under hardened path assumptions.
    - Confirm milestones and docs reflect final single-player release-ready state.
@@ -62,8 +75,8 @@ Current baseline already implemented:
 - [x] Produce/refresh Phase 9 asset manifest and gap list.
 - [x] Land first runtime-path isolation hardening slice.
 - [x] Land first isolation regression test slice.
-- [ ] Publish release workflow verification notes.
-- [ ] Re-run full verification matrix after each closed workstream.
+- [x] Publish release workflow verification notes.
+- [x] Re-run full verification matrix after each closed workstream.
 
 ## Progress log
 
@@ -84,6 +97,12 @@ Current baseline already implemented:
   - `python3 -m pytest tests/unit/test_asset_repository.py tests/unit/test_app_session_persistence.py tests/integration/test_real_data_parse.py` -> `10 passed`.
   - `python3 -m pytest tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py` -> `6 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`.
+- Completed first Phase 9 Workstream 4 release-workflow/docs slice:
+  - Documented release verification command bundle and runtime artifact expectations.
+  - Hardened `python/.gitignore` for runtime screenshot/profile artifacts while preserving tracked placeholders.
+  - Re-ran full phase verification matrix:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`.
 
 ## Verification plan
 
