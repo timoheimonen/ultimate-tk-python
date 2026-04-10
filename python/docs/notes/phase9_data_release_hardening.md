@@ -1,4 +1,4 @@
-# Phase 9: Data Colocation and Release Hardening (Kickoff)
+# Phase 9: Data Colocation and Release Hardening (Completed)
 
 This phase finalizes single-player release readiness by ensuring the Python port runs fully from `python/`-local runtime data paths with no dependency on legacy root-level DOS asset directories.
 
@@ -78,6 +78,24 @@ Current baseline already implemented:
 - [x] Publish release workflow verification notes.
 - [x] Re-run full verification matrix after each closed workstream.
 
+## Phase 9 closeout
+
+- All Phase 9 workstreams are now closed:
+  - Workstream 1: asset manifest + gap inventory in `python/game_data/`
+  - Workstream 2: runtime path isolation and manifest-backed startup enforcement
+  - Workstream 3: isolation regressions including missing-required-asset fail-fast coverage
+  - Workstream 4: release workflow + artifact hygiene notes and `.gitignore` hardening
+  - Workstream 5: final verification and milestone/document handoff
+- Final verification matrix under hardened path assumptions:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`.
+- Completion criteria status:
+  - Runtime data colocation under `python/game_data/`: satisfied.
+  - Graphical/sound migration-readability from legacy roots: satisfied.
+  - Python-local-only runtime path hardening: satisfied.
+  - Isolation regression coverage with deterministic checks: satisfied.
+  - Milestone and docs handoff updates: satisfied.
+
 ## Progress log
 
 - Started and completed first Phase 9 Workstream 1 slice by adding a generated asset manifest + gap list workflow under `python/game_data/`.
@@ -103,6 +121,9 @@ Current baseline already implemented:
   - Re-ran full phase verification matrix:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`.
+- Completed Phase 9 closeout and final handoff with a final hardened-path verification rerun:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`.
 
 ## Verification plan
 
