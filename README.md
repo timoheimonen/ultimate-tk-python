@@ -88,7 +88,7 @@ python3 -m pip install -e ".[ai_train]"
 Conda-first install for AI training in env `ultimatetk`:
 
 ```bash
-conda install -y -n ultimatetk -c conda-forge numpy gymnasium pytorch stable-baselines3 tensorboard
+conda install -y -n ultimatetk -c conda-forge numpy gymnasium pytorch stable-baselines3 tensorboard "setuptools<81"
 ```
 
 ## Gymnasium training env (Phase 12)
