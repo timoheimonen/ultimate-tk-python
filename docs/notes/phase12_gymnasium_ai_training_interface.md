@@ -207,24 +207,29 @@ Acceptance checks:
 - Full release safety:
   - `python3 tools/release_verification.py`
 
-## Commit slicing plan (planned)
+## Commit slicing plan
 
-- [ ] Commit A (`feat`): add env scaffold + optional AI extras + import-safe wiring.
-- [ ] Commit B (`feat`): add headless gameplay-first training mode with progression continuity.
-- [ ] Commit C (`feat`): implement action translation (`MultiBinary`/`MultiDiscrete`) with strafing.
-- [ ] Commit D (`feat`): implement radial observation extractor and global state vector.
-- [ ] Commit E (`feat`): add reward/termination/completion signaling.
-- [ ] Commit F (`test`): add env unit/integration coverage (including shop-progression behavior).
-- [ ] Commit G (`docs`): update README + tracker + phase note closeout state.
+- [x] Commit A (`feat`): add env scaffold + optional AI extras + import-safe wiring.
+- [x] Commit B (`feat`): add headless gameplay-first training mode with progression continuity.
+- [x] Commit C (`feat`): implement action translation (`MultiBinary`/`MultiDiscrete`) with strafing.
+- [x] Commit D (`feat`): implement radial observation extractor and global state vector.
+- [x] Commit E (`feat`): add reward/termination/completion signaling.
+- [x] Commit F (`test`): add env unit/integration coverage (including shop-progression behavior).
+- [x] Commit G (`docs`): update README + tracker + phase note closeout state.
+
+Applied via:
+
+- `5cd20fb` (`feat: add phase-12 gymnasium training scaffold`)
+- `1cc8225` (`test: lock deterministic gym replay behavior`)
 
 ## Completion criteria
 
-- [ ] Gymnasium env runs headless and deterministic under fixed seed.
-- [ ] Episodes start directly at level 1 gameplay with shop enabled.
-- [ ] Level progression continues across levels within the same episode.
-- [ ] Shop/economy interactions are available and persist through level progression in the same run.
-- [ ] Run completion signals game completion and terminates training episode.
-- [ ] Documentation and tracker reflect final Phase 12 status.
+- [x] Gymnasium env runs headless and deterministic under fixed seed.
+- [x] Episodes start directly at level 1 gameplay with shop enabled.
+- [x] Level progression continues across levels within the same episode.
+- [x] Shop/economy interactions are available and persist through level progression in the same run.
+- [x] Run completion signals game completion and terminates training episode.
+- [x] Documentation and tracker reflect final Phase 12 status.
 
 ## Progress log
 
@@ -245,4 +250,10 @@ Acceptance checks:
   - `python3 -m pytest tests/unit/test_gym_action_codec.py tests/unit/test_gym_observation.py tests/unit/test_gym_env.py tests/integration/test_gym_env_progression.py tests/integration/test_gym_env_shop_progression.py` -> `10 passed`.
   - `python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 200` -> smoke run passed (`truncated=True`, `terminal_reason=time_limit`).
   - `python3 -m pytest tests/unit/test_gym_env.py` -> `4 passed` (includes fixed-seed deterministic replay check).
+
+## Phase 12 closeout
+
+- Phase 12 initial Gymnasium interface goals are complete.
+- Default runtime/release flows remain dependency-safe for non-AI environments.
+- Optional AI dependency path is validated in the `ultimatetk` conda environment.
   - `python3 tools/release_verification.py` -> unit `183 passed`, integration `47 passed, 1 skipped`.

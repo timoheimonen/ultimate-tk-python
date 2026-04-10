@@ -12,10 +12,11 @@ This repository hosts the Python refactor at root level.
   - optional pygame runtime backend is wired behind `--platform pygame`,
   - gameplay/menu/progression visual frames are available for window presentation,
   - pygame dependency remains optional.
-- Phase 12 is in progress:
-  - Gymnasium training env scaffold is available under `ultimatetk.ai`,
+- Phase 12 is completed:
+  - Gymnasium training env is available under `ultimatetk.ai`,
   - headless gameplay-first reset starts directly at level 1,
-  - shop controls and multi-level progression are wired for AI runs.
+  - shop controls and multi-level progression are wired for AI runs,
+  - deterministic replay checks and AI integration coverage are included.
 
 ## Run
 
