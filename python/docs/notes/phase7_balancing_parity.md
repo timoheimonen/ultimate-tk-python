@@ -165,6 +165,17 @@ Current baseline already implemented:
 - Validation focus for this slice:
   - `python3 -m pytest tests/unit/test_scene_flow.py -k "level_complete_scene_auto_returns_after_phase7_hold_ticks or run_complete_scene_auto_returns_after_phase7_hold_ticks"` -> `2 passed`.
 
+## Workstream 5 lock-expansion slice (post-progression shop/economy stability)
+
+- Added scene-flow lock coverage that shop/economy interaction remains stable after the full manual progression loop using tuned Phase 7 hold windows:
+  - `test_manual_progression_restart_keeps_shop_flow_stable_after_phase7_pacing`
+- This test locks that after run-complete return and gameplay restart:
+  - shop opens/closes normally,
+  - a buy attempt reports deterministic `NO CASH` failure metadata,
+  - player cash remains unchanged on blocked purchase.
+- Validation focus for this slice:
+  - `python3 -m pytest tests/unit/test_scene_flow.py -k manual_progression_restart_keeps_shop_flow_stable_after_phase7_pacing` -> `1 passed`.
+
 ## Progress log
 
 - Created Phase 7 kickoff plan and workstream structure in `python/docs/notes/phase7_balancing_parity.md`.
@@ -232,7 +243,14 @@ Current baseline already implemented:
   - Re-ran phase verification command set after this lock slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `180 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: finalize Workstream 5 closeout notes and decide whether any remaining economy/shop pacing locks are required before Phase 7 handoff.
+- Continued Workstream 5 lock expansion with post-progression shop/economy stability locks:
+  - Added scene-flow coverage that shop open/buy/close runtime behavior and blocked-purchase economy telemetry remain stable after progression-loop restart under tuned hold windows.
+  - Focused lock run:
+    - `python3 -m pytest tests/unit/test_scene_flow.py -k manual_progression_restart_keeps_shop_flow_stable_after_phase7_pacing` -> `1 passed`.
+  - Re-ran phase verification command set after this lock slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: finalize Workstream 5 closeout notes and prepare explicit Phase 7 handoff summary for Phase 8.
 
 ## Kickoff checklist
 

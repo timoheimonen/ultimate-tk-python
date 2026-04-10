@@ -523,6 +523,75 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(manager.current_scene_name, "gameplay")
         self.assertEqual(context.session.level_index, 0)
 
+    def test_manual_progression_restart_keeps_shop_flow_stable_after_phase7_pacing(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        context.session.level_index = 8
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        if enemies is None:
+            self.skipTest("gameplay scene did not initialize enemies")
+        enemies.clear()
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "level_complete")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+        self.assertEqual(context.session.level_index, 9)
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        if enemies is None:
+            self.skipTest("gameplay scene did not initialize enemies")
+        enemies.clear()
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "run_complete")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        self.assertEqual(context.session.level_index, 0)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        cash_before = context.runtime.player_cash
+        manager.handle_events((AppEvent.action_pressed(InputAction.TOGGLE_SHOP),))
+        manager.update(0.025)
+        self.assertTrue(context.runtime.shop_active)
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        gameplay_scene._shop_row = 0  # type: ignore[attr-defined]
+        gameplay_scene._shop_column = 0  # type: ignore[attr-defined]
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertEqual(context.runtime.shop_last_action, "buy")
+        self.assertEqual(context.runtime.shop_last_category, "weapon")
+        self.assertFalse(context.runtime.shop_last_success)
+        self.assertEqual(context.runtime.shop_last_reason, "NO CASH")
+        self.assertEqual(context.runtime.player_cash, cash_before)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.TOGGLE_SHOP),))
+        manager.update(0.025)
+        self.assertFalse(context.runtime.shop_active)
+
     def test_gameplay_death_clears_active_projectiles_and_explosives_same_tick(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(
