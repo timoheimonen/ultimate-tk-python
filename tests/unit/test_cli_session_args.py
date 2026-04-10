@@ -14,6 +14,10 @@ from ultimatetk.__main__ import _parse_args
 
 
 class CliSessionArgsTests(unittest.TestCase):
+    def test_parse_pygame_platform(self) -> None:
+        args = _parse_args(["--platform", "pygame"])
+        self.assertEqual(args.platform, "pygame")
+
     def test_parse_load_session_flag(self) -> None:
         args = _parse_args(["--load-session"])
         self.assertTrue(args.load_session)

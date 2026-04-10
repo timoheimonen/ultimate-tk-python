@@ -42,7 +42,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--platform",
-        choices=("headless", "terminal"),
+        choices=("headless", "terminal", "pygame"),
         default="headless",
         help="Runtime platform backend",
     )

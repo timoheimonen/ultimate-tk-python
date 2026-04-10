@@ -78,6 +78,13 @@ class GameApplication:
                 hold_frames=config.terminal_hold_frames,
                 input_schedule=input_schedule,
             )
+        elif config.platform == "pygame":
+            from ultimatetk.core.platform_pygame import PygamePlatformBackend
+
+            active_platform = PygamePlatformBackend(
+                status_print_interval=config.status_print_interval,
+                input_schedule=input_schedule,
+            )
         else:
             raise ValueError(f"unsupported platform backend: {config.platform}")
         clock = FixedStepClock(

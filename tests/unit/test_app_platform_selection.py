@@ -14,6 +14,7 @@ from ultimatetk.core.app import GameApplication
 from ultimatetk.core.config import RuntimeConfig
 from ultimatetk.core.paths import GamePaths
 from ultimatetk.core.platform import HeadlessPlatformBackend, TerminalPlatformBackend
+from ultimatetk.core.platform_pygame import PygamePlatformBackend
 
 
 def _paths() -> GamePaths:
@@ -35,6 +36,13 @@ class AppPlatformSelectionTests(unittest.TestCase):
             paths=_paths(),
         )
         self.assertIsInstance(app.platform, TerminalPlatformBackend)
+
+    def test_selects_pygame_backend(self) -> None:
+        app = GameApplication.create(
+            config=RuntimeConfig(platform="pygame"),
+            paths=_paths(),
+        )
+        self.assertIsInstance(app.platform, PygamePlatformBackend)
 
     def test_invalid_platform_raises(self) -> None:
         with self.assertRaises(ValueError):
