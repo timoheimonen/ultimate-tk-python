@@ -1867,6 +1867,8 @@ class CombatSystemTests(unittest.TestCase):
         self.assertIsNotNone(second_switch)
         assert first_switch is not None
         assert second_switch is not None
+        self.assertEqual(first_switch, hold_ticks)
+        self.assertEqual(second_switch - first_switch, max(1, combat_module.ENEMY_STRAFE_RELOAD_STAGGER_TICKS))
         self.assertNotEqual(first_switch, second_switch)
         self.assertGreater(second_switch, first_switch)
 

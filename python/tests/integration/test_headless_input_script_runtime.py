@@ -3404,6 +3404,8 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(second_enemy_switch)
         assert first_enemy_switch is not None
         assert second_enemy_switch is not None
+        self.assertEqual(first_enemy_switch, 4)
+        self.assertEqual(second_enemy_switch - first_enemy_switch, 1)
         self.assertNotEqual(first_enemy_switch, second_enemy_switch)
         self.assertGreater(second_enemy_switch, first_enemy_switch)
 
