@@ -1,6 +1,6 @@
 # Ultimate TK Python Port for AI-GYM
 
-Python port of **Ultimate Tapan kaikki**, with optional Gymnasium/PPO tooling for AI training and visible model playback.
+Python port of **Ultimate Tapan kaikki**, with Gymnasium/PPO tooling for AI training and visible model playback.
 
 ## Origin, Credits, License
 
@@ -10,10 +10,23 @@ Python port of **Ultimate Tapan kaikki**, with optional Gymnasium/PPO tooling fo
 
 ## Scope
 
-- This is not yet a 100% finished parity port.
+- This is not a 100% finished parity port, differs many ways, for example enemy AI behaviour.
 - Playable runtime is available (headless, terminal, pygame).
 - AI modules are implemented for Gymnasium environment usage, PPO training/evaluation, and saved-model pygame playback.
 - For transparency, development phase plans and progress notes are kept in-repo under `docs/notes/` and `python_refactor.md`.
+- Focus on port was AI-GYM
+
+## AI Interface
+
+- The game is wrapped as a Gymnasium environment under `src/ultimatetk/ai/`.
+- Reset starts a headless gameplay run (level 1) and returns an observation snapshot.
+- Each `step(action)` applies AI controls (move/turn/strafe/shoot/shop/weapon selection) to the game tick loop.
+- The environment advances the same core gameplay simulation used by normal runtime scenes.
+- Observation core uses a 360-degree scan split into 32 equal angular segments around the player.
+- Each segment encodes nearest directional context (for example enemy/block/projectile presence and distance-style signals), then is combined with player/runtime telemetry into a compact PPO-ready vector.
+- Rewards are shaped for useful behavior (survival, combat progress, forward run progression) and exposed per step - not finished.
+- Episode termination maps to gameplay outcomes (`death`, `game_completed`) or max-step timeout.
+- PPO tooling (`tools/ppo_train.py`, `tools/ppo_eval.py`, `tools/ppo_play_pygame.py`) sits on top of this interface.
 
 ## Requirements
 
