@@ -1787,6 +1787,7 @@ class CombatSystemTests(unittest.TestCase):
         )
 
         hold_ticks = max(1, combat_module.ENEMY_STRAFE_DIRECTION_HOLD_TICKS)
+        self.assertGreaterEqual(hold_ticks, 5)
         stagger_window = max(0, combat_module.ENEMY_STRAFE_RELOAD_STAGGER_TICKS)
         phase_delay = 0
         if stagger_window > 0:

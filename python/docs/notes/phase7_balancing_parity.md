@@ -93,6 +93,23 @@ Current baseline already implemented:
   - Turn-in-place shooting camera catch-up now accelerates by reducing catch-up divisor with an explicit tuning constant (instead of fixed `-1` adjustment).
   - Locked the stronger response with `test_follow_camera_turn_in_place_firing_catches_up_faster_than_idle` asserting a minimum `>= 2` pixel lead for firing versus idle camera advance.
 
+## First tuning slice target (combat/enemy cadence)
+
+- Candidate parameters in `python/src/ultimatetk/systems/combat.py`:
+  - `ENEMY_STRAFE_DIRECTION_HOLD_TICKS`
+  - `ENEMY_STRAFE_RELOAD_STAGGER_TICKS`
+  - `ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO`
+  - `ENEMY_LOST_SIGHT_CHASE_TICKS_MAX`
+- Guardrails:
+  - Preserve locked projectile ordering, dead-state gating, and splash-cover invariants.
+  - Preserve deterministic strafe-side switching and neighbor-id stagger behavior.
+- Applied delta:
+  - Increased `ENEMY_STRAFE_DIRECTION_HOLD_TICKS` from `4` to `5` to reduce short-window reload strafe zig-zag.
+  - Added cadence lock assertion in `test_enemy_strafe_direction_holds_across_short_reload_windows` requiring a hold window of at least `5` ticks.
+- Validation focus for this slice:
+  - `python3 -m pytest tests/unit/test_combat.py -k strafe` -> `4 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "multi_enemy_strafe_switches_are_staggered_during_reload or enemy_strafe_blocked_lane_retries_opposite_direction"` -> `2 passed`.
+
 ## Progress log
 
 - Created Phase 7 kickoff plan and workstream structure in `python/docs/notes/phase7_balancing_parity.md`.
@@ -111,14 +128,23 @@ Current baseline already implemented:
   - Re-ran phase verification command set post-slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `175 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: start Workstream 3 first combat/enemy cadence tuning slice.
+- Completed first Workstream 3 combat/enemy cadence tuning slice:
+  - Increased enemy strafe hold cadence window (`ENEMY_STRAFE_DIRECTION_HOLD_TICKS = 5`) for steadier reload-phase pressure movement.
+  - Added explicit lock assertion for the tuned hold window in combat unit coverage.
+  - Focused guard runs:
+    - `python3 -m pytest tests/unit/test_combat.py -k strafe` -> `4 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "multi_enemy_strafe_switches_are_staggered_during_reload or enemy_strafe_blocked_lane_retries_opposite_direction"` -> `2 passed`.
+  - Re-ran phase verification command set post-slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `175 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: start Workstream 4 first progression/economy pacing slice.
 
 ## Kickoff checklist
 
 - [x] Define canonical Phase 7 parity scenarios and acceptance tolerances.
 - [x] Capture baseline telemetry from scripted runtime scenarios.
 - [x] Complete first tuning slice for movement/camera with lock updates.
-- [ ] Complete first tuning slice for combat/enemy cadence with lock updates.
+- [x] Complete first tuning slice for combat/enemy cadence with lock updates.
 - [ ] Re-run phase verification command set after each closed workstream.
 
 ## Verification plan
