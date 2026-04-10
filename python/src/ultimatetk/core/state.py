@@ -8,6 +8,8 @@ class AppMode(str, Enum):
     BOOT = "boot"
     MAIN_MENU = "main_menu"
     GAMEPLAY = "gameplay"
+    LEVEL_COMPLETE = "level_complete"
+    RUN_COMPLETE = "run_complete"
     GAME_OVER = "game_over"
     SHUTDOWN = "shutdown"
 
@@ -70,6 +72,11 @@ class RuntimeState:
     player_explosive_detonations_total: int = 0
     game_over_active: bool = False
     game_over_ticks_remaining: int = 0
+    progression_event: str = ""
+    progression_from_level_index: int = -1
+    progression_to_level_index: int = -1
+    progression_has_next_level: bool = False
+    progression_ticks_remaining: int = 0
 
 
 @dataclass(slots=True)

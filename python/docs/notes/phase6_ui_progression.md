@@ -7,7 +7,7 @@ Current baseline already implemented:
 - Boot -> main-menu -> gameplay scene flow exists with deterministic scene transitions.
 - Main menu now supports interactive `start`/`quit` selection with deterministic non-autostart input handling, while preserving the autostart shortcut for test/dev loops.
 - Gameplay and game-over loop is stable, and game-over already returns to main menu.
-- Session state fields (`episode_index`, `level_index`, `player_name`) are now wired into an initial gameplay progression path (manual-flow level advancement + missing-next-level fallback); broader UI outcome states are still pending.
+- Session state fields (`episode_index`, `level_index`, `player_name`) are now wired into gameplay progression transitions with explicit inter-level and run-complete scene states.
 
 ## Phase 6 goals
 
@@ -29,7 +29,7 @@ Current baseline already implemented:
    - Advance `session.level_index` on completion; handle missing-next-level fallback explicitly.
    - Define restart/retry behavior on death versus successful completion.
 
-3. Inter-level and run-outcome UI states (pending)
+3. Inter-level and run-outcome UI states (completed)
    - Add level-complete summary/transition scene state.
    - Add terminal/run-complete state (episode end or content end fallback).
    - Expose key progression metadata through runtime fields for verification tooling.
@@ -68,9 +68,20 @@ Current baseline already implemented:
   - `test_gameplay_death_does_not_advance_session_index_when_progression_enabled`
 - Added scripted headless progression coverage in `python/tests/integration/test_headless_input_script_runtime.py`:
   - `test_scripted_level_completion_advances_session_index_for_manual_progression_flow`
-- Verification runs after Workstreams 1-2:
+- Completed Workstream 3 inter-level/run-outcome UI state wiring by adding dedicated progression scenes in `python/src/ultimatetk/ui/progression_scene.py`:
+  - Added `LevelCompleteScene` with deterministic hold/confirm flow before loading the next level.
+  - Added `RunCompleteScene` with deterministic hold/confirm flow before returning to non-autostart main menu.
+  - Wired progression transitions in `python/src/ultimatetk/systems/gameplay_scene.py` so level-complete and content-end fallback now route through explicit scene states instead of immediate scene swaps.
+- Added Workstream 3 progression metadata publication in runtime state for verification tooling:
+  - Added `progression_event`, `progression_from_level_index`, `progression_to_level_index`, `progression_has_next_level`, and `progression_ticks_remaining` in `python/src/ultimatetk/core/state.py`.
+  - Included progression metadata in periodic status logging in `python/src/ultimatetk/core/platform.py`.
+- Expanded Workstream 3 regression coverage:
+  - Unit scene-flow updates in `python/tests/unit/test_scene_flow.py` now assert `level_complete` and `run_complete` scene transitions plus runtime progression metadata.
+  - Added scripted integration fallback coverage in `python/tests/integration/test_headless_input_script_runtime.py`:
+    - `test_scripted_run_complete_fallback_returns_to_main_menu_with_reset_index`
+- Verification runs after Workstreams 1-3:
   - `python3 -m pytest tests/unit/test_scene_flow.py`
-  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k main_menu`
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "main_menu or level_completion or run_complete"`
   - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
 

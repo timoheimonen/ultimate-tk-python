@@ -436,6 +436,11 @@ class GameplayScene(BaseScene):
         context.runtime.player_explosive_detonations_total = 0
         context.runtime.game_over_active = False
         context.runtime.game_over_ticks_remaining = 0
+        context.runtime.progression_event = ""
+        context.runtime.progression_from_level_index = -1
+        context.runtime.progression_to_level_index = -1
+        context.runtime.progression_has_next_level = False
+        context.runtime.progression_ticks_remaining = 0
 
         self._held_actions.clear()
         self._cycle_weapon_requested = False
@@ -1993,23 +1998,28 @@ class GameplayScene(BaseScene):
         return alive_enemy_count(self._enemies) == 0
 
     def _advance_level_progression(self, context: GameContext) -> SceneTransition:
+        from ultimatetk.ui.progression_scene import LevelCompleteScene, RunCompleteScene
+
+        completed_level_index = context.session.level_index
         next_level_index = context.session.level_index + 1
         if self._level_exists_for_session_index(context, next_level_index):
-            context.session.level_index = next_level_index
             context.logger.info(
-                "Level complete, advancing to level %d",
-                context.session.level_index + 1,
+                "Level complete at level %d, entering level-complete scene for level %d",
+                completed_level_index + 1,
+                next_level_index + 1,
             )
-            return SceneTransition(next_scene=GameplayScene())
+            return SceneTransition(
+                next_scene=LevelCompleteScene(
+                    from_level_index=completed_level_index,
+                    to_level_index=next_level_index,
+                ),
+            )
 
         context.logger.info(
-            "Level complete at level %d, no next level found; returning to main menu",
-            context.session.level_index + 1,
+            "Level complete at level %d, no next level found; entering run-complete scene",
+            completed_level_index + 1,
         )
-        context.session.level_index = 0
-        from ultimatetk.ui.main_menu_scene import MainMenuScene
-
-        return SceneTransition(next_scene=MainMenuScene(autostart_enabled=False))
+        return SceneTransition(next_scene=RunCompleteScene(completed_level_index=completed_level_index))
 
     def _level_exists_for_session_index(self, context: GameContext, level_index: int) -> bool:
         repo = GameDataRepository(context.paths)
