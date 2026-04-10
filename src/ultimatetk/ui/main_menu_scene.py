@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from ultimatetk.assets.repository import GameDataRepository
 from ultimatetk.core.context import GameContext
 from ultimatetk.core.events import AppEvent, EventType, InputAction
 from ultimatetk.core.scenes import BaseScene, SceneTransition
 from ultimatetk.core.state import AppMode
+from ultimatetk.formats.fnt import FontFile
+from ultimatetk.rendering import SCREEN_HEIGHT, SCREEN_WIDTH, frame_digest
+from ultimatetk.ui.software_ui import fallback_palette_bytes, render_menu_frame
 
 
 class MainMenuScene(BaseScene):
@@ -19,11 +23,19 @@ class MainMenuScene(BaseScene):
         self._did_autostart = False
         self._autostart_enabled = autostart_enabled
         self._selected_index = 0
+        self._ui_font: FontFile | None = None
+        self._palette_bytes: bytes = fallback_palette_bytes()
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.MAIN_MENU
         self._selected_index = 0
+        self._ui_font = self._load_ui_font(context)
+        self._palette_bytes = self._load_palette_bytes(context)
         context.logger.info("Entered main menu scene")
+
+    def on_exit(self, context: GameContext) -> None:
+        del context
+        self._ui_font = None
 
     def handle_events(self, context: GameContext, events: Sequence[AppEvent]) -> SceneTransition | None:
         for event in events:
@@ -68,3 +80,33 @@ class MainMenuScene(BaseScene):
         from ultimatetk.systems.gameplay_scene import GameplayScene
 
         return SceneTransition(next_scene=GameplayScene())
+
+    def render(self, context: GameContext, alpha: float) -> None:
+        del alpha
+        pixels = render_menu_frame(
+            font=self._ui_font,
+            selected_index=self._selected_index,
+            entries=self._MENU_ENTRIES,
+        )
+        context.runtime.last_render_width = SCREEN_WIDTH
+        context.runtime.last_render_height = SCREEN_HEIGHT
+        context.runtime.last_render_pixels = pixels
+        context.runtime.last_render_palette = self._palette_bytes
+        context.runtime.last_render_digest = frame_digest(pixels)
+
+    def _load_ui_font(self, context: GameContext) -> FontFile | None:
+        repo = GameDataRepository(context.paths)
+        for font_name in ("8X8.FNT", "8X8B.FNT"):
+            try:
+                return repo.load_fnt(font_name)
+            except FileNotFoundError:
+                continue
+        return None
+
+    def _load_palette_bytes(self, context: GameContext) -> bytes:
+        repo = GameDataRepository(context.paths)
+        try:
+            wall_sheet = repo.load_efp("WALLS1.EFP")
+            return wall_sheet.palette
+        except FileNotFoundError:
+            return fallback_palette_bytes()

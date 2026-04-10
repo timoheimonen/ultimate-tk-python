@@ -162,16 +162,21 @@ Acceptance checks:
   - Added direct weapon-slot mappings for numpad keys (`KP0..KP9`, `KP-`, `KP+`) and `F1..F12`.
   - Added mouse-wheel and `PageUp/PageDown` weapon cycling support.
   - Added deterministic unit coverage for the new mapping paths.
+- Added post-closeout menu/progression UI render follow-up:
+  - Implemented software-drawn visible main-menu frame (title, entries, selection highlight, control hints) for pygame/headless frame output.
+  - Implemented software-drawn level-complete and run-complete progression screens to avoid black transition frames.
+  - Added scene-flow unit coverage that menu and progression scenes publish valid render payloads.
 - Verification snapshot:
   - `python3 -m pytest tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `24 passed`.
-  - `python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `59 passed`.
+  - `python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `61 passed`.
   - `python3 -m pytest tests/unit/test_pygame_platform.py` -> `12 passed`.
   - `python3 -m pytest tests/unit/test_pygame_platform.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py` -> `24 passed`.
-  - `python3 tools/release_verification.py` -> unit `181 passed`, integration `47 passed, 1 skipped`.
+  - `python3 tools/release_verification.py` -> unit `183 passed`, integration `47 passed, 1 skipped`.
   - `PYTHONPATH=src python3 -m ultimatetk --max-seconds 0.1` -> headless smoke run passed.
   - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --max-seconds 0.01` -> expected fail-fast with clear missing-pygame install hint.
   - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --window-scale 2 --max-seconds 0.01` -> expected fail-fast with clear missing-pygame install hint (scale arg path exercised).
   - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --autostart-gameplay --window-scale 2 --max-seconds 1` -> pygame startup/menu/gameplay path validated with installed dependency.
+  - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --window-scale 3 --max-seconds 1` -> pygame boot->visible main menu render path validated.
 
 ## Phase 11 closeout
 

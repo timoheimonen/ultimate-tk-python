@@ -166,6 +166,26 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(manager.current_scene_name, "main_menu")
         self.assertFalse(context.runtime.running)
 
+    def test_main_menu_render_populates_runtime_frame(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.render(0.0)
+        self.assertEqual(context.runtime.last_render_width, SCREEN_WIDTH)
+        self.assertEqual(context.runtime.last_render_height, SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_pixels), SCREEN_WIDTH * SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_palette), 256 * 3)
+        self.assertNotEqual(context.runtime.last_render_digest, 0)
+
     def test_gameplay_death_returns_to_main_menu_without_autostart_loop(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(
@@ -383,6 +403,35 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(context.runtime.progression_ticks_remaining, 0)
         self.assertEqual(context.session.level_index, 0)
         self.assertEqual(transition.next_scene.name, "main_menu")
+
+    def test_progression_scenes_render_populate_runtime_frame(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+
+        level_complete = LevelCompleteScene(from_level_index=0, to_level_index=1)
+        level_complete.on_enter(context)
+        level_complete.render(context, 0.0)
+        self.assertEqual(context.runtime.last_render_width, SCREEN_WIDTH)
+        self.assertEqual(context.runtime.last_render_height, SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_pixels), SCREEN_WIDTH * SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_palette), 256 * 3)
+        self.assertNotEqual(context.runtime.last_render_digest, 0)
+        level_complete.on_exit(context)
+
+        run_complete = RunCompleteScene(completed_level_index=2)
+        run_complete.on_enter(context)
+        run_complete.render(context, 0.0)
+        self.assertEqual(context.runtime.last_render_width, SCREEN_WIDTH)
+        self.assertEqual(context.runtime.last_render_height, SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_pixels), SCREEN_WIDTH * SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_palette), 256 * 3)
+        self.assertNotEqual(context.runtime.last_render_digest, 0)
+        run_complete.on_exit(context)
 
     def test_gameplay_death_does_not_advance_session_index_when_progression_enabled(self) -> None:
         config = RuntimeConfig(autostart_gameplay=False)

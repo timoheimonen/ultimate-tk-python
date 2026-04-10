@@ -79,6 +79,7 @@ python3 tools/release_verification.py --legacy-compare-root ARCHIVE
 ```
 
 Runtime controls (terminal and pygame):
+- Main menu: `W/S` or `A/D` selects, `Space`/`Enter`/`Tab` confirms
 - Movement/turn: `WASD` or arrow keys
 - Strafe: `Q` / `E`
 - Shoot: `Space`
