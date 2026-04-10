@@ -111,6 +111,7 @@ def _fake_pygame(events: list[object] | None = None) -> SimpleNamespace:
         QUIT=100,
         KEYDOWN=101,
         KEYUP=102,
+        MOUSEWHEEL=103,
         K_ESCAPE=27,
         K_w=119,
         K_UP=273,
@@ -127,6 +128,8 @@ def _fake_pygame(events: list[object] | None = None) -> SimpleNamespace:
         K_TAB=9,
         K_r=114,
         K_RETURN=13,
+        K_PAGEUP=280,
+        K_PAGEDOWN=281,
         K_BACKQUOTE=96,
         K_1=49,
         K_2=50,
@@ -140,6 +143,30 @@ def _fake_pygame(events: list[object] | None = None) -> SimpleNamespace:
         K_0=48,
         K_MINUS=45,
         K_EQUALS=61,
+        K_KP1=257,
+        K_KP2=258,
+        K_KP3=259,
+        K_KP4=260,
+        K_KP5=261,
+        K_KP6=262,
+        K_KP7=263,
+        K_KP8=264,
+        K_KP9=265,
+        K_KP0=256,
+        K_KP_MINUS=269,
+        K_KP_PLUS=270,
+        K_F1=282,
+        K_F2=283,
+        K_F3=284,
+        K_F4=285,
+        K_F5=286,
+        K_F6=287,
+        K_F7=288,
+        K_F8=289,
+        K_F9=290,
+        K_F10=291,
+        K_F11=292,
+        K_F12=293,
         init=lambda: None,
         quit=lambda: None,
         key=key,
@@ -264,6 +291,59 @@ class PygamePlatformBackendTests(unittest.TestCase):
         self.assertEqual(events[0].action, InputAction.MOVE_FORWARD)
         self.assertEqual(events[1].type, EventType.ACTION_RELEASED)
         self.assertEqual(events[1].action, InputAction.MOVE_FORWARD)
+
+    def test_poll_events_maps_numpad_weapon_selection(self) -> None:
+        event_weapon = SimpleNamespace(type=101, key=258)  # KEYDOWN K_KP2
+        fake_pygame = _fake_pygame(events=[event_weapon])
+        backend = PygamePlatformBackend()
+        context = _context()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        events = tuple(backend.poll_events())
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, EventType.WEAPON_SELECT)
+        self.assertEqual(events[0].weapon_slot, 2)
+
+    def test_poll_events_maps_function_key_weapon_selection(self) -> None:
+        event_weapon = SimpleNamespace(type=101, key=285)  # KEYDOWN K_F4
+        fake_pygame = _fake_pygame(events=[event_weapon])
+        backend = PygamePlatformBackend()
+        context = _context()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        events = tuple(backend.poll_events())
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, EventType.WEAPON_SELECT)
+        self.assertEqual(events[0].weapon_slot, 3)
+
+    def test_poll_events_maps_mouse_wheel_to_next_weapon(self) -> None:
+        event_wheel = SimpleNamespace(type=103, y=2)
+        fake_pygame = _fake_pygame(events=[event_wheel])
+        backend = PygamePlatformBackend()
+        context = _context()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        events = tuple(backend.poll_events())
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].type, EventType.ACTION_PRESSED)
+        self.assertEqual(events[0].action, InputAction.NEXT_WEAPON)
+        self.assertEqual(events[1].type, EventType.ACTION_PRESSED)
+        self.assertEqual(events[1].action, InputAction.NEXT_WEAPON)
 
     def test_present_blits_scaled_frame_when_payload_is_valid(self) -> None:
         fake_pygame = _fake_pygame()

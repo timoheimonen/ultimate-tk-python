@@ -68,7 +68,7 @@ Acceptance checks:
 
 Acceptance checks:
 
-- [x] Interactive run opens a window and presents animated frames (validated via deterministic mocked-pygame startup/present tests in CI-safe environment).
+- [x] Interactive run opens a window and presents animated frames.
 - [x] Close button and `Esc` both trigger clean shutdown/event flow.
 - [x] Keyboard control parity with terminal backend is functionally equivalent.
 
@@ -156,13 +156,22 @@ Acceptance checks:
 - Completed Phase 11 validation closeout slice:
   - Expanded mocked-pygame tests to lock default/custom window sizing, quit event mapping, and duplicate keydown suppression.
   - Marked remaining acceptance and completion checklist items complete based on deterministic pygame-backend unit coverage and passing non-pygame verification matrix.
+- Completed live pygame runtime validation (after local dependency install):
+  - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --autostart-gameplay --window-scale 2 --max-seconds 1` launched the pygame window path, transitioned boot -> menu -> gameplay, and shut down cleanly.
+- Added post-closeout pygame control discoverability/input parity follow-up:
+  - Added direct weapon-slot mappings for numpad keys (`KP0..KP9`, `KP-`, `KP+`) and `F1..F12`.
+  - Added mouse-wheel and `PageUp/PageDown` weapon cycling support.
+  - Added deterministic unit coverage for the new mapping paths.
 - Verification snapshot:
-  - `python3 -m pytest tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `10 passed`.
-  - `python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `56 passed`.
+  - `python3 -m pytest tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `24 passed`.
+  - `python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `59 passed`.
+  - `python3 -m pytest tests/unit/test_pygame_platform.py` -> `12 passed`.
+  - `python3 -m pytest tests/unit/test_pygame_platform.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py` -> `24 passed`.
   - `python3 tools/release_verification.py` -> unit `181 passed`, integration `47 passed, 1 skipped`.
   - `PYTHONPATH=src python3 -m ultimatetk --max-seconds 0.1` -> headless smoke run passed.
   - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --max-seconds 0.01` -> expected fail-fast with clear missing-pygame install hint.
   - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --window-scale 2 --max-seconds 0.01` -> expected fail-fast with clear missing-pygame install hint (scale arg path exercised).
+  - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --autostart-gameplay --window-scale 2 --max-seconds 1` -> pygame startup/menu/gameplay path validated with installed dependency.
 
 ## Phase 11 closeout
 

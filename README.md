@@ -21,6 +21,20 @@ Run from repository root:
 PYTHONPATH=src python3 -m ultimatetk --max-seconds 2 --autostart-gameplay --status-print-interval 40
 ```
 
+## Conda setup
+
+Create/update a conda environment and install project requirements:
+
+```bash
+./scripts/setup_conda_env.sh
+```
+
+Optional custom environment name:
+
+```bash
+./scripts/setup_conda_env.sh my-env-name
+```
+
 Replay scripted input in headless mode:
 
 ```bash
@@ -64,14 +78,14 @@ Optional strict parity against archived legacy sources:
 python3 tools/release_verification.py --legacy-compare-root ARCHIVE
 ```
 
-Terminal controls:
+Runtime controls (terminal and pygame):
 - Movement/turn: `WASD` or arrow keys
 - Strafe: `Q` / `E`
 - Shoot: `Space`
-- Next weapon: `Tab`
+- Next weapon: `Tab` (pygame also supports mouse wheel + `PageUp/PageDown`)
 - Toggle shop: `R` or `Enter`
 - Shop controls (while open): `W/S` rows, `A/D` columns, `Space` buy, `Tab` sell
-- Direct weapon slot: `` ` ``, `1..0`, `-`
+- Direct weapon slot: `` ` ``, `1..0`, `-` (pygame also supports numpad `0..9` and `F1..F12`)
 - Quit: `Esc`
 - The terminal backend attempts to apply player1 keybinds from `game_data/options.cfg`; unsupported legacy scan codes fall back to defaults above.
 
