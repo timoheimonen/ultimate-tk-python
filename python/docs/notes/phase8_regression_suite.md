@@ -1,4 +1,4 @@
-# Phase 8: Regression Suite (Kickoff)
+# Phase 8: Regression Suite (Completed)
 
 This phase focuses on long-horizon regression locking: golden behavior/snapshot checks that guard parity-sensitive movement, combat, UI flow, and progression timing as Phase 9 release hardening proceeds.
 
@@ -78,12 +78,33 @@ Current baseline already implemented:
   - active enemy/crate snapshot counts,
   - shop/game-over state flags.
 
+## Workstream 3 render-golden slice 1
+
+- Added deterministic render-golden digest locks in `python/tests/integration/test_real_data_render.py` for `LEVEL1.LEV` baseline capture path:
+  - camera start lock: `(90, 90)`
+  - with-effects digest lock: `2613501106`
+  - without-effects digest lock: `2826512403`
+- This converts the existing smoke render test into an explicit golden regression check while keeping the dual-effects comparison invariant.
+
+## Workstream 4 command bundle and artifact policy
+
+- Fast pre-commit regression bundle:
+  - `python3 -m pytest tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py`
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "manual_progression_loop or multi_enemy_strafe_switches_are_staggered_during_reload"`
+- Full Phase 8 regression bundle:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py`
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py`
+- Artifact/golden policy (current phase scope):
+  - Primary golden references are assertion-level behavior/render digests embedded in integration tests.
+  - Runtime-generated files under `python/runs/` remain non-golden diagnostics unless explicitly promoted.
+  - Any future binary/fixture golden assets should be stored under `python/tests/regression/golden/` with deterministic naming and no machine-specific metadata.
+
 ## Kickoff checklist
 
 - [x] Define canonical Phase 8 golden scenario catalog.
 - [x] Implement first behavior-golden regression slice.
-- [ ] Implement first render-golden regression slice.
-- [ ] Publish Phase 8 command bundles and artifact policy.
+- [x] Implement first render-golden regression slice.
+- [x] Publish Phase 8 command bundles and artifact policy.
 - [x] Re-run full verification matrix after each closed workstream.
 
 ## Progress log
@@ -97,7 +118,16 @@ Current baseline already implemented:
 - Re-ran Phase 8 verification matrix post-slice:
   - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
-- Next immediate action: start Workstream 3 render-golden slice 1 with digest policy and first golden capture targets.
+- Completed Workstream 3 render-golden slice 1 by adding deterministic camera/digest golden locks for the `LEVEL1` real-data render integration path.
+- Re-ran Phase 8 verification matrix post-slice:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
+- Completed Workstream 4 by publishing fast/full command bundles and golden artifact policy for current Phase 8 scope.
+- Re-ran final Phase 8 closeout verification matrix:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
+- Closed Phase 8: behavior-golden and render-golden slices are in place, regression bundles/policy are documented, and completion criteria are satisfied.
+- Next focus moves to Phase 9 data colocation and release hardening.
 
 ## Verification plan
 

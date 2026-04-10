@@ -94,9 +94,9 @@ python/
    - Main menu, options, episode/level flow, shop, HUD
 7. Balancing and parity pass (completed)
    - Timing adjustments, camera behavior, spawn and effect cadence
-8. Regression suite (active)
+8. Regression suite (completed)
    - Golden snapshots and behavior checks from known scenarios
-9. Data colocation and release hardening
+9. Data colocation and release hardening (active)
    - Migrate all required runtime assets into `python/game_data/`
    - Verify the game launches and runs without reading root-level legacy data paths
 
@@ -228,3 +228,7 @@ python/
 - Phase 8 kickoff note/checklist created at `python/docs/notes/phase8_regression_suite.md` and is now the active implementation guide for regression-suite expansion.
 - Started Phase 8 Workstream 1 (golden scenario catalog): drafted canonical behavior/render scenario sets plus acceptance envelope in `python/docs/notes/phase8_regression_suite.md`, and captured baseline verification snapshot (`181` unit tests + `45` integration tests passing).
 - Completed Phase 8 Workstream 2 slice 1 (behavior-golden): added deterministic runtime behavior digest assertions for scripted manual progression-loop endpoint coverage in `python/tests/integration/test_headless_input_script_runtime.py`, with Phase 8 verification matrix re-confirmed passing (`181` unit tests + `45` integration tests).
+- Completed Phase 8 Workstream 3 slice 1 (render-golden): added deterministic real-data render camera/digest golden locks in `python/tests/integration/test_real_data_render.py`, with Phase 8 verification matrix re-confirmed passing (`181` unit tests + `45` integration tests).
+- Completed Phase 8 Workstream 4: published fast/full regression command bundles and Phase 8 golden artifact policy in `python/docs/notes/phase8_regression_suite.md`.
+- Completed Phase 8 closeout: all five workstreams are now closed and documented in `python/docs/notes/phase8_regression_suite.md`; next focus moves to Phase 9 data-colocation/release-hardening work.
+- Phase 9 kickoff note/checklist created at `python/docs/notes/phase9_data_release_hardening.md` and is now the active implementation guide for final release hardening.
