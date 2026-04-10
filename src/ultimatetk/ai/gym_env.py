@@ -133,7 +133,7 @@ else:
                 observation = extract_observation(view, runtime)
             self._last_observation = observation
 
-            reward_step = self._reward_tracker.step(runtime)
+            reward_step = self._reward_tracker.step(runtime, observation)
 
             terminated = False
             truncated = False

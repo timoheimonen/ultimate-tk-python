@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
 
 from ultimatetk.core.state import RuntimeState
 
@@ -8,11 +11,12 @@ from ultimatetk.core.state import RuntimeState
 @dataclass(frozen=True, slots=True)
 class RewardConfig:
     step_penalty: float = -0.001
-    kill_reward: float = 2.0
-    hit_reward: float = 0.15
+    kill_reward: float = 5.0
+    hit_reward: float = 0.5
+    look_at_enemy_reward: float = 0.005
     crate_reward: float = 0.10
-    damage_penalty: float = 0.02
-    death_penalty: float = 15.0
+    damage_penalty: float = 0.01
+    death_penalty: float = 5.0
     level_complete_reward: float = 5.0
     run_complete_reward: float = 25.0
     idle_ticks_threshold: int = 60
@@ -54,7 +58,7 @@ class RewardTracker:
         self._prev_y = runtime.player_world_y
         self._stationary_ticks = 0
 
-    def step(self, runtime: RuntimeState) -> RewardStep:
+    def step(self, runtime: RuntimeState, observation: dict[str, Any] | None = None) -> RewardStep:
         cfg = self._config
         reward = cfg.step_penalty
 
@@ -67,6 +71,8 @@ class RewardTracker:
         reward += cfg.hit_reward * float(delta_hits)
         reward += cfg.crate_reward * float(delta_crates)
         reward -= cfg.damage_penalty * float(delta_damage)
+        if _enemy_visible(observation):
+            reward += cfg.look_at_enemy_reward
 
         progression_changed = runtime.progression_event != self._prev_progression_event
         if progression_changed and runtime.progression_event == "level_complete":
@@ -78,7 +84,7 @@ class RewardTracker:
             reward -= cfg.death_penalty
 
         moved = abs(runtime.player_world_x - self._prev_x) + abs(runtime.player_world_y - self._prev_y)
-        if runtime.player_dead or runtime.shop_active:
+        if runtime.player_dead or runtime.shop_active or runtime.player_shoot_hold_active:
             self._stationary_ticks = 0
         elif moved <= cfg.idle_distance_epsilon:
             self._stationary_ticks += 1
@@ -97,3 +103,17 @@ class RewardTracker:
         self._prev_y = runtime.player_world_y
 
         return RewardStep(value=reward, stationary_ticks=self._stationary_ticks)
+
+
+def _enemy_visible(observation: dict[str, Any] | None) -> bool:
+    if not observation:
+        return False
+    rays = observation.get("rays")
+    if rays is None:
+        return False
+
+    matrix = np.asarray(rays, dtype=np.float32)
+    if matrix.ndim != 2 or matrix.shape[1] < 2:
+        return False
+
+    return bool(np.min(matrix[:, 1]) < 1.0)

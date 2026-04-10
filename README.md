@@ -1,6 +1,6 @@
-# Ultimate TK Python Port
+# Ultimate TK Python Port for AI-GYM
 
-Python port of **Ultimate Tapankaikki**, with optional Gymnasium/PPO tooling for AI training and visible model playback.
+Python port of **Ultimate Tapan kaikki**, with optional Gymnasium/PPO tooling for AI training and visible model playback.
 
 ## Origin, Credits, License
 

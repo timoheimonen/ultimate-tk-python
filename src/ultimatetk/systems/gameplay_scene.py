@@ -2067,6 +2067,7 @@ class GameplayScene(BaseScene):
             context.runtime.player_ammo_capacities = ammo_capacities
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
+            context.runtime.player_shoot_hold_active = False
             context.runtime.player_shots_fired_total = 0
             context.runtime.player_cash = 0
             context.runtime.player_shield = 0
@@ -2119,6 +2120,7 @@ class GameplayScene(BaseScene):
         context.runtime.player_ammo_capacities = bullet_ammo_capacities_snapshot()
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
+        context.runtime.player_shoot_hold_active = self._player.shoot_hold_count > 0
         context.runtime.player_shots_fired_total = self._player.shots_fired_total
         context.runtime.player_cash = self._player.cash
         context.runtime.player_shield = self._player.shield
