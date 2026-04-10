@@ -33,7 +33,48 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume-from", default="", help="Path to .zip checkpoint to resume from")
     parser.add_argument("--n-steps", type=int, default=1024, help="PPO rollout steps")
     parser.add_argument("--batch-size", type=int, default=256, help="PPO batch size")
-    parser.add_argument("--learning-rate", type=float, default=3e-4, help="PPO learning rate")
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=3e-4,
+        help="Target/min PPO learning rate after linear decay",
+    )
+    parser.add_argument(
+        "--learning-rate-start",
+        type=float,
+        default=6e-4,
+        help="Starting PPO learning rate before linear decay",
+    )
+    parser.add_argument(
+        "--learning-rate-decay-steps",
+        type=int,
+        default=None,
+        help="Override linear LR decay duration in timesteps (default: 80%% of total timesteps)",
+    )
+    parser.add_argument(
+        "--decay-ratio",
+        type=float,
+        default=0.8,
+        help="Default decay fraction of total timesteps when explicit decay steps are not set",
+    )
+    parser.add_argument(
+        "--ent-coef",
+        type=float,
+        default=0.005,
+        help="Target/min entropy coefficient after linear decay",
+    )
+    parser.add_argument(
+        "--ent-coef-start",
+        type=float,
+        default=0.03,
+        help="Starting entropy coefficient before linear decay",
+    )
+    parser.add_argument(
+        "--ent-coef-decay-steps",
+        type=int,
+        default=None,
+        help="Override entropy decay duration in timesteps (default: 80%% of total timesteps)",
+    )
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument(
         "--disable-asset-manifest-check",
@@ -48,10 +89,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _import_training_dependencies() -> tuple[object, object, object, object, object]:
+def _import_training_dependencies() -> tuple[object, object, object, object, object, object]:
     try:
         from stable_baselines3 import PPO
-        from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
+        from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback, EvalCallback
         from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
     except ModuleNotFoundError as exc:
         raise RuntimeError(
@@ -67,7 +108,7 @@ def _import_training_dependencies() -> tuple[object, object, object, object, obj
             "conda install -n ultimatetk -c conda-forge tensorboard",
         ) from exc
 
-    return PPO, CallbackList, CheckpointCallback, EvalCallback, (DummyVecEnv, VecMonitor)
+    return PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, (DummyVecEnv, VecMonitor)
 
 
 def _default_run_name() -> str:
@@ -92,6 +133,50 @@ def _write_run_config(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _linear_decay_value(*, start: float, end: float, decay_steps: int, step: int) -> float:
+    elapsed = max(0, int(step))
+    if elapsed >= int(decay_steps):
+        return float(end)
+    ratio = float(elapsed) / float(decay_steps)
+    return float(start + (end - start) * ratio)
+
+
+def _build_linear_lr_schedule(*, lr_start: float, lr_end: float, decay_steps: int, total_timesteps: int):
+    if lr_start <= 0.0 or lr_end <= 0.0:
+        raise ValueError("learning rates must be > 0")
+    if decay_steps < 1:
+        raise ValueError("--learning-rate-decay-steps must be >= 1")
+    if total_timesteps < 1:
+        raise ValueError("--total-timesteps must be >= 1")
+
+    effective_decay_steps = min(int(decay_steps), int(total_timesteps))
+
+    def _schedule(progress_remaining: float) -> float:
+        elapsed = (1.0 - float(progress_remaining)) * float(total_timesteps)
+        return _linear_decay_value(
+            start=float(lr_start),
+            end=float(lr_end),
+            decay_steps=effective_decay_steps,
+            step=int(elapsed),
+        )
+
+    return _schedule
+
+
+def _build_entropy_decay_callback(*, base_callback_cls: type, ent_start: float, ent_end: float, decay_steps: int):
+    class EntCoefDecayCallback(base_callback_cls):
+        def _on_step(self) -> bool:  # type: ignore[override]
+            self.model.ent_coef = _linear_decay_value(
+                start=float(ent_start),
+                end=float(ent_end),
+                decay_steps=int(decay_steps),
+                step=int(self.model.num_timesteps),
+            )
+            return True
+
+    return EntCoefDecayCallback()
+
+
 def main() -> int:
     args = parse_args()
 
@@ -101,8 +186,26 @@ def main() -> int:
         raise ValueError("--n-envs must be >= 1")
     if args.eval_episodes < 1:
         raise ValueError("--eval-episodes must be >= 1")
+    if args.learning_rate <= 0.0:
+        raise ValueError("--learning-rate must be > 0")
+    if args.learning_rate_start <= 0.0:
+        raise ValueError("--learning-rate-start must be > 0")
+    if args.learning_rate_start < args.learning_rate:
+        raise ValueError("--learning-rate-start must be >= --learning-rate")
+    if args.decay_ratio <= 0.0 or args.decay_ratio > 1.0:
+        raise ValueError("--decay-ratio must be in (0, 1]")
+    if args.learning_rate_decay_steps is not None and args.learning_rate_decay_steps < 1:
+        raise ValueError("--learning-rate-decay-steps must be >= 1")
+    if args.ent_coef <= 0.0:
+        raise ValueError("--ent-coef must be > 0")
+    if args.ent_coef_start <= 0.0:
+        raise ValueError("--ent-coef-start must be > 0")
+    if args.ent_coef_start < args.ent_coef:
+        raise ValueError("--ent-coef-start must be >= --ent-coef")
+    if args.ent_coef_decay_steps is not None and args.ent_coef_decay_steps < 1:
+        raise ValueError("--ent-coef-decay-steps must be >= 1")
 
-    PPO, CallbackList, CheckpointCallback, EvalCallback, vec_env_types = _import_training_dependencies()
+    PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, vec_env_types = _import_training_dependencies()
     DummyVecEnv, VecMonitor = vec_env_types
 
     caps = detect_torch_capabilities()
@@ -141,12 +244,41 @@ def main() -> int:
         eval_env.seed(args.seed + 10_000)
 
     resume_path = args.resume_from.strip()
+    default_decay_steps = max(1, int(float(args.total_timesteps) * float(args.decay_ratio)))
+    effective_lr_decay_steps = (
+        int(args.learning_rate_decay_steps)
+        if args.learning_rate_decay_steps is not None
+        else default_decay_steps
+    )
+    effective_ent_decay_steps = (
+        int(args.ent_coef_decay_steps)
+        if args.ent_coef_decay_steps is not None
+        else default_decay_steps
+    )
+    effective_lr_decay_steps = min(int(effective_lr_decay_steps), int(args.total_timesteps))
+
+    learning_rate_schedule = _build_linear_lr_schedule(
+        lr_start=float(args.learning_rate_start),
+        lr_end=float(args.learning_rate),
+        decay_steps=effective_lr_decay_steps,
+        total_timesteps=int(args.total_timesteps),
+    )
+    effective_ent_decay_steps = min(int(effective_ent_decay_steps), int(args.total_timesteps))
+
     if resume_path:
         model = PPO.load(
             str(Path(resume_path).expanduser().resolve()),
             env=train_env,
             device=device,
             print_system_info=False,
+        )
+        model.learning_rate = learning_rate_schedule
+        model.lr_schedule = learning_rate_schedule
+        model.ent_coef = _linear_decay_value(
+            start=float(args.ent_coef_start),
+            end=float(args.ent_coef),
+            decay_steps=effective_ent_decay_steps,
+            step=int(model.num_timesteps),
         )
         reset_num_timesteps = False
     else:
@@ -159,12 +291,21 @@ def main() -> int:
             tensorboard_log=str(tensorboard_dir),
             n_steps=max(1, int(args.n_steps)),
             batch_size=max(1, int(args.batch_size)),
-            learning_rate=float(args.learning_rate),
+            learning_rate=learning_rate_schedule,
+            ent_coef=float(args.ent_coef_start),
             gamma=float(args.gamma),
         )
         reset_num_timesteps = True
 
     callback_items: list[object] = []
+    callback_items.append(
+        _build_entropy_decay_callback(
+            base_callback_cls=BaseCallback,
+            ent_start=float(args.ent_coef_start),
+            ent_end=float(args.ent_coef),
+            decay_steps=effective_ent_decay_steps,
+        ),
+    )
     if checkpoint_save_freq > 0:
         callback_items.append(
             CheckpointCallback(
@@ -208,6 +349,12 @@ def main() -> int:
         "n_steps": int(args.n_steps),
         "batch_size": int(args.batch_size),
         "learning_rate": float(args.learning_rate),
+        "learning_rate_start": float(args.learning_rate_start),
+        "learning_rate_decay_steps": int(effective_lr_decay_steps),
+        "ent_coef": float(args.ent_coef),
+        "ent_coef_start": float(args.ent_coef_start),
+        "ent_coef_decay_steps": int(effective_ent_decay_steps),
+        "decay_ratio": float(args.decay_ratio),
         "gamma": float(args.gamma),
         "resume_from": resume_path,
         "render_training_scenes": bool(args.render_training_scenes),

@@ -122,6 +122,12 @@ python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 300
 python3 tools/ppo_train.py --total-timesteps 200000 --n-envs 1 --device auto
 ```
 
+Learning-rate schedule defaults to linear decay from `6e-4` -> `3e-4` over the first `80%` of total timesteps.
+Tune with `--learning-rate-start`, `--learning-rate`, `--decay-ratio`, and `--learning-rate-decay-steps`.
+
+Exploration schedule defaults to entropy coefficient linear decay from `0.03` -> `0.005` over the first `80%` of total timesteps.
+Tune with `--ent-coef-start`, `--ent-coef`, `--decay-ratio`, and `--ent-coef-decay-steps`.
+
 ### Max-throughput training mode (uncapped training loop)
 
 ```bash
