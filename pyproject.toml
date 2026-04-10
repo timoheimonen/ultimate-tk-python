@@ -14,6 +14,7 @@ dependencies = []
 dev = ["pytest>=8.0"]
 pygame = ["pygame>=2.5"]
 ai = ["gymnasium>=0.29", "numpy>=1.26"]
+ai_train = ["stable-baselines3>=2.5"]
 
 [project.scripts]
 ultimatetk = "ultimatetk.__main__:main"

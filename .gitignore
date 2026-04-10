@@ -6,5 +6,6 @@ __pycache__/
 *.egg-info/
 runs/profiles/session.json
 runs/profiles/*.json
+runs/ai/
 runs/screenshots/*
 !runs/screenshots/.gitkeep

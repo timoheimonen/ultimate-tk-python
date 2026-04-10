@@ -100,9 +100,21 @@ runs/
    - Ensure all graphical and sound assets are readable/migrated from original legacy files into `game_data/`
    - Verify the game launches and runs without reading root-level legacy data paths
 10. Root flatten and legacy cleanup (completed)
-   - Make legacy-root compare checks optional (off by default)
-   - Move Python project layout from `python/` to repository root
-   - Remove original root-level legacy game-data directories after flatten verification
+    - Make legacy-root compare checks optional (off by default)
+    - Move Python project layout from `python/` to repository root
+    - Remove original root-level legacy game-data directories after flatten verification
+11. Optional pygame runtime frontend (completed)
+    - Add `--platform pygame` backend with lazy import and dependency-safe default runtime path
+    - Keep internal rendering at `320x200` with integer window scaling (`--window-scale`)
+    - Ensure menu/progression/gameplay scenes publish visible frames and stable input/quit behavior
+12. Gymnasium AI training interface (completed)
+    - Add headless `gymnasium.Env` wrapper under `src/ultimatetk/ai/`
+    - Start directly in level-1 gameplay, keep shop actions enabled, and preserve progression carry-over
+    - Expose 32-sector radial vector observations, multi-action controls (including strafing), and terminal signaling (`death`, `game_completed`, `time_limit`)
+13. PPO trainer + checkpoint/eval loop (in progress)
+    - Add SB3 PPO tooling over the Gymnasium env with checkpoint and periodic evaluation callbacks
+    - Support resume-from-checkpoint workflows and run artifact directories under `runs/ai/ppo/`
+    - Support `cpu`/`mps`/`cuda` device selection for Apple Silicon and CUDA hosts
 
 ## Validation Strategy
 - Data parity:
@@ -261,3 +273,5 @@ runs/
 - Started Phase 12 implementation (initial scaffold): added `src/ultimatetk/ai/` Gymnasium stack (`gym_env.py`, `runtime_driver.py`, `action_codec.py`, `observation.py`, `reward.py`), added gameplay AI snapshot accessor (`GameplayStateView`) and scene-manager `current_scene` accessor, added optional `ai` extras in `pyproject.toml`, added Gym/random-policy smoke tool and AI-focused unit/integration tests, and re-verified non-AI release bundle stability (`python3 tools/release_verification.py` -> unit `183 passed`, integration `47 passed, 1 skipped`; AI tests currently skip in local env without `gymnasium`/`numpy`).
 - Continued Phase 12 validation after installing optional AI dependencies via conda (`conda install -y -n ultimatetk -c conda-forge numpy gymnasium`): AI-focused unit/integration matrix now passes (`10 passed`), random-policy smoke run passes, and fixed-seed deterministic replay coverage was added to `tests/unit/test_gym_env.py` (`4 passed`).
 - Completed Phase 12 closeout: Gymnasium interface goals are complete (headless gameplay-first reset, shop-enabled policy controls, multi-level progression carry-over, run-complete termination signaling, and deterministic replay coverage), with passing AI matrix (`11 passed`) and unchanged release verification (`183` unit passed, integration `47 passed, 1 skipped`).
+- Started Phase 13 PPO tooling slice: added SB3 action-space adapter (`src/ultimatetk/ai/sb3_action_wrapper.py`), torch device resolver (`src/ultimatetk/ai/training_device.py`), SB3 env factory (`src/ultimatetk/ai/sb3_env_factory.py`), trainer/eval CLIs (`tools/ppo_train.py`, `tools/ppo_eval.py`), phase note (`docs/notes/phase13_ppo_trainer_loop.md`), and unit coverage for action wrapping/device resolution (`tests/unit/test_sb3_action_wrapper.py`, `tests/unit/test_training_device.py`); README and optional deps were updated for conda-first training setup.
+- Continued Phase 13 validation + tooling bring-up: installed trainer deps via conda in `ultimatetk` (`conda install -y -n ultimatetk -c conda-forge pytorch stable-baselines3`), added CLI help smoke tests (`tests/unit/test_ppo_tools_cli.py`), validated targeted unit/integration suites (`8 passed` + `6 passed`), and completed short MPS-backed train/eval smoke runs (`tools/ppo_train.py` + `tools/ppo_eval.py`) with checkpoint/best/final artifacts under `runs/ai/ppo/phase13_smoke2/`.

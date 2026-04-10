@@ -17,6 +17,10 @@ This repository hosts the Python refactor at root level.
   - headless gameplay-first reset starts directly at level 1,
   - shop controls and multi-level progression are wired for AI runs,
   - deterministic replay checks and AI integration coverage are included.
+- Phase 13 is in progress:
+  - PPO trainer/eval tooling is being added on top of the Gymnasium env,
+  - checkpoint + periodic evaluation loops are included,
+  - runtime device selection supports `cpu`, `mps`, and `cuda`.
 
 ## Run
 
@@ -75,6 +79,18 @@ Install AI/Gymnasium extras (optional):
 python3 -m pip install -e ".[ai]"
 ```
 
+Install PPO trainer dependencies (optional):
+
+```bash
+python3 -m pip install -e ".[ai_train]"
+```
+
+Conda-first install for AI training in env `ultimatetk`:
+
+```bash
+conda install -y -n ultimatetk -c conda-forge numpy gymnasium pytorch stable-baselines3
+```
+
 ## Gymnasium training env (Phase 12)
 
 Run random-policy smoke check:
@@ -107,6 +123,32 @@ Training-mode contract:
   - player death -> `terminated=True`, `info["terminal_reason"] == "death"`
   - run completion -> `terminated=True`, `info["game_completed"] == True`
   - max step cap -> `truncated=True`, `info["terminal_reason"] == "time_limit"`
+
+## PPO trainer loop (Phase 13 slice)
+
+Train PPO with periodic checkpoints and eval:
+
+```bash
+python3 tools/ppo_train.py --total-timesteps 200000 --n-envs 1 --device auto
+```
+
+Resume from checkpoint:
+
+```bash
+python3 tools/ppo_train.py --total-timesteps 200000 --resume-from runs/ai/ppo/<run>/checkpoints/ppo_model_50000_steps.zip --device auto
+```
+
+Evaluate a checkpoint/final model:
+
+```bash
+python3 tools/ppo_eval.py --model runs/ai/ppo/<run>/final_model.zip --episodes 5 --deterministic --device auto
+```
+
+Device notes:
+
+- Apple Silicon: use `--device auto` (prefers `mps` when available) or `--device mps`.
+- CUDA hosts: use `--device auto` (prefers `cuda` when available) or `--device cuda`.
+- CPU fallback remains available via `--device cpu`.
 
 ## Release verification
 
