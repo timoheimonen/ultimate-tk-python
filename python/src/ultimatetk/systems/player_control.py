@@ -26,6 +26,7 @@ CAMERA_IDLE_DEAD_ZONE_Y_BONUS = 2
 CAMERA_ACTION_DEAD_ZONE_X_BONUS = 1
 CAMERA_ACTION_DEAD_ZONE_Y_BONUS = 1
 CAMERA_CATCHUP_DIVISOR = 4
+CAMERA_ACTION_IDLE_CATCHUP_BONUS = 2
 CAMERA_MAX_STEP = 16
 CAMERA_STRAFE_TURN_DEAD_ZONE_X_REDUCTION = 2
 CAMERA_STRAFE_TURN_DEAD_ZONE_Y_REDUCTION = 1
@@ -1087,8 +1088,8 @@ def follow_player_camera(
     catchup_divisor_y = CAMERA_CATCHUP_DIVISOR
 
     if action_active and not player.walking:
-        catchup_divisor_x = max(1, CAMERA_CATCHUP_DIVISOR - 1)
-        catchup_divisor_y = max(1, CAMERA_CATCHUP_DIVISOR - 1)
+        catchup_divisor_x = max(1, CAMERA_CATCHUP_DIVISOR - CAMERA_ACTION_IDLE_CATCHUP_BONUS)
+        catchup_divisor_y = max(1, CAMERA_CATCHUP_DIVISOR - CAMERA_ACTION_IDLE_CATCHUP_BONUS)
 
     if player.walking and player.strafing and player.turning:
         dead_zone_x = max(0, dead_zone_x - CAMERA_STRAFE_TURN_DEAD_ZONE_X_REDUCTION)

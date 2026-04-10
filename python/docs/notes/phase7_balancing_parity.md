@@ -88,6 +88,10 @@ Current baseline already implemented:
   - `python/tests/unit/test_player_control.py`
   - `python/tests/unit/test_scene_flow.py -k camera`
   - `python/tests/integration/test_headless_input_script_runtime.py -k "turn_changes_player_angle or enemy_strafe_blocked_lane_retries_opposite_direction"`
+- Applied delta:
+  - Added `CAMERA_ACTION_IDLE_CATCHUP_BONUS = 2` in `python/src/ultimatetk/systems/player_control.py`.
+  - Turn-in-place shooting camera catch-up now accelerates by reducing catch-up divisor with an explicit tuning constant (instead of fixed `-1` adjustment).
+  - Locked the stronger response with `test_follow_camera_turn_in_place_firing_catches_up_faster_than_idle` asserting a minimum `>= 2` pixel lead for firing versus idle camera advance.
 
 ## Progress log
 
@@ -97,13 +101,23 @@ Current baseline already implemented:
   - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `175 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
 - Identified first parameter slice for Workstream 2 (movement/camera constants and focused guard suites).
-- Next immediate action: apply first movement/camera tuning delta and lock any new boundary assertions.
+- Completed first Workstream 2 movement/camera tuning slice:
+  - Applied action-idle camera catch-up tuning delta in `player_control.py`.
+  - Added stronger camera-response lock assertion in `python/tests/unit/test_player_control.py`.
+  - Focused guard runs:
+    - `python3 -m pytest tests/unit/test_player_control.py` -> `48 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "turn_changes_player_angle or enemy_strafe_blocked_lane_retries_opposite_direction"` -> `2 passed`.
+    - `python3 -m pytest tests/unit/test_scene_flow.py -k camera` -> `0 selected` (no camera-tagged scene-flow tests currently).
+  - Re-ran phase verification command set post-slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `175 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: start Workstream 3 first combat/enemy cadence tuning slice.
 
 ## Kickoff checklist
 
 - [x] Define canonical Phase 7 parity scenarios and acceptance tolerances.
 - [x] Capture baseline telemetry from scripted runtime scenarios.
-- [ ] Complete first tuning slice for movement/camera with lock updates.
+- [x] Complete first tuning slice for movement/camera with lock updates.
 - [ ] Complete first tuning slice for combat/enemy cadence with lock updates.
 - [ ] Re-run phase verification command set after each closed workstream.
 

@@ -216,3 +216,4 @@ python/
 - Phase 7 kickoff plan created at `python/docs/notes/phase7_balancing_parity.md` with baseline-capture, balancing, and lock-expansion workstreams.
 - Started Phase 7 Workstream 1 (baseline capture/targets): defined canonical movement/combat/economy/progression parity scenarios plus initial tolerance windows in `python/docs/notes/phase7_balancing_parity.md`, and captured first baseline verification snapshot (`175` unit tests + `44` integration tests passing).
 - Prepared first Phase 7 Workstream 2 movement/camera tuning slice by enumerating candidate camera parameters and focused guard suites in `python/docs/notes/phase7_balancing_parity.md`.
+- Completed first Phase 7 Workstream 2 movement/camera tuning slice: turn-in-place shooting camera catch-up now uses explicit action-idle catch-up tuning (`CAMERA_ACTION_IDLE_CATCHUP_BONUS = 2`), with strengthened unit lock assertion and passing focused + full phase verification suites.

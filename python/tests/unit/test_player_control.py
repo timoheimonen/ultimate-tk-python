@@ -339,6 +339,7 @@ class PlayerControlTests(unittest.TestCase):
         )
 
         self.assertGreater(firing_camera_x, idle_camera_x)
+        self.assertGreaterEqual(firing_camera_x - idle_camera_x, 2)
 
     def test_follow_camera_backward_motion_reduces_forward_look_pull(self) -> None:
         level = _build_level(width=40, height=30, start=(12, 8))
