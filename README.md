@@ -156,11 +156,36 @@ Uses default training settings from `tools/ppo_train.py`.
 
 ### PPO training parameters (`tools/ppo_train.py`)
 
-- Quick defaults: `total_timesteps=5000000`, `n_envs=1`, `device=auto`, `seed=123`
-- PPO defaults: `n_steps=2048`, `batch_size=128`, `gamma=0.99`, `gae_lambda=0.95`, `clip_range=0.2`
-- Learning-rate decay defaults: `0.0003` -> `0.00005` over first `80%` of training (`--learning-rate-start`, `--learning-rate`, `--learning-rate-decay-steps`, `--decay-ratio`)
-- Entropy decay defaults: `0.05` -> `0.01` over first `80%` of training (`--ent-coef-start`, `--ent-coef`, `--ent-coef-decay-steps`, `--decay-ratio`)
-- Runtime/checkpoint defaults: `max_episode_steps=6000`, `target_tick_rate=40`, `checkpoint_freq=1000000`, `eval_freq=25000`, `eval_episodes=5`
+Example:
+
+```bash
+python3 tools/ppo_train.py --device auto --total-timesteps 30000000 --batch-size 512
+```
+
+Common flags and defaults:
+
+- `--total-timesteps 5000000`
+- `--n-envs 1`
+- `--device auto`
+- `--seed 123`
+- `--n-steps 2048`
+- `--batch-size 128`
+- `--gamma 0.99`
+- `--gae-lambda 0.95`
+- `--clip-range 0.2`
+- `--learning-rate-start 0.0003`
+- `--learning-rate 0.00005`
+- `--decay-ratio 0.8`
+- `--ent-coef-start 0.05`
+- `--ent-coef 0.01`
+- `--max-episode-steps 6000`
+- `--target-tick-rate 40`
+- `--checkpoint-freq 1000000`
+- `--eval-freq 25000`
+- `--eval-episodes 5`
+
+Note:
+
 - Run management flags: `--run-name`, `--runs-root`, `--resume-from`, `--disable-asset-manifest-check`, `--render-training-scenes`
 
 ### Max-throughput training mode (uncapped training loop)
