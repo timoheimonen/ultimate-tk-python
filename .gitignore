@@ -9,3 +9,4 @@ runs/profiles/*.json
 runs/ai/
 runs/screenshots/*
 !runs/screenshots/.gitkeep
+.DS_Store
