@@ -32,6 +32,17 @@ class PPOToolsCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Evaluate PPO checkpoint", result.stdout)
 
+    def test_ppo_play_pygame_help(self) -> None:
+        result = subprocess.run(
+            (sys.executable, "tools/ppo_play_pygame.py", "--help"),
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Play PPO model with pygame visualization", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

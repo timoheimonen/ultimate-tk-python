@@ -115,6 +115,10 @@ runs/
     - Add SB3 PPO tooling over the Gymnasium env with checkpoint and periodic evaluation callbacks
     - Support resume-from-checkpoint workflows and run artifact directories under `runs/ai/ppo/`
     - Support `cpu`/`mps`/`cuda` device selection for Apple Silicon and CUDA hosts
+14. Saved AI model pygame playback (in progress)
+    - Add dedicated playback tool that runs trained PPO checkpoints with visible pygame output
+    - Keep playback at normal FPS cap for visual inspection of policy behavior
+    - Reuse phase-12/13 observation/action semantics for parity with training
 
 ## Validation Strategy
 - Data parity:
@@ -277,3 +281,4 @@ runs/
 - Continued Phase 13 validation + tooling bring-up: installed trainer deps via conda in `ultimatetk` (`conda install -y -n ultimatetk -c conda-forge pytorch stable-baselines3`), added CLI help smoke tests (`tests/unit/test_ppo_tools_cli.py`), validated targeted unit/integration suites (`8 passed` + `6 passed`), and completed short MPS-backed train/eval smoke runs (`tools/ppo_train.py` + `tools/ppo_eval.py`) with checkpoint/best/final artifacts under `runs/ai/ppo/phase13_smoke2/`.
 - Continued Phase 13 throughput optimization and logging setup: installed `tensorboard` via conda (`conda install -y -n ultimatetk -c conda-forge tensorboard`), switched training env runtime to skip scene rendering by default, added opt-in render flags to train/eval tools, allowed disabling eval/checkpoint callbacks (`--eval-freq 0 --checkpoint-freq 0`) for uncapped throughput runs, and tuned auto-device selection to prefer CPU on non-CUDA hosts; re-validated unit/regression bundles (`10 passed`, `6 passed`, release unit matrix `183 passed`) and recorded uncapped training smoke throughput (`fps 1211`, `runs/ai/ppo/phase13_smoke_fast_auto/`).
 - Continued Phase 13 tensorboard visibility hardening: `tools/ppo_train.py` now requires tensorboard, always writes tensorboard logs, and prints explicit browser launch instructions (`tensorboard --logdir ... --host 127.0.0.1 --port 6006`) when training starts; validated with short smoke run producing `events.out.tfevents...` under `runs/ai/ppo/phase13_tb_check/tensorboard/`.
+- Started Phase 14 pygame playback slice: added plan note (`docs/notes/phase14_ai_model_pygame_playback.md`), introduced shared SB3 action conversion helper (`sb3_vector_to_env_action`) in `src/ultimatetk/ai/sb3_action_wrapper.py`, and added `tools/ppo_play_pygame.py` to run saved PPO models through `TrainingRuntimeDriver` with pygame presentation at capped FPS (default 40) plus optional manual-input mixing for debug sessions; validated with updated PPO tool tests (`11 passed`), short live playback smoke (`reason=max_seconds`, `steps=38`), and release unit verification (`183 passed`).

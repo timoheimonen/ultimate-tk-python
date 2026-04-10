@@ -23,6 +23,24 @@ def build_sb3_action_space() -> Any:
     return spaces.MultiDiscrete(_ACTION_NVECS.copy())
 
 
+def sb3_vector_to_env_action(action: Any) -> dict[str, Any]:
+    vector = np.asarray(action, dtype=np.int64).reshape(-1)
+    if vector.size != ACTION_VECTOR_SIZE:
+        raise ValueError(
+            f"expected action vector of size {ACTION_VECTOR_SIZE}, got {vector.size}",
+        )
+
+    hold = (vector[0:8] != 0).astype(np.int8, copy=False)
+    trigger = (vector[8:10] != 0).astype(np.int8, copy=False)
+    weapon_select = int(np.clip(vector[10], 0, 12))
+
+    return {
+        "hold": hold,
+        "trigger": trigger,
+        "weapon_select": weapon_select,
+    }
+
+
 if gym is None:
 
     class SB3ActionWrapper:  # pragma: no cover - import shim for optional deps
@@ -41,18 +59,4 @@ else:
             self.action_space = build_sb3_action_space()
 
         def action(self, action: Any) -> dict[str, Any]:
-            vector = np.asarray(action, dtype=np.int64).reshape(-1)
-            if vector.size != ACTION_VECTOR_SIZE:
-                raise ValueError(
-                    f"expected action vector of size {ACTION_VECTOR_SIZE}, got {vector.size}",
-                )
-
-            hold = (vector[0:8] != 0).astype(np.int8, copy=False)
-            trigger = (vector[8:10] != 0).astype(np.int8, copy=False)
-            weapon_select = int(np.clip(vector[10], 0, 12))
-
-            return {
-                "hold": hold,
-                "trigger": trigger,
-                "weapon_select": weapon_select,
-            }
+            return sb3_vector_to_env_action(action)
