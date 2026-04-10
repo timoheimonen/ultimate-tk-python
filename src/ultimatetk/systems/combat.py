@@ -32,8 +32,13 @@ ENEMY_EXPLOSIVE_MIN_SAFE_RADIUS_RATIO = 0.2
 ENEMY_POST_SHOT_PRESSURE_TRIGGER_DISTANCE_RATIO = 0.5
 ENEMY_POST_SHOT_PRESSURE_MIN_DISTANCE = 32.0
 ENEMY_LOST_SIGHT_CHASE_TICKS_MAX = 120
+ENEMY_INVESTIGATE_TICKS_MAX = 45
+ENEMY_INVESTIGATE_STOP_DISTANCE = 10.0
+ENEMY_INVESTIGATE_SPEED_SCALE = 0.75
 ENEMY_VISION_HALF_ANGLE_DEGREES = 90
 ENEMY_VISION_MAX_DISTANCE_PIXELS = 160.0
+ENEMY_SEPARATION_NEIGHBOR_RADIUS = 36.0
+ENEMY_SEPARATION_FORCE = 0.85
 ENEMY_PATROL_TURN_CHANCE_DIVISOR = 50
 ENEMY_PATROL_START_CHANCE_DIVISOR = 100
 ENEMY_PATROL_BURST_BASE_TICKS = 20
@@ -216,6 +221,9 @@ class EnemyState:
     strafe_ticks: int = 0
     patrol_rng_state: int = 0
     sees_player: bool = False
+    investigate_ticks: int = 0
+    investigate_x: float | None = None
+    investigate_y: float | None = None
     alive: bool = True
     hit_flash_ticks: int = 0
 
@@ -670,6 +678,9 @@ def update_enemy_behavior(
             enemy.sees_player = False
             enemy.pressure_ticks = 0
             enemy.chase_ticks = 0
+            enemy.investigate_ticks = 0
+            enemy.investigate_x = None
+            enemy.investigate_y = None
             enemy.shoot_count = 0
             enemy.strafe_ticks = 0
             continue
@@ -678,6 +689,9 @@ def update_enemy_behavior(
             enemy.sees_player = False
             enemy.pressure_ticks = 0
             enemy.chase_ticks = 0
+            enemy.investigate_ticks = 0
+            enemy.investigate_x = None
+            enemy.investigate_y = None
             enemy.shoot_count = 0
             enemy.strafe_ticks = 0
             _advance_enemy_patrol(
@@ -710,11 +724,17 @@ def update_enemy_behavior(
         if enemy.sees_player:
             enemy.strafe_ticks += 1
             enemy.target_angle = player_angle
+            enemy.investigate_ticks = ENEMY_INVESTIGATE_TICKS_MAX
+            enemy.investigate_x = player.center_x
+            enemy.investigate_y = player.center_y
         elif saw_player_last_tick:
             enemy.chase_ticks = _enemy_lost_sight_chase_ticks(
                 enemy,
                 distance_to_player=distance_to_player,
             )
+            enemy.investigate_ticks = ENEMY_INVESTIGATE_TICKS_MAX
+            enemy.investigate_x = player.center_x
+            enemy.investigate_y = player.center_y
 
         enemy.angle = _rotate_towards_angle(
             enemy.angle,
@@ -735,15 +755,17 @@ def update_enemy_behavior(
 
             attack_range = weapon_range_for_slot(weapon_slot)
             follow_distance = max(40.0, attack_range * 0.55)
-            if distance_to_player > follow_distance or _enemy_should_apply_post_shot_pressure(
+            engage_distance = min(follow_distance, float(attack_range))
+            should_apply_pressure = _enemy_should_apply_post_shot_pressure(
                 enemy,
                 weapon_slot=weapon_slot,
                 distance_to_player=distance_to_player,
-            ):
-                _move_enemy_with_collision(
+            )
+            if distance_to_player > engage_distance or should_apply_pressure:
+                _move_enemy_with_strafe_fallback(
                     enemy,
                     level,
-                    angle=enemy.angle,
+                    move_angle=enemy.angle,
                     speed=enemy_speed_for_type(enemy.type_index),
                     enemies=enemies,
                     player=player,
@@ -772,6 +794,7 @@ def update_enemy_behavior(
                         player=player,
                     )
 
+            distance_to_player = math.hypot(player.center_x - enemy.center_x, player.center_y - enemy.center_y)
             if _can_enemy_fire(enemy, weapon_slot=weapon_slot, distance_to_player=distance_to_player):
                 shots_fired += 1
                 enemy.load_count = 0
@@ -810,12 +833,20 @@ def update_enemy_behavior(
                     player=player,
                 )
             else:
-                _advance_enemy_patrol(
-                    enemy,
-                    level,
-                    enemies=enemies,
-                    player=player,
-                )
+                if enemy.investigate_ticks > 0:
+                    _advance_enemy_investigate(
+                        enemy,
+                        level,
+                        enemies=enemies,
+                        player=player,
+                    )
+                else:
+                    _advance_enemy_patrol(
+                        enemy,
+                        level,
+                        enemies=enemies,
+                        player=player,
+                    )
 
         _advance_enemy_reload(enemy, weapon_slot=weapon_slot)
 
@@ -1674,6 +1705,54 @@ def _enemy_strafe_angle(enemy: EnemyState) -> int:
     return (enemy.angle + 270) % 360
 
 
+def _move_enemy_with_strafe_fallback(
+    enemy: EnemyState,
+    level: LevelData,
+    *,
+    move_angle: int,
+    speed: float,
+    enemies: Sequence[EnemyState],
+    player: PlayerState,
+) -> bool:
+    adjusted_angle = _enemy_separation_adjusted_angle(
+        enemy,
+        move_angle=move_angle,
+        enemies=enemies,
+    )
+    moved = _move_enemy_with_collision(
+        enemy,
+        level,
+        angle=adjusted_angle,
+        speed=speed,
+        enemies=enemies,
+        player=player,
+    )
+    if moved:
+        return True
+
+    strafe_angle = _enemy_strafe_angle(enemy)
+    strafe_speed = max(0.1, speed * 0.7)
+    moved = _move_enemy_with_collision(
+        enemy,
+        level,
+        angle=strafe_angle,
+        speed=strafe_speed,
+        enemies=enemies,
+        player=player,
+    )
+    if moved:
+        return True
+
+    return _move_enemy_with_collision(
+        enemy,
+        level,
+        angle=(strafe_angle + 180) % 360,
+        speed=strafe_speed,
+        enemies=enemies,
+        player=player,
+    )
+
+
 def _advance_enemy_reload(enemy: EnemyState, *, weapon_slot: int) -> None:
     loading_time = weapon_profile_for_slot(weapon_slot).loading_time
     if enemy.load_count < loading_time:
@@ -1699,6 +1778,47 @@ def _advance_enemy_lost_sight_chase(
         enemy.chase_ticks -= 1
     else:
         enemy.chase_ticks = 0
+
+
+def _advance_enemy_investigate(
+    enemy: EnemyState,
+    level: LevelData,
+    *,
+    enemies: Sequence[EnemyState],
+    player: PlayerState,
+) -> None:
+    if enemy.investigate_ticks <= 0:
+        return
+    if enemy.investigate_x is None or enemy.investigate_y is None:
+        enemy.investigate_ticks = 0
+        return
+
+    target_angle = _angle_to_point(
+        enemy.center_x,
+        enemy.center_y,
+        enemy.investigate_x,
+        enemy.investigate_y,
+    )
+    enemy.target_angle = target_angle
+    enemy.angle = _rotate_towards_angle(enemy.angle, target_angle, step=ENEMY_ROTATION_STEP_DEGREES)
+
+    distance_to_target = math.hypot(enemy.investigate_x - enemy.center_x, enemy.investigate_y - enemy.center_y)
+    if distance_to_target <= ENEMY_INVESTIGATE_STOP_DISTANCE:
+        enemy.investigate_ticks = 0
+        return
+
+    _move_enemy_with_strafe_fallback(
+        enemy,
+        level,
+        move_angle=enemy.angle,
+        speed=enemy_speed_for_type(enemy.type_index) * ENEMY_INVESTIGATE_SPEED_SCALE,
+        enemies=enemies,
+        player=player,
+    )
+    enemy.investigate_ticks -= 1
+    if enemy.investigate_ticks <= 0:
+        enemy.investigate_x = None
+        enemy.investigate_y = None
 
 
 def _advance_enemy_patrol(
@@ -1750,6 +1870,40 @@ def _enemy_next_patrol_roll(enemy: EnemyState) -> int:
 
     enemy.patrol_rng_state = (1103515245 * enemy.patrol_rng_state + 12345) & 0x7FFFFFFF
     return enemy.patrol_rng_state
+
+
+def _enemy_separation_adjusted_angle(
+    enemy: EnemyState,
+    *,
+    move_angle: int,
+    enemies: Sequence[EnemyState],
+) -> int:
+    desired_radians = math.radians(move_angle % 360)
+    vec_x = math.sin(desired_radians)
+    vec_y = math.cos(desired_radians)
+
+    has_neighbor = False
+    for other in enemies:
+        if other is enemy or not other.alive:
+            continue
+        dx = enemy.center_x - other.center_x
+        dy = enemy.center_y - other.center_y
+        distance = math.hypot(dx, dy)
+        if distance <= 0.0 or distance > ENEMY_SEPARATION_NEIGHBOR_RADIUS:
+            continue
+        has_neighbor = True
+        inv_distance = 1.0 / distance
+        influence = (ENEMY_SEPARATION_NEIGHBOR_RADIUS - distance) / ENEMY_SEPARATION_NEIGHBOR_RADIUS
+        vec_x += dx * inv_distance * ENEMY_SEPARATION_FORCE * influence
+        vec_y += dy * inv_distance * ENEMY_SEPARATION_FORCE * influence
+
+    if not has_neighbor:
+        return move_angle % 360
+    if abs(vec_x) < 1e-6 and abs(vec_y) < 1e-6:
+        return move_angle % 360
+
+    adjusted = int(round(math.degrees(math.atan2(vec_x, vec_y))))
+    return adjusted % 360
 
 
 def _move_enemy_with_collision(

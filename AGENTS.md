@@ -8,7 +8,7 @@ This file defines workflow rules for coding agents working in this repository.
 - Keep commits focused to one phase/goal.
 - Verify the phase before committing (tests or a smoke run).
 - Keep `python_refactor.md` up to date as progress changes.
-- Keep `python/docs/notes/` updated as phase progress changes.
+- Keep `docs/notes/` updated as phase progress changes.
 - Do not commit secrets, credentials, or machine-specific files.
 - Use descriptive commit messages that explain intent.
 - Do not rewrite published history (no force-push or destructive reset).

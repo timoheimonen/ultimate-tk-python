@@ -32,7 +32,7 @@ python3 tools/release_verification.py --skip-integration
 Run with strict legacy parity against archived original sources:
 
 ```bash
-python3 tools/release_verification.py --legacy-compare-root ARCHIVE
+python3 tools/release_verification.py --legacy-compare-root /path/to/original/legacy-root
 ```
 
 ## Direct command bundle

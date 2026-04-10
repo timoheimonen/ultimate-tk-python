@@ -69,6 +69,10 @@ class SceneManager:
     def current_scene_name(self) -> str:
         return self._current_scene.name
 
+    @property
+    def current_scene(self) -> Scene:
+        return self._current_scene
+
     def handle_events(self, events: Sequence[AppEvent]) -> None:
         transition = self._current_scene.handle_events(self._context, events)
         self._apply_transition(transition)

@@ -37,6 +37,7 @@ class RuntimeState:
     player_ammo_capacities: tuple[int, ...] = ()
     player_load_count: int = 0
     player_fire_ticks: int = 0
+    player_shoot_hold_active: bool = False
     player_shots_fired_total: int = 0
     player_cash: int = 0
     player_shield: int = 0

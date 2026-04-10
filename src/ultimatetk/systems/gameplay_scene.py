@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Sequence
 
 from ultimatetk.assets import GameDataRepository
@@ -78,6 +79,17 @@ from ultimatetk.systems.player_control import (
     weapon_sell_price_for_slot,
     weapon_shop_cost_for_slot,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class GameplayStateView:
+    level: LevelData
+    player: PlayerState
+    enemies: tuple[EnemyState, ...]
+    crates: tuple[CrateState, ...]
+    enemy_projectiles: tuple[EnemyProjectile, ...]
+    player_explosives: tuple[PlayerExplosive, ...]
+    shop_active: bool
 
 
 class GameplayScene(BaseScene):
@@ -2055,6 +2067,7 @@ class GameplayScene(BaseScene):
             context.runtime.player_ammo_capacities = ammo_capacities
             context.runtime.player_load_count = 0
             context.runtime.player_fire_ticks = 0
+            context.runtime.player_shoot_hold_active = False
             context.runtime.player_shots_fired_total = 0
             context.runtime.player_cash = 0
             context.runtime.player_shield = 0
@@ -2107,6 +2120,7 @@ class GameplayScene(BaseScene):
         context.runtime.player_ammo_capacities = bullet_ammo_capacities_snapshot()
         context.runtime.player_load_count = self._player.load_count
         context.runtime.player_fire_ticks = self._player.fire_animation_ticks
+        context.runtime.player_shoot_hold_active = self._player.shoot_hold_count > 0
         context.runtime.player_shots_fired_total = self._player.shots_fired_total
         context.runtime.player_cash = self._player.cash
         context.runtime.player_shield = self._player.shield
@@ -2162,6 +2176,19 @@ class GameplayScene(BaseScene):
         context.runtime.player_explosive_detonations_total = self._player_explosive_detonations
         context.runtime.game_over_active = self._game_over_active
         context.runtime.game_over_ticks_remaining = self._game_over_ticks_remaining
+
+    def ai_state_view(self) -> GameplayStateView | None:
+        if self._level is None or self._player is None:
+            return None
+        return GameplayStateView(
+            level=self._level,
+            player=self._player,
+            enemies=tuple(self._enemies),
+            crates=tuple(self._crates),
+            enemy_projectiles=tuple(self._enemy_projectiles),
+            player_explosives=tuple(self._player_explosives),
+            shop_active=self._shop_active,
+        )
 
 
 def _crate_frame_index(crate: CrateState, frame_count: int) -> int:
