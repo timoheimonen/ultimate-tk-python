@@ -583,6 +583,57 @@ class CombatSystemTests(unittest.TestCase):
         self.assertGreater(enemy.x, 40.0)
         self.assertLess(enemy.y, 140.0)
 
+    def test_enemy_short_range_weapon_closes_dead_zone_gap(self) -> None:
+        level = _build_level(width=12, height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=5,
+            x=40.0,
+            y=76.0,
+            health=10.0,
+            max_health=10.0,
+            angle=180,
+            target_angle=180,
+            load_count=10,
+        )
+
+        update_enemy_behavior(level, [enemy], player)
+
+        self.assertTrue(enemy.sees_player)
+        self.assertLess(enemy.y, 76.0)
+
+    def test_enemy_forward_push_uses_strafe_fallback_when_blocked(self) -> None:
+        level = _build_level(width=12, height=12)
+        player = PlayerState(x=40.0, y=40.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=0,
+        )
+
+        move_angles: list[int] = []
+
+        def _record_move(*args: object, **kwargs: object) -> bool:
+            del args
+            move_angles.append(int(kwargs["angle"]))
+            return len(move_angles) == 2
+
+        with (
+            patch.object(combat_module, "_enemy_strafe_angle", return_value=270),
+            patch.object(combat_module, "_move_enemy_with_collision", side_effect=_record_move),
+        ):
+            report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertEqual(move_angles[:2], [180, 270])
+
     def test_enemy_behavior_uses_legacy_los_trace_step(self) -> None:
         level = _build_level(width=12, height=12)
         player = PlayerState(x=40.0, y=40.0)
@@ -854,6 +905,83 @@ class CombatSystemTests(unittest.TestCase):
         self.assertFalse(enemy.sees_player)
         self.assertGreater(enemy.chase_ticks, 0)
         self.assertLess(enemy.y, start_y)
+
+    def test_enemy_investigates_last_seen_position_after_chase_window(self) -> None:
+        level = _build_level(height=20)
+        player = PlayerState(x=400.0, y=400.0)
+        enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+            load_count=0,
+            chase_ticks=0,
+            investigate_ticks=3,
+            investigate_x=54.0,
+            investigate_y=54.0,
+        )
+
+        start_y = enemy.y
+        report = update_enemy_behavior(level, [enemy], player)
+
+        self.assertEqual(report.shots_fired, 0)
+        self.assertFalse(enemy.sees_player)
+        self.assertEqual(enemy.investigate_ticks, 2)
+        self.assertLess(enemy.y, start_y)
+
+    def test_enemy_separation_adjusts_move_angle_when_neighbor_is_close(self) -> None:
+        moving_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+        )
+        neighbor_enemy = EnemyState(
+            enemy_id=1,
+            type_index=0,
+            x=20.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+        )
+
+        adjusted = combat_module._enemy_separation_adjusted_angle(
+            moving_enemy,
+            move_angle=180,
+            enemies=[moving_enemy, neighbor_enemy],
+        )
+
+        self.assertNotEqual(adjusted, 180)
+
+    def test_enemy_separation_keeps_move_angle_without_neighbors(self) -> None:
+        moving_enemy = EnemyState(
+            enemy_id=0,
+            type_index=0,
+            x=40.0,
+            y=120.0,
+            health=18.0,
+            max_health=18.0,
+            angle=180,
+            target_angle=180,
+        )
+
+        adjusted = combat_module._enemy_separation_adjusted_angle(
+            moving_enemy,
+            move_angle=180,
+            enemies=[moving_enemy],
+        )
+
+        self.assertEqual(adjusted, 180)
 
     def test_enemy_without_prior_sight_does_not_start_chase_window(self) -> None:
         blocked_level = _build_level(height=12, walls={(2, 3)})
