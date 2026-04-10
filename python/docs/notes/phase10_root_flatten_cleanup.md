@@ -11,19 +11,19 @@ This checklist defines the execution order for moving the Python project from `p
 
 ## Workstream 1: Make legacy-compare optional
 
-- [ ] Update `tests/integration/test_real_data_parse.py`:
-  - [ ] Default mode passes without legacy root directories.
-  - [ ] Legacy parity checks run only when explicit legacy-compare mode is enabled.
-- [ ] Update `tools/asset_manifest_report.py`:
-  - [ ] Default mode builds/validates from `game_data` only.
-  - [ ] Optional strict compare mode accepts explicit `--legacy-root`.
-- [ ] Update `tools/release_verification.py`:
-  - [ ] Default release bundle does not require legacy roots.
-  - [ ] Optional legacy compare switch/path is supported.
-- [ ] Verification gate:
-  - [ ] Run unit matrix.
-  - [ ] Run integration matrix.
-  - [ ] Run release verifier in default mode.
+- [x] Update `tests/integration/test_real_data_parse.py`:
+  - [x] Default mode passes without legacy root directories.
+  - [x] Legacy parity checks run only when explicit legacy-compare mode is enabled.
+- [x] Update `tools/asset_manifest_report.py`:
+  - [x] Default mode builds/validates from `game_data` only.
+  - [x] Optional strict compare mode accepts explicit `--legacy-root`.
+- [x] Update `tools/release_verification.py`:
+  - [x] Default release bundle does not require legacy roots.
+  - [x] Optional legacy compare switch/path is supported.
+- [x] Verification gate:
+  - [x] Run unit matrix.
+  - [x] Run integration matrix.
+  - [x] Run release verifier in default mode.
 
 ## Workstream 2: Resolve root-level name conflicts
 
@@ -85,6 +85,14 @@ This checklist defines the execution order for moving the Python project from `p
 - Archived original DOS-era payload and legacy data/code trees under `ARCHIVE/` to unblock case-insensitive root flattening (`SRC`/`src` and `LICENSE` collisions).
 - Preserved Python runtime project under `python/` unchanged for the next flatten step.
 - Post-archive verification snapshot: `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+- Completed Workstream 1 legacy-optional hardening:
+  - `python/tools/asset_manifest_report.py` now defaults to `python_only` mode and supports optional `--legacy-root` strict parity mode.
+  - `python/tests/integration/test_real_data_parse.py` legacy parity test now runs only when `ULTIMATETK_LEGACY_COMPARE_ROOT` is set.
+  - `python/tools/release_verification.py` now supports `--legacy-compare-root` and wires strict parity env/path only when requested.
+- Workstream 1 verification snapshot:
+  - `python3 python/tools/release_verification.py --skip-integration` -> manifest(default python-only) + `181 passed` unit matrix.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `47 passed, 1 skipped` (legacy compare test skipped by default).
+  - `python3 python/tools/release_verification.py --legacy-compare-root ARCHIVE --skip-unit` -> strict legacy parity mode integration matrix `48 passed`.
 
 ## Completion criteria
 

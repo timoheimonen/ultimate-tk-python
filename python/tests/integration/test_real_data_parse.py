@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -79,7 +80,11 @@ class RealDataParseTests(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         categories = manifest.get("categories", {})
 
-        legacy_root = paths.python_root.parent
+        legacy_root_env = os.getenv("ULTIMATETK_LEGACY_COMPARE_ROOT")
+        if legacy_root_env is None:
+            self.skipTest("set ULTIMATETK_LEGACY_COMPARE_ROOT to enable legacy parity comparison")
+
+        legacy_root = Path(legacy_root_env).expanduser().resolve()
         compared = 0
         for category in categories.values():
             if category.get("kind") not in {"graphics", "sound"}:

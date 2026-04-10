@@ -21,11 +21,18 @@ This executes:
 - `--skip-manifest`: skip manifest/gap regeneration
 - `--skip-unit`: skip unit matrix
 - `--skip-integration`: skip integration matrix
+- `--legacy-compare-root <path>`: enable strict parity comparison against legacy source directories
 
 Example:
 
 ```bash
 python3 python/tools/release_verification.py --skip-integration
+```
+
+Run with strict legacy parity against archived original sources:
+
+```bash
+python3 python/tools/release_verification.py --legacy-compare-root ARCHIVE
 ```
 
 ## Direct command bundle

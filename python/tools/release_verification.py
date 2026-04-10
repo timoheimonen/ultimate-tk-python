@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,6 +16,7 @@ PYTHON_ROOT = THIS_FILE.parents[1]
 class VerificationStep:
     name: str
     command: tuple[str, ...]
+    env_overrides: dict[str, str] | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,23 +36,40 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip integration verification matrix",
     )
+    parser.add_argument(
+        "--legacy-compare-root",
+        type=Path,
+        default=None,
+        help="Optional legacy source root for strict legacy-vs-python asset parity checks",
+    )
     return parser.parse_args()
 
 
 def _run_step(step: VerificationStep) -> None:
     print(f"[release-verify] {step.name}", flush=True)
     print(f"[release-verify] command: {' '.join(step.command)}", flush=True)
-    subprocess.run(step.command, cwd=PYTHON_ROOT, check=True)
+    env = None
+    if step.env_overrides:
+        env = dict(os.environ)
+        env.update(step.env_overrides)
+    subprocess.run(step.command, cwd=PYTHON_ROOT, check=True, env=env)
 
 
 def _build_steps(args: argparse.Namespace) -> list[VerificationStep]:
     steps: list[VerificationStep] = []
+    legacy_compare_root = (
+        args.legacy_compare_root.expanduser().resolve() if args.legacy_compare_root else None
+    )
 
     if not args.skip_manifest:
+        manifest_command = [sys.executable, "tools/asset_manifest_report.py"]
+        if legacy_compare_root is not None:
+            manifest_command.extend(["--legacy-root", str(legacy_compare_root)])
+
         steps.append(
             VerificationStep(
                 name="Regenerate asset manifest and gap report",
-                command=(sys.executable, "tools/asset_manifest_report.py"),
+                command=tuple(manifest_command),
             ),
         )
 
@@ -71,6 +90,12 @@ def _build_steps(args: argparse.Namespace) -> list[VerificationStep]:
         )
 
     if not args.skip_integration:
+        integration_env = None
+        if legacy_compare_root is not None:
+            integration_env = {
+                "ULTIMATETK_LEGACY_COMPARE_ROOT": str(legacy_compare_root),
+            }
+
         steps.append(
             VerificationStep(
                 name="Run phase integration verification matrix",
@@ -82,6 +107,7 @@ def _build_steps(args: argparse.Namespace) -> list[VerificationStep]:
                     "tests/integration/test_real_data_render.py",
                     "tests/integration/test_real_data_parse.py",
                 ),
+                env_overrides=integration_env,
             ),
         )
 

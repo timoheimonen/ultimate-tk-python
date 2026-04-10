@@ -1,6 +1,7 @@
 {
   "manifest_version": 1,
   "generated_by": "python/tools/asset_manifest_report.py",
+  "compare_mode": "python_only",
   "required_files": [
     "efps/BODYP.EFP",
     "efps/BOMB.EFP",
@@ -260,7 +261,8 @@
       ],
       "kind": "graphics",
       "legacy_dir": "EFPS",
-      "python_dir": "efps"
+      "python_dir": "efps",
+      "compare_mode": "python_only"
     },
     "FNTS->fnts": {
       "legacy_count": 5,
@@ -283,7 +285,8 @@
       ],
       "kind": "graphics",
       "legacy_dir": "FNTS",
-      "python_dir": "fnts"
+      "python_dir": "fnts",
+      "compare_mode": "python_only"
     },
     "LEVS->levs": {
       "legacy_count": 89,
@@ -474,7 +477,8 @@
       ],
       "kind": "level",
       "legacy_dir": "LEVS",
-      "python_dir": "levs"
+      "python_dir": "levs",
+      "compare_mode": "python_only"
     },
     "MUSIC->music": {
       "legacy_count": 6,
@@ -499,7 +503,8 @@
       ],
       "kind": "sound",
       "legacy_dir": "MUSIC",
-      "python_dir": "music"
+      "python_dir": "music",
+      "compare_mode": "python_only"
     },
     "WAVS->wavs": {
       "legacy_count": 10,
@@ -532,7 +537,8 @@
       ],
       "kind": "sound",
       "legacy_dir": "WAVS",
-      "python_dir": "wavs"
+      "python_dir": "wavs",
+      "compare_mode": "python_only"
     }
   },
   "standalone_files": {
@@ -540,15 +546,17 @@
       "legacy_file": "PALETTE.TAB",
       "python_file": "palette.tab",
       "required": true,
-      "legacy_exists": true,
-      "python_exists": true
+      "legacy_exists": null,
+      "python_exists": true,
+      "compare_mode": "python_only"
     },
     "OPTIONS.CFG": {
       "legacy_file": "OPTIONS.CFG",
       "python_file": "options.cfg",
       "required": false,
-      "legacy_exists": true,
-      "python_exists": true
+      "legacy_exists": null,
+      "python_exists": true,
+      "compare_mode": "python_only"
     }
   }
 }
