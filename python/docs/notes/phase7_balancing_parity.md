@@ -110,6 +110,24 @@ Current baseline already implemented:
   - `python3 -m pytest tests/unit/test_combat.py -k strafe` -> `4 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "multi_enemy_strafe_switches_are_staggered_during_reload or enemy_strafe_blocked_lane_retries_opposite_direction"` -> `2 passed`.
 
+## First tuning slice target (progression/economy pacing)
+
+- Candidate parameters in `python/src/ultimatetk/ui/progression_scene.py`:
+  - `LevelCompleteScene._RETURN_TICKS`
+  - `RunCompleteScene._RETURN_TICKS`
+- Guardrails:
+  - Keep progression event semantics unchanged (`progression_*` metadata contract intact).
+  - Preserve explicit confirm-to-skip behavior for both scenes.
+- Applied delta:
+  - Reduced `LevelCompleteScene._RETURN_TICKS` from `24` to `20`.
+  - Reduced `RunCompleteScene._RETURN_TICKS` from `36` to `30`.
+  - Added explicit scene-flow lock tests:
+    - `test_level_complete_scene_uses_phase7_hold_ticks`
+    - `test_run_complete_scene_uses_phase7_hold_ticks`
+- Validation focus for this slice:
+  - `python3 -m pytest tests/unit/test_scene_flow.py` -> `31 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "run_complete_fallback_returns_to_main_menu_with_reset_index or manual_progression_loop_reaches_run_complete_and_returns_to_menu"` -> `2 passed`.
+
 ## Progress log
 
 - Created Phase 7 kickoff plan and workstream structure in `python/docs/notes/phase7_balancing_parity.md`.
@@ -137,7 +155,16 @@ Current baseline already implemented:
   - Re-ran phase verification command set post-slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `175 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: start Workstream 4 first progression/economy pacing slice.
+- Completed first Workstream 4 progression/economy pacing slice:
+  - Reduced inter-level and run-complete hold windows (`20` and `30` ticks) for faster flow between combat segments and menu return.
+  - Added explicit scene-flow lock tests for tuned progression hold windows.
+  - Focused guard runs:
+    - `python3 -m pytest tests/unit/test_scene_flow.py` -> `31 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "run_complete_fallback_returns_to_main_menu_with_reset_index or manual_progression_loop_reaches_run_complete_and_returns_to_menu"` -> `2 passed`.
+  - Re-ran phase verification command set post-slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `177 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: start Workstream 5 lock expansion for Phase 7 tuning deltas.
 
 ## Kickoff checklist
 
@@ -145,7 +172,7 @@ Current baseline already implemented:
 - [x] Capture baseline telemetry from scripted runtime scenarios.
 - [x] Complete first tuning slice for movement/camera with lock updates.
 - [x] Complete first tuning slice for combat/enemy cadence with lock updates.
-- [ ] Re-run phase verification command set after each closed workstream.
+- [x] Re-run phase verification command set after each closed workstream.
 
 ## Verification plan
 

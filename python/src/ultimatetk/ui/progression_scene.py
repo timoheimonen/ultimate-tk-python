@@ -13,7 +13,7 @@ _CONFIRM_ACTIONS = frozenset((InputAction.SHOOT, InputAction.TOGGLE_SHOP, InputA
 
 class LevelCompleteScene(BaseScene):
     name = "level_complete"
-    _RETURN_TICKS = 24
+    _RETURN_TICKS = 20
 
     def __init__(self, *, from_level_index: int, to_level_index: int) -> None:
         self._from_level_index = max(0, from_level_index)
@@ -63,7 +63,7 @@ class LevelCompleteScene(BaseScene):
 
 class RunCompleteScene(BaseScene):
     name = "run_complete"
-    _RETURN_TICKS = 36
+    _RETURN_TICKS = 30
 
     def __init__(self, *, completed_level_index: int) -> None:
         self._completed_level_index = max(0, completed_level_index)

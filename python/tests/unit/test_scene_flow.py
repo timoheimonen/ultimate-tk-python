@@ -26,6 +26,7 @@ from ultimatetk.systems.player_control import (
     bullet_capacity_units_for_type,
     grant_bullet_ammo,
 )
+from ultimatetk.ui.progression_scene import LevelCompleteScene, RunCompleteScene
 
 
 class SceneFlowTests(unittest.TestCase):
@@ -267,6 +268,20 @@ class SceneFlowTests(unittest.TestCase):
         self.assertIsNot(manager._current_scene, original_scene)  # type: ignore[attr-defined]
         self.assertEqual(context.session.level_index, 1)
 
+    def test_level_complete_scene_uses_phase7_hold_ticks(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        scene = LevelCompleteScene(from_level_index=0, to_level_index=1)
+
+        scene.on_enter(context)
+
+        self.assertEqual(context.runtime.progression_ticks_remaining, 20)
+
     def test_level_completion_fallback_returns_to_menu_when_next_level_is_missing(self) -> None:
         config = RuntimeConfig(autostart_gameplay=False)
         paths = GamePaths(
@@ -303,6 +318,20 @@ class SceneFlowTests(unittest.TestCase):
 
         self.assertEqual(manager.current_scene_name, "main_menu")
         self.assertEqual(context.session.level_index, 0)
+
+    def test_run_complete_scene_uses_phase7_hold_ticks(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        scene = RunCompleteScene(completed_level_index=9)
+
+        scene.on_enter(context)
+
+        self.assertEqual(context.runtime.progression_ticks_remaining, 30)
 
     def test_gameplay_death_does_not_advance_session_index_when_progression_enabled(self) -> None:
         config = RuntimeConfig(autostart_gameplay=False)
