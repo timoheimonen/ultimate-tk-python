@@ -84,6 +84,7 @@ class GameplayScene(BaseScene):
     name = "gameplay"
 
     _GAME_OVER_RETURN_TICKS = 80
+    _DEFAULT_EPISODE = "DEFAULT"
     _PROJECTILE_MARKER_PIXELS = bytes((252, 252, 252, 252))
     _PROJECTILE_MARKER_SIZE = 2
     _PLAYER_EXPLOSIVE_MARKER_SIZE = 3
@@ -379,6 +380,7 @@ class GameplayScene(BaseScene):
         self._enemy_damage_to_player = 0.0
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
+        self._progression_enabled = False
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.GAMEPLAY
@@ -473,19 +475,21 @@ class GameplayScene(BaseScene):
         self._enemy_damage_to_player = 0.0
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
+        self._progression_enabled = not context.config.autostart_gameplay
         self._static_sprites = ()
         self._spot_phase = 0
         self._render_flags = RenderFlags()
 
         repo = GameDataRepository(context.paths)
-        episode = "DEFAULT"
-        level_name = f"LEVEL{max(1, context.session.level_index + 1)}.LEV"
+        episode = self._DEFAULT_EPISODE
+        level_name = self._level_name_for_session_index(context.session.level_index)
         self._ui_font = self._load_ui_font(repo)
 
         try:
             level = repo.load_lev(level_name, episode=episode)
         except FileNotFoundError:
             level_name = "LEVEL1.LEV"
+            context.session.level_index = 0
             try:
                 level = repo.load_lev(level_name, episode=episode)
             except FileNotFoundError as exc:
@@ -692,6 +696,8 @@ class GameplayScene(BaseScene):
                     if self._player.dead:
                         self._activate_game_over(context)
                         transition = self._update_game_over_flow(context)
+                    elif transition is None and self._should_advance_level_progression():
+                        transition = self._advance_level_progression(context)
         else:
             context.runtime.mode = AppMode.GAME_OVER
 
@@ -1978,6 +1984,45 @@ class GameplayScene(BaseScene):
         from ultimatetk.ui.main_menu_scene import MainMenuScene
 
         return SceneTransition(next_scene=MainMenuScene(autostart_enabled=False))
+
+    def _should_advance_level_progression(self) -> bool:
+        if not self._progression_enabled:
+            return False
+        if self._player is None or self._player.dead:
+            return False
+        return alive_enemy_count(self._enemies) == 0
+
+    def _advance_level_progression(self, context: GameContext) -> SceneTransition:
+        next_level_index = context.session.level_index + 1
+        if self._level_exists_for_session_index(context, next_level_index):
+            context.session.level_index = next_level_index
+            context.logger.info(
+                "Level complete, advancing to level %d",
+                context.session.level_index + 1,
+            )
+            return SceneTransition(next_scene=GameplayScene())
+
+        context.logger.info(
+            "Level complete at level %d, no next level found; returning to main menu",
+            context.session.level_index + 1,
+        )
+        context.session.level_index = 0
+        from ultimatetk.ui.main_menu_scene import MainMenuScene
+
+        return SceneTransition(next_scene=MainMenuScene(autostart_enabled=False))
+
+    def _level_exists_for_session_index(self, context: GameContext, level_index: int) -> bool:
+        repo = GameDataRepository(context.paths)
+        level_name = self._level_name_for_session_index(level_index)
+        try:
+            repo.load_lev(level_name, episode=self._DEFAULT_EPISODE)
+        except (FileNotFoundError, ValueError):
+            return False
+        return True
+
+    @staticmethod
+    def _level_name_for_session_index(level_index: int) -> str:
+        return f"LEVEL{max(1, level_index + 1)}.LEV"
 
     def _publish_player_runtime_state(self, context: GameContext) -> None:
         if self._player is None:

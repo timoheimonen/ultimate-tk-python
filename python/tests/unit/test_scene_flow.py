@@ -229,6 +229,92 @@ class SceneFlowTests(unittest.TestCase):
         manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
         self.assertEqual(manager.current_scene_name, "gameplay")
 
+    def test_level_completion_advances_session_index_and_reloads_gameplay_when_progression_enabled(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+        self.assertEqual(context.session.level_index, 0)
+
+        original_scene = manager._current_scene  # type: ignore[attr-defined]
+        enemies = getattr(original_scene, "_enemies", None)
+        if enemies is None:
+            self.skipTest("gameplay scene did not initialize enemies")
+
+        enemies.clear()
+        manager.update(0.025)
+
+        self.assertEqual(manager.current_scene_name, "gameplay")
+        self.assertIsNot(manager._current_scene, original_scene)  # type: ignore[attr-defined]
+        self.assertEqual(context.session.level_index, 1)
+
+    def test_level_completion_fallback_returns_to_menu_when_next_level_is_missing(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        context.session.level_index = 9
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        if enemies is None:
+            self.skipTest("gameplay scene did not initialize enemies")
+
+        enemies.clear()
+        manager.update(0.025)
+
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        self.assertEqual(context.session.level_index, 0)
+
+    def test_gameplay_death_does_not_advance_session_index_when_progression_enabled(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.dead = True
+        player.health = 0.0
+
+        for _ in range(120):
+            manager.update(0.025)
+            if manager.current_scene_name == "main_menu":
+                break
+
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        self.assertEqual(context.session.level_index, 0)
+
     def test_gameplay_death_clears_active_projectiles_and_explosives_same_tick(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(

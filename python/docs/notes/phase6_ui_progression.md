@@ -7,7 +7,7 @@ Current baseline already implemented:
 - Boot -> main-menu -> gameplay scene flow exists with deterministic scene transitions.
 - Main menu now supports interactive `start`/`quit` selection with deterministic non-autostart input handling, while preserving the autostart shortcut for test/dev loops.
 - Gameplay and game-over loop is stable, and game-over already returns to main menu.
-- Session state fields (`episode_index`, `level_index`, `player_name`) exist but are not yet used as a full progression state machine.
+- Session state fields (`episode_index`, `level_index`, `player_name`) are now wired into an initial gameplay progression path (manual-flow level advancement + missing-next-level fallback); broader UI outcome states are still pending.
 
 ## Phase 6 goals
 
@@ -24,7 +24,7 @@ Current baseline already implemented:
    - Wire menu navigation/select input handling in non-autostart runs.
    - Keep autostart path available for test/dev loops without regressing manual flow.
 
-2. Session progression state machine (pending)
+2. Session progression state machine (completed)
    - Define level-complete criteria and deterministic transition timing.
    - Advance `session.level_index` on completion; handle missing-next-level fallback explicitly.
    - Define restart/retry behavior on death versus successful completion.
@@ -58,7 +58,17 @@ Current baseline already implemented:
   - `test_scripted_main_menu_manual_start_enters_gameplay_without_autostart`
   - `test_scripted_main_menu_quit_selection_stops_run_without_core_quit_event`
 - Defined initial Workstream 2 completion trigger baseline for implementation: treat level completion as `enemies_alive == 0` in gameplay runtime state, then advance `session.level_index` with explicit missing-next-level fallback.
-- Verification run after Workstream 1:
+- Completed initial Workstream 2 progression state machine in `python/src/ultimatetk/systems/gameplay_scene.py`:
+  - Added deterministic level-complete trigger (`alive_enemy_count == 0`) for manual progression runs (`autostart_gameplay=False`) so existing autostart-heavy regression loops remain stable while progression wiring lands.
+  - Added deterministic progression transitions: successful completion advances `session.level_index` and reloads gameplay; missing-next-level fallback resets `session.level_index` to `0` and returns to non-autostart main menu.
+  - Preserved death/retry behavior separation: death path still routes through game-over -> main menu without level advancement.
+- Added Workstream 2 scene-flow regression coverage in `python/tests/unit/test_scene_flow.py`:
+  - `test_level_completion_advances_session_index_and_reloads_gameplay_when_progression_enabled`
+  - `test_level_completion_fallback_returns_to_menu_when_next_level_is_missing`
+  - `test_gameplay_death_does_not_advance_session_index_when_progression_enabled`
+- Added scripted headless progression coverage in `python/tests/integration/test_headless_input_script_runtime.py`:
+  - `test_scripted_level_completion_advances_session_index_for_manual_progression_flow`
+- Verification runs after Workstreams 1-2:
   - `python3 -m pytest tests/unit/test_scene_flow.py`
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k main_menu`
   - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
@@ -69,8 +79,8 @@ Current baseline already implemented:
 - [x] Confirm initial Phase 6 target UX path (menu start + quit + level advance).
 - [x] Define first minimal completion trigger for level progression path.
 - [x] Implement Workstream 1 with unit scene-flow coverage.
-- [ ] Implement initial Workstream 2 progression advancement + fallback behavior.
-- [ ] Add at least one scripted integration progression scenario before broader UI polish.
+- [x] Implement initial Workstream 2 progression advancement + fallback behavior.
+- [x] Add at least one scripted integration progression scenario before broader UI polish.
 
 ## Verification plan
 
