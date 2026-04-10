@@ -184,14 +184,14 @@ Acceptance checks:
 ## Workstream 6: Determinism, tests, and docs
 
 - [x] Add unit tests for env reset/step contracts and spaces.
-- [ ] Add deterministic replay checks under fixed seed.
+- [x] Add deterministic replay checks under fixed seed.
 - [x] Add progression-path integration test covering level1 -> ... -> run completion episode ending.
 - [x] Add integration coverage for shop usage impact across level progression (buy in earlier level, verify carry-over into later level).
 - [x] Update README and tracker with AI interface usage and constraints.
 
 Acceptance checks:
 
-- [ ] Focused AI env test matrix is green (blocked locally until `gymnasium`/`numpy` are installed).
+- [x] Focused AI env test matrix is green.
 - [x] Existing release verification remains green without AI optional deps installed.
 
 ## Verification matrix (planned)
@@ -241,5 +241,8 @@ Acceptance checks:
   - `tests/integration/test_gym_env_shop_progression.py`
 - Verification snapshot:
   - `python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py tests/unit/test_gym_action_codec.py tests/unit/test_gym_observation.py tests/unit/test_gym_env.py` -> `61 passed, 8 skipped`.
-  - `python3 -m pytest tests/integration/test_gym_env_progression.py tests/integration/test_gym_env_shop_progression.py` -> `2 skipped` (optional AI deps not installed in local env).
+  - `conda install -y -n ultimatetk -c conda-forge numpy gymnasium` installed optional AI deps in the active conda env.
+  - `python3 -m pytest tests/unit/test_gym_action_codec.py tests/unit/test_gym_observation.py tests/unit/test_gym_env.py tests/integration/test_gym_env_progression.py tests/integration/test_gym_env_shop_progression.py` -> `10 passed`.
+  - `python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 200` -> smoke run passed (`truncated=True`, `terminal_reason=time_limit`).
+  - `python3 -m pytest tests/unit/test_gym_env.py` -> `4 passed` (includes fixed-seed deterministic replay check).
   - `python3 tools/release_verification.py` -> unit `183 passed`, integration `47 passed, 1 skipped`.

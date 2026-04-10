@@ -90,6 +90,65 @@ class GymEnvTests(unittest.TestCase):
         finally:
             env.close()
 
+    def test_replay_is_deterministic_under_fixed_seed(self) -> None:
+        action_sequence = [
+            {
+                "hold": np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.int8),
+                "trigger": np.array([0, 0], dtype=np.int8),
+                "weapon_select": 0,
+            },
+            {
+                "hold": np.array([1, 0, 1, 0, 0, 0, 0, 0], dtype=np.int8),
+                "trigger": np.array([0, 0], dtype=np.int8),
+                "weapon_select": 0,
+            },
+            {
+                "hold": np.array([0, 0, 0, 0, 1, 0, 1, 0], dtype=np.int8),
+                "trigger": np.array([1, 0], dtype=np.int8),
+                "weapon_select": 0,
+            },
+            {
+                "hold": np.zeros((8,), dtype=np.int8),
+                "trigger": np.zeros((2,), dtype=np.int8),
+                "weapon_select": 2,
+            },
+        ]
+
+        def rollout() -> list[tuple[float, bool, bool, int, bool, str, float]]:
+            env = UltimateTKEnv(
+                project_root=str(PROJECT_ROOT),
+                enforce_asset_manifest=True,
+                max_episode_steps=120,
+            )
+            try:
+                observation, _ = env.reset(seed=23)
+                trace: list[tuple[float, bool, bool, int, bool, str, float]] = []
+                for step in range(32):
+                    action = action_sequence[step % len(action_sequence)]
+                    observation, reward, terminated, truncated, info = env.step(action)
+                    rays_sum = float(np.sum(observation["rays"]))
+                    state_sum = float(np.sum(observation["state"]))
+                    trace.append(
+                        (
+                            round(float(reward), 6),
+                            bool(terminated),
+                            bool(truncated),
+                            int(info.get("level_index", 0)),
+                            bool(info.get("game_completed", False)),
+                            str(info.get("terminal_reason", "")),
+                            round(rays_sum + state_sum, 6),
+                        ),
+                    )
+                    if terminated or truncated:
+                        break
+                return trace
+            finally:
+                env.close()
+
+        trace_a = rollout()
+        trace_b = rollout()
+        self.assertEqual(trace_a, trace_b)
+
 
 if __name__ == "__main__":
     unittest.main()
