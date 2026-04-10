@@ -21,19 +21,19 @@ FILE_MAP = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Copy legacy TK data into python/game_data",
+        description="Copy legacy TK data into game_data",
     )
     parser.add_argument(
         "--legacy-root",
         type=Path,
-        default=Path(__file__).resolve().parents[2],
+        default=Path(__file__).resolve().parents[1] / "ARCHIVE",
         help="Path containing legacy EFPS/FNTS/LEVS/MUSIC/WAVS folders",
     )
     parser.add_argument(
-        "--python-root",
+        "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[1],
-        help="Path to the python/ folder",
+        help="Path to the project root containing game_data/",
     )
     parser.add_argument(
         "--dry-run",
@@ -74,8 +74,8 @@ def _copy_file(src: Path, dst: Path, dry_run: bool) -> None:
 def main() -> int:
     args = parse_args()
     legacy_root = args.legacy_root.expanduser().resolve()
-    python_root = args.python_root.expanduser().resolve()
-    game_data_root = python_root / "game_data"
+    project_root = args.project_root.expanduser().resolve()
+    game_data_root = project_root / "game_data"
 
     for src_name, dst_name in DIR_MAP.items():
         _copy_dir(legacy_root / src_name, game_data_root / dst_name, args.dry_run)

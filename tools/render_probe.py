@@ -6,8 +6,8 @@ import sys
 
 
 THIS_FILE = Path(__file__).resolve()
-PYTHON_ROOT = THIS_FILE.parents[1]
-SRC_ROOT = PYTHON_ROOT / "src"
+PROJECT_ROOT = THIS_FILE.parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=PYTHON_ROOT / "runs" / "screenshots" / "phase3_render_probe.ppm",
+        default=PROJECT_ROOT / "runs" / "screenshots" / "phase3_render_probe.ppm",
         help="Output .ppm file path",
     )
     parser.add_argument("--spot-phase", type=int, default=120, help="Spot light sine phase in degrees")

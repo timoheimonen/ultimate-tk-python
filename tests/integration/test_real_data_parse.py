@@ -34,7 +34,7 @@ class RealDataParseTests(unittest.TestCase):
     def test_parse_known_assets(self) -> None:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
+            self.skipTest("game_data not migrated yet")
 
         repo = GameDataRepository(paths)
 
@@ -55,7 +55,7 @@ class RealDataParseTests(unittest.TestCase):
     def test_asset_manifest_required_files_exist(self) -> None:
         paths = GamePaths.discover()
         manifest_path = paths.game_data_root / "asset_manifest.json"
-        self.assertTrue(manifest_path.is_file(), "missing python/game_data/asset_manifest.json")
+        self.assertTrue(manifest_path.is_file(), "missing game_data/asset_manifest.json")
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         required_files = manifest.get("required_files", [])
@@ -69,13 +69,13 @@ class RealDataParseTests(unittest.TestCase):
         self.assertEqual(
             missing_files,
             [],
-            f"missing required python/game_data assets: {missing_files}",
+            f"missing required game_data assets: {missing_files}",
         )
 
     def test_graphics_and_sound_assets_match_legacy_source(self) -> None:
         paths = GamePaths.discover()
         manifest_path = paths.game_data_root / "asset_manifest.json"
-        self.assertTrue(manifest_path.is_file(), "missing python/game_data/asset_manifest.json")
+        self.assertTrue(manifest_path.is_file(), "missing game_data/asset_manifest.json")
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         categories = manifest.get("categories", {})
@@ -111,12 +111,12 @@ class RealDataParseTests(unittest.TestCase):
             self.assertEqual(
                 missing_in_python,
                 [],
-                f"missing graphical/sound assets in python/{python_dir_name}: {missing_in_python}",
+                f"missing graphical/sound assets in game_data/{python_dir_name}: {missing_in_python}",
             )
             self.assertEqual(
                 extra_in_python,
                 [],
-                f"unexpected graphical/sound assets in python/{python_dir_name}: {extra_in_python}",
+                f"unexpected graphical/sound assets in game_data/{python_dir_name}: {extra_in_python}",
             )
             compared += 1
 

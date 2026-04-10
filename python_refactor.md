@@ -97,10 +97,10 @@ python/
 8. Regression suite (completed)
    - Golden snapshots and behavior checks from known scenarios
 9. Data colocation and release hardening (completed)
-   - Migrate all required runtime assets into `python/game_data/`
-   - Ensure all graphical and sound assets are readable/migrated from original legacy files into `python/game_data/`
+   - Migrate all required runtime assets into `game_data/`
+   - Ensure all graphical and sound assets are readable/migrated from original legacy files into `game_data/`
    - Verify the game launches and runs without reading root-level legacy data paths
-10. Root flatten and legacy cleanup (planned)
+10. Root flatten and legacy cleanup (completed)
    - Make legacy-root compare checks optional (off by default)
    - Move Python project layout from `python/` to repository root
    - Remove original root-level legacy game-data directories after flatten verification
@@ -115,7 +115,7 @@ python/
 - Timing parity:
   - Keep fixed-step target equivalent to original 40 FPS behavior
 - Isolation parity:
-  - Validate startup/gameplay works when only `python/` data paths are available
+  - Validate startup/gameplay works when only root-local runtime data paths are available
 
 ## Risks and Watch Items
 - Palette/shadow/light math must match legacy table behavior
@@ -125,7 +125,7 @@ python/
 
 ## Definition of Done (Single-Player)
 - Player can launch, choose episode, play through levels, fight enemies, use shop, and complete progression without network code.
-- All runtime content required by Python build exists inside `python/`.
+- All runtime content required by Python build exists in root-local runtime folders (`src/`, `game_data/`, `runs/`).
 - Python build runs correctly without reading root-level DOS asset directories.
 - Gameplay and visuals are close enough to legacy behavior for practical parity.
 
@@ -245,3 +245,7 @@ python/
 - Added Phase 10 execution checklist plan at `python/docs/notes/phase10_root_flatten_cleanup.md` for optional legacy-compare mode, root flattening, and legacy data cleanup sequencing.
 - Started Phase 10 Workstream 2 conflict-prep move: archived original DOS-era payload (`SRC`, `BAK`, root asset directories, binaries/docs/config files) under `ARCHIVE/` to remove root-level naming collisions ahead of flattening, with unit matrix verification (`181 passed`).
 - Completed Phase 10 Workstream 1 (optional legacy-compare mode): manifest generation and release verification now run in default python-only mode without legacy root directories, while strict parity checks remain available via explicit legacy-root flags/environment (`python3 python/tools/release_verification.py --skip-integration` passed; strict mode `python3 python/tools/release_verification.py --legacy-compare-root ARCHIVE --skip-unit` passed).
+- Completed Phase 10 Workstream 3 (root flatten): moved project runtime/docs/tooling from `python/` to repository root (`src/`, `tests/`, `tools/`, `docs/`, `game_data/`, `runs/`, `pyproject.toml`, root `.gitignore`), removed the wrapper directory, and verified root-layout execution (`python3 tools/release_verification.py` -> `181 passed`, plus integration matrix `47 passed, 1 skipped` default mode).
+- Continued Phase 10 Workstream 4 cleanup: root legacy asset/source trees remain archived under `ARCHIVE/` and strict parity mode remains available via `python3 tools/release_verification.py --legacy-compare-root ARCHIVE --skip-unit` (`48 passed`).
+- Historical references above that use `python/...` paths reflect pre-flatten commit history and are kept for traceability.
+- Completed Phase 10 closeout: root-native project layout is finalized, legacy payload is archived under `ARCHIVE/`, default release verification is legacy-independent, strict legacy parity checks remain opt-in, and `docs/notes/phase10_root_flatten_cleanup.md` now records full completion.

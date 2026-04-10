@@ -6,8 +6,8 @@ import sys
 
 
 THIS_FILE = Path(__file__).resolve()
-PYTHON_ROOT = THIS_FILE.parents[1]
-SRC_ROOT = PYTHON_ROOT / "src"
+PROJECT_ROOT = THIS_FILE.parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
@@ -16,7 +16,7 @@ from ultimatetk.core.paths import GamePaths
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Probe parsed data from python/game_data")
+    parser = argparse.ArgumentParser(description="Probe parsed data from game_data")
     parser.add_argument("--efp", default="COOL.EFP", help="EFP filename in game_data/efps")
     parser.add_argument("--fnt", default="8X8.FNT", help="FNT filename in game_data/fnts")
     parser.add_argument("--episode", default="DEFAULT", help="Episode directory in game_data/levs")

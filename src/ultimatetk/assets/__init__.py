@@ -1,4 +1,4 @@
-"""High-level asset repository backed by python/game_data/."""
+"""High-level asset repository backed by game_data/."""
 
 from ultimatetk.assets.repository import GameDataRepository
 

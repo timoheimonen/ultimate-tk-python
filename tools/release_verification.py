@@ -9,7 +9,7 @@ import sys
 
 
 THIS_FILE = Path(__file__).resolve()
-PYTHON_ROOT = THIS_FILE.parents[1]
+PROJECT_ROOT = THIS_FILE.parents[1]
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +52,7 @@ def _run_step(step: VerificationStep) -> None:
     if step.env_overrides:
         env = dict(os.environ)
         env.update(step.env_overrides)
-    subprocess.run(step.command, cwd=PYTHON_ROOT, check=True, env=env)
+    subprocess.run(step.command, cwd=PROJECT_ROOT, check=True, env=env)
 
 
 def _build_steps(args: argparse.Namespace) -> list[VerificationStep]:

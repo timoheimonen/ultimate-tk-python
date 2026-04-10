@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "generated_by": "python/tools/asset_manifest_report.py",
+  "generated_by": "tools/asset_manifest_report.py",
   "compare_mode": "python_only",
   "required_files": [
     "efps/BODYP.EFP",

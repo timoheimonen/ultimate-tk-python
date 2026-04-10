@@ -7,12 +7,12 @@ Use this runbook for repeatable release validation after Phase 9 hardening.
 Run the bundled verifier from repository root:
 
 ```bash
-python3 python/tools/release_verification.py
+python3 tools/release_verification.py
 ```
 
 This executes:
 
-1. Asset manifest + gap regeneration (`python/tools/asset_manifest_report.py`)
+1. Asset manifest + gap regeneration (`tools/asset_manifest_report.py`)
 2. Unit verification matrix
 3. Integration verification matrix
 
@@ -26,18 +26,18 @@ This executes:
 Example:
 
 ```bash
-python3 python/tools/release_verification.py --skip-integration
+python3 tools/release_verification.py --skip-integration
 ```
 
 Run with strict legacy parity against archived original sources:
 
 ```bash
-python3 python/tools/release_verification.py --legacy-compare-root ARCHIVE
+python3 tools/release_verification.py --legacy-compare-root ARCHIVE
 ```
 
 ## Direct command bundle
 
-If needed, run steps manually inside `python/`:
+If needed, run steps manually from repository root:
 
 ```bash
 python3 tools/asset_manifest_report.py
@@ -47,6 +47,6 @@ python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/
 
 ## Artifact hygiene
 
-- Runtime diagnostics stay under `python/runs/`.
+- Runtime diagnostics stay under `runs/`.
 - Do not commit runtime profile JSON files or generated screenshot dumps.
-- Keep tracked placeholder files (for example `python/runs/screenshots/.gitkeep`) in place.
+- Keep tracked placeholder files (for example `runs/screenshots/.gitkeep`) in place.
