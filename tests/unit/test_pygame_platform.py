@@ -176,6 +176,32 @@ class PygamePlatformBackendTests(unittest.TestCase):
             backend.startup(context)
             import_module.assert_called_once_with("pygame")
 
+    def test_startup_uses_default_window_scale_three(self) -> None:
+        backend = PygamePlatformBackend()
+        context = _context()
+        fake_pygame = _fake_pygame()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        self.assertEqual(fake_pygame.display.mode_calls, [(960, 600)])
+
+    def test_startup_applies_explicit_window_scale_two(self) -> None:
+        backend = PygamePlatformBackend(window_scale=2)
+        context = _context()
+        fake_pygame = _fake_pygame()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        self.assertEqual(fake_pygame.display.mode_calls, [(640, 400)])
+
     def test_poll_events_maps_action_weapon_and_quit(self) -> None:
         event_down = SimpleNamespace(type=101, key=119)  # KEYDOWN K_w
         event_up = SimpleNamespace(type=102, key=119)  # KEYUP K_w
@@ -200,6 +226,44 @@ class PygamePlatformBackendTests(unittest.TestCase):
         self.assertEqual(events[2].type, EventType.WEAPON_SELECT)
         self.assertEqual(events[2].weapon_slot, 1)
         self.assertEqual(events[3].type, EventType.QUIT)
+
+    def test_poll_events_maps_window_close_event_to_quit(self) -> None:
+        event_quit = SimpleNamespace(type=100)
+        fake_pygame = _fake_pygame(events=[event_quit])
+        backend = PygamePlatformBackend()
+        context = _context()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        events = tuple(backend.poll_events())
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, EventType.QUIT)
+
+    def test_poll_events_suppresses_duplicate_keydown_presses(self) -> None:
+        event_down_1 = SimpleNamespace(type=101, key=119)  # KEYDOWN K_w
+        event_down_2 = SimpleNamespace(type=101, key=119)  # KEYDOWN K_w repeat
+        event_up = SimpleNamespace(type=102, key=119)  # KEYUP K_w
+
+        fake_pygame = _fake_pygame(events=[event_down_1, event_down_2, event_up])
+        backend = PygamePlatformBackend()
+        context = _context()
+
+        with patch(
+            "ultimatetk.core.platform_pygame.importlib.import_module",
+            return_value=fake_pygame,
+        ):
+            backend.startup(context)
+
+        events = tuple(backend.poll_events())
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].type, EventType.ACTION_PRESSED)
+        self.assertEqual(events[0].action, InputAction.MOVE_FORWARD)
+        self.assertEqual(events[1].type, EventType.ACTION_RELEASED)
+        self.assertEqual(events[1].action, InputAction.MOVE_FORWARD)
 
     def test_present_blits_scaled_frame_when_payload_is_valid(self) -> None:
         fake_pygame = _fake_pygame()
