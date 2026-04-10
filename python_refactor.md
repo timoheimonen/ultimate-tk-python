@@ -90,9 +90,9 @@ python/
    - Movement, collision, aiming/rotation, weapon switching
 5. Combat and entities (completed)
    - Bullets, enemies, crates, effects, damage/death flow
-6. UI and progression (active)
+6. UI and progression (completed)
    - Main menu, options, episode/level flow, shop, HUD
-7. Balancing and parity pass
+7. Balancing and parity pass (active)
    - Timing adjustments, camera behavior, spawn and effect cadence
 8. Regression suite
    - Golden snapshots and behavior checks from known scenarios
@@ -213,3 +213,6 @@ python/
 - Completed Phase 6 Workstream 4 (persistence and profile continuity hooks): added minimal persisted session profile storage under `python/runs/profiles/session.json` (`player_name`, `episode_index`, `level_index`, schema version), wired explicit startup load/new-session entry points plus shutdown auto-save controls, and added dedicated unit coverage for profile store, app wiring, and CLI flag parsing.
 - Completed Phase 6 Workstream 5 (regression expansion and lock criteria): added full manual menu->gameplay->progression->menu loop coverage in unit and scripted headless integration suites, ensured persisted profile artifacts are gitignored, and re-verified Phase 5 combat/entity lock suites remained stable.
 - Phase 6 goals are now complete; next focus moves to Phase 7 balancing/parity pass.
+- Phase 7 kickoff plan created at `python/docs/notes/phase7_balancing_parity.md` with baseline-capture, balancing, and lock-expansion workstreams.
+- Started Phase 7 Workstream 1 (baseline capture/targets): defined canonical movement/combat/economy/progression parity scenarios plus initial tolerance windows in `python/docs/notes/phase7_balancing_parity.md`, and captured first baseline verification snapshot (`175` unit tests + `44` integration tests passing).
+- Prepared first Phase 7 Workstream 2 movement/camera tuning slice by enumerating candidate camera parameters and focused guard suites in `python/docs/notes/phase7_balancing_parity.md`.
