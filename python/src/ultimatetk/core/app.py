@@ -33,7 +33,7 @@ class GameApplication:
         platform: PlatformBackend | None = None,
     ) -> "GameApplication":
         resolved_paths = paths or GamePaths.discover()
-        resolved_paths.validate_game_data_layout()
+        resolved_paths.validate_game_data_layout(enforce_manifest=config.enforce_asset_manifest)
 
         if config.session_load_on_start and config.session_new_on_start:
             raise ValueError("cannot combine session_load_on_start with session_new_on_start")

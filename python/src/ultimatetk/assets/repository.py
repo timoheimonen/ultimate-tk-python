@@ -11,15 +11,28 @@ from ultimatetk.formats.options_cfg import OptionsConfig, load_options_cfg
 from ultimatetk.formats.palette_tab import PaletteTables, load_palette_tab
 
 
+def _ensure_path_within_directory(path: Path, directory: Path) -> Path:
+    resolved_directory = directory.resolve()
+    resolved_path = path.resolve()
+    try:
+        resolved_path.relative_to(resolved_directory)
+    except ValueError as exc:
+        raise FileNotFoundError(f"asset path escapes expected directory: {path}") from exc
+    return path
+
+
 def _resolve_case_insensitive(directory: Path, filename: str) -> Path:
+    if not directory.is_dir():
+        raise FileNotFoundError(f"directory not found: {directory}")
+
     exact = directory / filename
     if exact.exists():
-        return exact
+        return _ensure_path_within_directory(exact, directory)
 
     needle = filename.lower()
     for entry in directory.iterdir():
         if entry.name.lower() == needle:
-            return entry
+            return _ensure_path_within_directory(entry, directory)
 
     raise FileNotFoundError(f"file not found in {directory}: {filename}")
 

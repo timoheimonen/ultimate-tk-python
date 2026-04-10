@@ -40,7 +40,11 @@ class AppSessionPersistenceTests(unittest.TestCase):
             )
 
             app = GameApplication.create(
-                config=RuntimeConfig(session_load_on_start=True, session_auto_save=False),
+                config=RuntimeConfig(
+                    session_load_on_start=True,
+                    session_auto_save=False,
+                    enforce_asset_manifest=False,
+                ),
                 paths=paths,
             )
 
@@ -58,7 +62,11 @@ class AppSessionPersistenceTests(unittest.TestCase):
             )
 
             app = GameApplication.create(
-                config=RuntimeConfig(session_new_on_start=True, session_auto_save=False),
+                config=RuntimeConfig(
+                    session_new_on_start=True,
+                    session_auto_save=False,
+                    enforce_asset_manifest=False,
+                ),
                 paths=paths,
             )
 
@@ -83,6 +91,7 @@ class AppSessionPersistenceTests(unittest.TestCase):
                     config=RuntimeConfig(
                         session_load_on_start=True,
                         session_new_on_start=True,
+                        enforce_asset_manifest=False,
                     ),
                     paths=paths,
                 )
@@ -93,7 +102,11 @@ class AppSessionPersistenceTests(unittest.TestCase):
             paths = self._prepare_paths(root)
 
             app = GameApplication.create(
-                config=RuntimeConfig(max_seconds=0.0, session_auto_save=True),
+                config=RuntimeConfig(
+                    max_seconds=0.0,
+                    session_auto_save=True,
+                    enforce_asset_manifest=False,
+                ),
                 paths=paths,
             )
             app.context.session.player_name = "Saver"

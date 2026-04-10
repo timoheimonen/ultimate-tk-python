@@ -23,3 +23,4 @@ class RuntimeConfig:
     session_load_on_start: bool = False
     session_new_on_start: bool = False
     session_auto_save: bool = True
+    enforce_asset_manifest: bool = True

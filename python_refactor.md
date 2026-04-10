@@ -98,6 +98,7 @@ python/
    - Golden snapshots and behavior checks from known scenarios
 9. Data colocation and release hardening (active)
    - Migrate all required runtime assets into `python/game_data/`
+   - Ensure all graphical and sound assets are readable/migrated from original legacy files into `python/game_data/`
    - Verify the game launches and runs without reading root-level legacy data paths
 
 ## Validation Strategy
@@ -232,3 +233,5 @@ python/
 - Completed Phase 8 Workstream 4: published fast/full regression command bundles and Phase 8 golden artifact policy in `python/docs/notes/phase8_regression_suite.md`.
 - Completed Phase 8 closeout: all five workstreams are now closed and documented in `python/docs/notes/phase8_regression_suite.md`; next focus moves to Phase 9 data-colocation/release-hardening work.
 - Phase 9 kickoff note/checklist created at `python/docs/notes/phase9_data_release_hardening.md` and is now the active implementation guide for final release hardening.
+- Started Phase 9 Workstream 1 (asset inventory and colocation manifest hardening): added `python/tools/asset_manifest_report.py`, generated `python/game_data/asset_manifest.json` plus `python/game_data/asset_manifest_gap_list.md`, and added integration locks for manifest-required missing-asset checks plus graphical/sound parity against original legacy source directories (`python3 -m pytest tests/integration/test_real_data_parse.py` -> `3 passed`; full integration matrix -> `47 passed`).
+- Completed first Phase 9 Workstream 2/3 isolation slices: startup now enforces `asset_manifest.json` required-asset validation and in-root path checks, repository resolution now blocks symlink/path escapes outside expected asset directories, and new negative-path integration coverage locks fail-fast behavior when manifest-required assets are missing (`python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`; `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`).
