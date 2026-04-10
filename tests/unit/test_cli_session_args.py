@@ -18,6 +18,14 @@ class CliSessionArgsTests(unittest.TestCase):
         args = _parse_args(["--platform", "pygame"])
         self.assertEqual(args.platform, "pygame")
 
+    def test_parse_window_scale_for_pygame(self) -> None:
+        args = _parse_args(["--platform", "pygame", "--window-scale", "2"])
+        self.assertEqual(args.window_scale, 2)
+
+    def test_parse_rejects_non_positive_window_scale(self) -> None:
+        with self.assertRaises(SystemExit):
+            _parse_args(["--platform", "pygame", "--window-scale", "0"])
+
     def test_parse_load_session_flag(self) -> None:
         args = _parse_args(["--load-session"])
         self.assertTrue(args.load_session)

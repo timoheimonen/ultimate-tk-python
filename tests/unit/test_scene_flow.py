@@ -1245,6 +1245,10 @@ class SceneFlowTests(unittest.TestCase):
         gameplay_scene._shop_active = False
         manager.render(0.0)
         digest_without_shop = context.runtime.last_render_digest
+        self.assertEqual(context.runtime.last_render_width, SCREEN_WIDTH)
+        self.assertEqual(context.runtime.last_render_height, SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_pixels), SCREEN_WIDTH * SCREEN_HEIGHT)
+        self.assertEqual(len(context.runtime.last_render_palette), 256 * 3)
 
         gameplay_scene._shop_active = True
         manager.render(0.0)

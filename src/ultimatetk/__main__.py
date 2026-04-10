@@ -8,6 +8,13 @@ from ultimatetk.core.config import RuntimeConfig
 from ultimatetk.core.logging_setup import configure_logging
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return parsed
+
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ultimate TK Python refactor")
     parser.add_argument("--target-fps", type=int, default=40, help="Simulation tick rate")
@@ -51,6 +58,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         default=2,
         help="Frames to keep terminal actions active without repeat",
+    )
+    parser.add_argument(
+        "--window-scale",
+        type=_positive_int,
+        default=3,
+        help="Integer window scale for pygame backend",
     )
     parser.add_argument(
         "--input-script",
@@ -97,6 +110,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         status_print_interval=args.status_print_interval,
         platform=args.platform,
         terminal_hold_frames=args.terminal_hold_frames,
+        pygame_window_scale=args.window_scale,
         input_script=args.input_script,
         session_load_on_start=args.load_session,
         session_new_on_start=args.new_session,

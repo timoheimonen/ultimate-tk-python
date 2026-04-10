@@ -19,6 +19,7 @@ class RuntimeConfig:
     status_print_interval: int = 0
     platform: str = "headless"
     terminal_hold_frames: int = 2
+    pygame_window_scale: int = 3
     input_script: str | None = None
     session_load_on_start: bool = False
     session_new_on_start: bool = False

@@ -43,6 +43,22 @@ class AppPlatformSelectionTests(unittest.TestCase):
             paths=_paths(),
         )
         self.assertIsInstance(app.platform, PygamePlatformBackend)
+        self.assertEqual(app.platform.window_scale, 3)
+
+    def test_pygame_backend_applies_window_scale(self) -> None:
+        app = GameApplication.create(
+            config=RuntimeConfig(platform="pygame", pygame_window_scale=2),
+            paths=_paths(),
+        )
+        self.assertIsInstance(app.platform, PygamePlatformBackend)
+        self.assertEqual(app.platform.window_scale, 2)
+
+    def test_rejects_non_positive_pygame_window_scale(self) -> None:
+        with self.assertRaises(ValueError):
+            GameApplication.create(
+                config=RuntimeConfig(platform="pygame", pygame_window_scale=0),
+                paths=_paths(),
+            )
 
     def test_invalid_platform_raises(self) -> None:
         with self.assertRaises(ValueError):

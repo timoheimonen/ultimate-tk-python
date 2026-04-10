@@ -24,6 +24,8 @@ class RuntimeState:
     last_render_digest: int = 0
     last_render_width: int = 0
     last_render_height: int = 0
+    last_render_pixels: bytes = b""
+    last_render_palette: bytes = b""
     player_world_x: int = 0
     player_world_y: int = 0
     player_angle_degrees: int = 0

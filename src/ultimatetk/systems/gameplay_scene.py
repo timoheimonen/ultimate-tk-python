@@ -729,6 +729,11 @@ class GameplayScene(BaseScene):
     def render(self, context: GameContext, alpha: float) -> None:
         del alpha
         if self._renderer is None:
+            context.runtime.last_render_width = 0
+            context.runtime.last_render_height = 0
+            context.runtime.last_render_pixels = b""
+            context.runtime.last_render_palette = b""
+            context.runtime.last_render_digest = 0
             return
 
         sprites = self._compose_world_sprites()
@@ -751,6 +756,8 @@ class GameplayScene(BaseScene):
 
         context.runtime.last_render_width = SCREEN_WIDTH
         context.runtime.last_render_height = SCREEN_HEIGHT
+        context.runtime.last_render_pixels = pixels
+        context.runtime.last_render_palette = self._renderer.palette_bytes
         context.runtime.last_render_digest = frame_digest(pixels)
 
     def _compose_world_sprites(self) -> tuple[WorldSprite, ...]:

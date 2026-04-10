@@ -79,10 +79,14 @@ class GameApplication:
                 input_schedule=input_schedule,
             )
         elif config.platform == "pygame":
+            if config.pygame_window_scale < 1:
+                raise ValueError("pygame_window_scale must be >= 1")
+
             from ultimatetk.core.platform_pygame import PygamePlatformBackend
 
             active_platform = PygamePlatformBackend(
                 status_print_interval=config.status_print_interval,
+                window_scale=config.pygame_window_scale,
                 input_schedule=input_schedule,
             )
         else:

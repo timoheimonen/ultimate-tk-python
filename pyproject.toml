@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+pygame = ["pygame>=2.5"]
 
 [project.scripts]
 ultimatetk = "ultimatetk.__main__:main"

@@ -4,10 +4,14 @@ This repository hosts the Python refactor at root level.
 
 ## Current status
 - Phases 1-9 are completed (runtime, formats, rendering, controls/combat, UI/progression, parity tuning, regression suite, and data-colocation hardening).
-- Phase 10 is in progress:
+- Phase 10 is completed:
   - root-level project layout is active (no `python/` wrapper directory),
   - legacy DOS-era payload is archived under `ARCHIVE/`,
   - legacy parity checks are optional (default verification works without legacy root asset folders).
+- Phase 11 is in progress:
+  - optional pygame runtime backend is wired behind `--platform pygame`,
+  - gameplay render payload handoff is available for window presentation,
+  - pygame dependency remains optional.
 
 ## Run
 
@@ -27,6 +31,23 @@ Run with terminal keyboard input (interactive TTY required):
 
 ```bash
 PYTHONPATH=src python3 -m ultimatetk --platform terminal --autostart-gameplay --status-print-interval 20
+```
+
+Run with pygame window backend (optional dependency):
+
+```bash
+PYTHONPATH=src python3 -m ultimatetk --platform pygame --autostart-gameplay --window-scale 3
+```
+
+Optional scale examples:
+
+- `--window-scale 2` -> `640x400`
+- `--window-scale 3` -> `960x600`
+
+Install pygame extras (if needed):
+
+```bash
+python3 -m pip install -e ".[pygame]"
 ```
 
 ## Release verification

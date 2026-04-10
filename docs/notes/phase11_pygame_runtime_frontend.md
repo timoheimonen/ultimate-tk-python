@@ -36,35 +36,35 @@ Acceptance checks:
 
 ## Workstream 2: Frame handoff for visual backend presentation
 
-- [ ] Add runtime state fields for latest frame payload used by visual backends:
-  - [ ] frame width/height (`320x200` expected)
-  - [ ] indexed pixel bytes
-  - [ ] palette bytes (VGA 6-bit channels)
-- [ ] Keep existing digest/telemetry behavior unchanged for regression stability.
-- [ ] Publish the frame payload at end of gameplay scene render.
+- [x] Add runtime state fields for latest frame payload used by visual backends:
+  - [x] frame width/height (`320x200` expected)
+  - [x] indexed pixel bytes
+  - [x] palette bytes (VGA 6-bit channels)
+- [x] Keep existing digest/telemetry behavior unchanged for regression stability.
+- [x] Publish the frame payload at end of gameplay scene render.
 
 Acceptance checks:
 
-- [ ] Existing render digest tests continue passing unchanged.
-- [ ] New state fields are updated every render frame in gameplay scene.
+- [x] Existing render digest tests continue passing unchanged.
+- [x] New state fields are updated every render frame in gameplay scene.
 
 ## Workstream 3: Implement pygame backend
 
-- [ ] Add `PygamePlatformBackend` implementing `PlatformBackend` protocol.
-- [ ] Startup responsibilities:
-  - [ ] init pygame and display
-  - [ ] choose window size using integer scale: `display = (320 * scale, 200 * scale)`
-  - [ ] default scale `3`, allow explicit scale values
-- [ ] Present responsibilities:
-  - [ ] convert indexed frame + palette to RGB surface
-  - [ ] draw scaled surface to window with nearest-neighbor behavior
-  - [ ] update display each frame
-- [ ] Poll responsibilities:
-  - [ ] map keyboard press/release to existing `InputAction` events
-  - [ ] map quit/window-close to `QUIT`
-  - [ ] support direct weapon slot keys
-- [ ] Shutdown responsibilities:
-  - [ ] graceful `pygame.quit()` with no impact on headless/terminal paths
+- [x] Add `PygamePlatformBackend` implementing `PlatformBackend` protocol.
+- [x] Startup responsibilities:
+  - [x] init pygame and display
+  - [x] choose window size using integer scale: `display = (320 * scale, 200 * scale)`
+  - [x] default scale `3`, allow explicit scale values
+- [x] Present responsibilities:
+  - [x] convert indexed frame + palette to RGB surface
+  - [x] draw scaled surface to window with nearest-neighbor behavior
+  - [x] update display each frame
+- [x] Poll responsibilities:
+  - [x] map keyboard press/release to existing `InputAction` events
+  - [x] map quit/window-close to `QUIT`
+  - [x] support direct weapon slot keys
+- [x] Shutdown responsibilities:
+  - [x] graceful `pygame.quit()` with no impact on headless/terminal paths
 
 Acceptance checks:
 
@@ -74,11 +74,11 @@ Acceptance checks:
 
 ## Workstream 4: Scaling policy and CLI controls
 
-- [ ] Add CLI/runtime config for pygame scale (integer, min `1`).
-- [ ] Validate and clamp/reject invalid values.
-- [ ] Document recommended scales:
-  - [ ] `--window-scale 2` -> `640x400`
-  - [ ] `--window-scale 3` -> `960x600`
+- [x] Add CLI/runtime config for pygame scale (integer, min `1`).
+- [x] Validate and clamp/reject invalid values.
+- [x] Document recommended scales:
+  - [x] `--window-scale 2` -> `640x400`
+  - [x] `--window-scale 3` -> `960x600`
 
 Acceptance checks:
 
@@ -88,19 +88,19 @@ Acceptance checks:
 
 ## Workstream 5: Packaging, tests, and docs
 
-- [ ] Add optional dependency group for pygame in `pyproject.toml`.
-- [ ] Add unit tests for:
-  - [ ] platform selection (`headless`, `terminal`, `pygame`)
-  - [ ] CLI argument parsing for pygame scale
-  - [ ] lazy import/missing dependency behavior
-  - [ ] pygame input mapping logic (event translation unit-tested without real display)
-- [ ] Update `README.md` with pygame run examples and scaling notes.
-- [ ] Update `python_refactor.md` with Phase 11 kickoff/status line.
+- [x] Add optional dependency group for pygame in `pyproject.toml`.
+- [x] Add unit tests for:
+  - [x] platform selection (`headless`, `terminal`, `pygame`)
+  - [x] CLI argument parsing for pygame scale
+  - [x] lazy import/missing dependency behavior
+  - [x] pygame input mapping logic (event translation unit-tested without real display)
+- [x] Update `README.md` with pygame run examples and scaling notes.
+- [x] Update `python_refactor.md` with Phase 11 kickoff/status line.
 
 Acceptance checks:
 
-- [ ] Existing unit/integration suites remain green in non-pygame environments.
-- [ ] Pygame-specific tests are deterministic and skip safely when dependency is unavailable.
+- [x] Existing unit/integration suites remain green in non-pygame environments.
+- [x] Pygame-specific tests are deterministic and dependency-safe when pygame is unavailable.
 
 ## Verification matrix
 
@@ -134,7 +134,29 @@ Acceptance checks:
   - Added `PygamePlatformBackend` startup lazy import guard (`importlib.import_module("pygame")` only in pygame backend startup path).
   - Added explicit runtime error message with install hint when pygame is missing.
 - Added focused unit coverage for platform selection, CLI parse acceptance, and pygame missing-dependency startup behavior.
+- Completed Workstream 2 frame-payload publication slice:
+  - Added runtime render payload fields in `RuntimeState` (`last_render_pixels`, `last_render_palette`).
+  - Gameplay render now publishes indexed frame payload + palette while preserving digest/width/height telemetry.
+  - Added scene-flow assertions that payload dimensions and sizes are populated during gameplay rendering.
+- Completed Workstream 3 backend implementation slice:
+  - Replaced pygame backend stub with startup/poll/present/shutdown runtime flow.
+  - Added keyboard/action parity mapping (press/release, quit, and direct weapon-slot keys).
+  - Added present-time indexed-frame conversion and integer-scaled blit path.
+  - Added unit coverage for poll-event mapping and frame presentation behavior with mocked pygame module.
+- Completed Workstream 4 scaling/CLI slice:
+  - Added `--window-scale` CLI flag with positive-integer validation.
+  - Added runtime config wiring (`pygame_window_scale`) and application-level validation.
+  - Pygame backend now receives configured scale from runtime config.
+  - Added CLI/app unit coverage for explicit scale, defaults, and invalid value rejection.
+- Completed Workstream 5 packaging/tests/docs slice:
+  - Added optional dependency extra `pygame` in `pyproject.toml`.
+  - Updated `README.md` with pygame launch command, optional install command, and scale examples.
+  - Updated milestone tracker entries in `python_refactor.md`.
+  - Re-ran full release verification matrix to ensure non-pygame workflows remain green.
 - Verification snapshot:
   - `python3 -m pytest tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `10 passed`.
+  - `python3 -m pytest tests/unit/test_scene_flow.py tests/unit/test_app_platform_selection.py tests/unit/test_cli_session_args.py tests/unit/test_pygame_platform.py` -> `52 passed`.
+  - `python3 tools/release_verification.py` -> unit `181 passed`, integration `47 passed, 1 skipped`.
   - `PYTHONPATH=src python3 -m ultimatetk --max-seconds 0.1` -> headless smoke run passed.
   - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --max-seconds 0.01` -> expected fail-fast with clear missing-pygame install hint.
+  - `PYTHONPATH=src python3 -m ultimatetk --platform pygame --window-scale 2 --max-seconds 0.01` -> expected fail-fast with clear missing-pygame install hint (scale arg path exercised).
