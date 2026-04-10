@@ -3591,6 +3591,46 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked_hits, 0)
         self.assertEqual(blocked_kills, 0)
 
+    def test_scripted_main_menu_manual_start_enters_gameplay_without_autostart(self) -> None:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=False,
+            max_seconds=1.0,
+            input_script="0:+SHOOT;20:QUIT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+        app.scene_manager.update(0.025)
+        self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
+
+        exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(app.scene_manager.current_scene_name, "gameplay")
+        self.assertGreater(app.context.runtime.player_health, 0)
+
+    def test_scripted_main_menu_quit_selection_stops_run_without_core_quit_event(self) -> None:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=False,
+            max_seconds=1.0,
+            input_script="0:+MOVE_BACKWARD;1:+SHOOT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+        app.scene_manager.update(0.025)
+        self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
+
+        exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
+        self.assertFalse(app.context.runtime.running)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -88,9 +88,9 @@ python/
    - Tile/sprite drawing, transparency rules, palette/shadow/light table usage
 4. Input and player control (completed)
    - Movement, collision, aiming/rotation, weapon switching
-5. Combat and entities (active closeout phase)
+5. Combat and entities (completed)
    - Bullets, enemies, crates, effects, damage/death flow
-6. UI and progression (next)
+6. UI and progression (active)
    - Main menu, options, episode/level flow, shop, HUD
 7. Balancing and parity pass
    - Timing adjustments, camera behavior, spawn and effect cadence
@@ -207,4 +207,5 @@ python/
 - Completed Phase 5 Workstream 5 (regression expansion and lock criteria): finished final lock sweep for mine trigger ordering, HUD readiness tint transitions, movement/camera micro-parity boundaries, and C4/dead-player projectile telemetry gating; verified with full phase unit + integration command set.
 - Completed Phase 5 handoff closeout: all Workstreams 1-5 are now closed and documented in `python/docs/notes/phase5_combat_entities.md`.
 - Phase 6 kickoff note/checklist created at `python/docs/notes/phase6_ui_progression.md` and is now the active implementation guide for UI/progression flow.
-- Next focus is Phase 6 Workstream 1 (interactive main-menu transition wiring), then Workstream 2 progression-state advancement.
+- Completed Phase 6 Workstream 1 (interactive main-menu transition wiring): replaced the menu scaffold with explicit start/quit entries, added deterministic non-autostart menu navigation/confirm handling while preserving autostart flow, and expanded scene-flow plus scripted headless coverage for manual start and menu-selected quit behavior.
+- Next focus is Phase 6 Workstream 2 (session progression state advancement + missing-next-level fallback), with Workstream 3 inter-level/run-outcome UI state scaffolding after progression transitions are in place.

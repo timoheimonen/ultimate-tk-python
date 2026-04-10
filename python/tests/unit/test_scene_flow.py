@@ -125,6 +125,46 @@ class SceneFlowTests(unittest.TestCase):
         manager.update(0.025)
         self.assertEqual(manager.current_scene_name, "gameplay")
 
+    def test_boot_to_menu_requires_manual_start_when_autostart_is_disabled(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        self.assertEqual(manager.current_scene_name, "boot")
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+    def test_main_menu_quit_selection_sets_runtime_running_false(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        self.assertTrue(context.runtime.running)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.MOVE_BACKWARD),))
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        self.assertFalse(context.runtime.running)
+
     def test_gameplay_death_returns_to_main_menu_without_autostart_loop(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(
@@ -156,6 +196,38 @@ class SceneFlowTests(unittest.TestCase):
 
         manager.update(0.025)
         self.assertEqual(manager.current_scene_name, "main_menu")
+
+    def test_gameplay_death_returns_to_menu_and_manual_start_reenters_gameplay(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=True)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        player = getattr(gameplay_scene, "_player", None)
+        if player is None:
+            self.skipTest("gameplay scene did not initialize player")
+
+        player.dead = True
+        player.health = 0.0
+
+        for _ in range(120):
+            manager.update(0.025)
+            if manager.current_scene_name == "main_menu":
+                break
+
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
 
     def test_gameplay_death_clears_active_projectiles_and_explosives_same_tick(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
