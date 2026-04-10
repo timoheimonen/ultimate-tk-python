@@ -80,6 +80,7 @@ This phase builds a practical PPO training pipeline on top of the Phase 12 Gymna
   - training/eval env path now skips scene rendering by default (opt-in flags keep rendering available for debugging)
   - training callbacks can be disabled (`--eval-freq 0`, `--checkpoint-freq 0`) for maximum step throughput
   - `auto` device resolution now prefers `cpu` on non-CUDA hosts to avoid low-throughput MPS default behavior
+  - PPO trainer now requires tensorboard and always enables tensorboard logging at training start, printing browser launch instructions
 - Added tests:
   - `tests/unit/test_sb3_action_wrapper.py`
   - `tests/unit/test_training_device.py`

@@ -58,20 +58,21 @@ def _import_training_dependencies() -> tuple[object, object, object, object, obj
             "stable-baselines3 dependencies are missing. Install with conda, for example: "
             "conda install -n ultimatetk -c conda-forge pytorch stable-baselines3",
         ) from exc
+
+    try:
+        import tensorboard  # noqa: F401
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "tensorboard is required for PPO training logs. Install with conda, for example: "
+            "conda install -n ultimatetk -c conda-forge tensorboard",
+        ) from exc
+
     return PPO, CallbackList, CheckpointCallback, EvalCallback, (DummyVecEnv, VecMonitor)
 
 
 def _default_run_name() -> str:
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"ppo_{timestamp}"
-
-
-def _tensorboard_available() -> bool:
-    try:
-        import tensorboard  # noqa: F401
-    except ModuleNotFoundError:
-        return False
-    return True
 
 
 def _build_run_dir(args: argparse.Namespace) -> Path:
@@ -120,9 +121,7 @@ def main() -> int:
     if eval_freq > 0:
         eval_dir.mkdir(parents=True, exist_ok=True)
         best_dir.mkdir(parents=True, exist_ok=True)
-    tensorboard_enabled = _tensorboard_available()
-    if tensorboard_enabled:
-        tensorboard_dir.mkdir(parents=True, exist_ok=True)
+    tensorboard_dir.mkdir(parents=True, exist_ok=True)
 
     env_factory = build_sb3_env_factory(
         project_root=PROJECT_ROOT,
@@ -157,7 +156,7 @@ def main() -> int:
             verbose=1,
             seed=args.seed,
             device=device,
-            tensorboard_log=str(tensorboard_dir) if tensorboard_enabled else None,
+            tensorboard_log=str(tensorboard_dir),
             n_steps=max(1, int(args.n_steps)),
             batch_size=max(1, int(args.batch_size)),
             learning_rate=float(args.learning_rate),
@@ -215,8 +214,12 @@ def main() -> int:
     }
     _write_run_config(run_dir / "run_config.json", config_payload)
 
-    if not tensorboard_enabled:
-        print("tensorboard is not installed; tensorboard logging is disabled")
+    print(f"TensorBoard logdir: {tensorboard_dir}")
+    print(
+        "To view live training metrics, run: "
+        f"tensorboard --logdir '{tensorboard_dir}' --host 127.0.0.1 --port 6006",
+    )
+    print("Then open: http://127.0.0.1:6006/")
 
     try:
         model.learn(
