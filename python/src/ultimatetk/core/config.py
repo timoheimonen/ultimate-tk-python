@@ -20,3 +20,6 @@ class RuntimeConfig:
     platform: str = "headless"
     terminal_hold_frames: int = 2
     input_script: str | None = None
+    session_load_on_start: bool = False
+    session_new_on_start: bool = False
+    session_auto_save: bool = True

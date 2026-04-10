@@ -7,7 +7,7 @@ Current baseline already implemented:
 - Boot -> main-menu -> gameplay scene flow exists with deterministic scene transitions.
 - Main menu now supports interactive `start`/`quit` selection with deterministic non-autostart input handling, while preserving the autostart shortcut for test/dev loops.
 - Gameplay and game-over loop is stable, and game-over already returns to main menu.
-- Session state fields (`episode_index`, `level_index`, `player_name`) are now wired into gameplay progression transitions with explicit inter-level and run-complete scene states.
+- Session state fields (`episode_index`, `level_index`, `player_name`) are wired into progression transitions and persisted-session hooks (load/new/save profile path for headless/terminal workflows).
 
 ## Phase 6 goals
 
@@ -34,7 +34,7 @@ Current baseline already implemented:
    - Add terminal/run-complete state (episode end or content end fallback).
    - Expose key progression metadata through runtime fields for verification tooling.
 
-4. Persistence and profile continuity hooks (pending)
+4. Persistence and profile continuity hooks (completed)
    - Define minimal persisted session payload (player name, episode/level progression markers).
    - Add explicit load/new-session behavior entry points.
    - Keep machine-specific paths and secrets out of persisted artifacts.
@@ -79,11 +79,24 @@ Current baseline already implemented:
   - Unit scene-flow updates in `python/tests/unit/test_scene_flow.py` now assert `level_complete` and `run_complete` scene transitions plus runtime progression metadata.
   - Added scripted integration fallback coverage in `python/tests/integration/test_headless_input_script_runtime.py`:
     - `test_scripted_run_complete_fallback_returns_to_main_menu_with_reset_index`
+- Completed Workstream 4 persistence/profile continuity hooks:
+  - Added session profile persistence module `python/src/ultimatetk/core/session_store.py` with minimal payload fields only (`player_name`, `episode_index`, `level_index`, plus schema `version`) persisted to `python/runs/profiles/session.json`.
+  - Added explicit runtime entry points via CLI flags in `python/src/ultimatetk/__main__.py`:
+    - `--load-session` to load persisted profile at startup,
+    - `--new-session` to reset profile at startup,
+    - `--no-save-session` to disable shutdown persistence.
+  - Wired startup load/new behavior and shutdown auto-save hooks in `python/src/ultimatetk/core/app.py`.
+  - Added persistence regression coverage:
+    - `python/tests/unit/test_session_store.py`
+    - `python/tests/unit/test_app_session_persistence.py`
+    - `python/tests/unit/test_cli_session_args.py`
 - Verification runs after Workstreams 1-3:
   - `python3 -m pytest tests/unit/test_scene_flow.py`
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "main_menu or level_completion or run_complete"`
   - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py`
+- Additional verification runs after Workstream 4:
+  - `python3 -m pytest tests/unit/test_session_store.py tests/unit/test_app_session_persistence.py tests/unit/test_cli_session_args.py`
 
 ## Kickoff checklist
 

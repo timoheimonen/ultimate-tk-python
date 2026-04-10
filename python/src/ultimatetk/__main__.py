@@ -60,6 +60,22 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "for example '5:+MOVE_FORWARD;20:-MOVE_FORWARD;25:+TURN_LEFT'"
         ),
     )
+    session_group = parser.add_mutually_exclusive_group()
+    session_group.add_argument(
+        "--load-session",
+        action="store_true",
+        help="Load persisted session profile from runs/profiles/session.json",
+    )
+    session_group.add_argument(
+        "--new-session",
+        action="store_true",
+        help="Start fresh session and overwrite persisted session profile",
+    )
+    parser.add_argument(
+        "--no-save-session",
+        action="store_true",
+        help="Disable automatic session profile save on shutdown",
+    )
     parser.add_argument(
         "--log-level",
         default="INFO",
@@ -82,6 +98,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         platform=args.platform,
         terminal_hold_frames=args.terminal_hold_frames,
         input_script=args.input_script,
+        session_load_on_start=args.load_session,
+        session_new_on_start=args.new_session,
+        session_auto_save=not args.no_save_session,
     )
     app = GameApplication.create(config)
     return app.run()
