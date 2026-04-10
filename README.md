@@ -119,25 +119,27 @@ python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 300
 ### Train PPO
 
 ```bash
-python3 tools/ppo_train.py --total-timesteps 200000 --n-envs 1 --device auto
+python3 tools/ppo_train.py --total-timesteps 5000000 --n-envs 1 --device auto
 ```
 
-Learning-rate schedule defaults to linear decay from `6e-4` -> `3e-4` over the first `80%` of total timesteps.
+Learning-rate schedule defaults to linear decay from `3e-4` -> `5e-5` over the first `80%` of total timesteps.
 Tune with `--learning-rate-start`, `--learning-rate`, `--decay-ratio`, and `--learning-rate-decay-steps`.
 
-Exploration schedule defaults to entropy coefficient linear decay from `0.03` -> `0.005` over the first `80%` of total timesteps.
+Exploration schedule defaults to entropy coefficient linear decay from `0.05` -> `0.01` over the first `80%` of total timesteps.
 Tune with `--ent-coef-start`, `--ent-coef`, `--decay-ratio`, and `--ent-coef-decay-steps`.
+
+Core PPO defaults: `n_steps=2048`, `batch_size=128`, `gamma=0.99`, `gae_lambda=0.95`, `clip_range=0.2`.
 
 ### Max-throughput training mode (uncapped training loop)
 
 ```bash
-python3 tools/ppo_train.py --total-timesteps 200000 --device auto --eval-freq 0 --checkpoint-freq 0
+python3 tools/ppo_train.py --total-timesteps 5000000 --device auto --eval-freq 0 --checkpoint-freq 0
 ```
 
 ### Resume training from checkpoint
 
 ```bash
-python3 tools/ppo_train.py --total-timesteps 200000 --resume-from runs/ai/ppo/<run>/checkpoints/ppo_model_50000_steps.zip --device auto
+python3 tools/ppo_train.py --total-timesteps 5000000 --resume-from runs/ai/ppo/<run>/checkpoints/ppo_model_50000_steps.zip --device auto
 ```
 
 ### Evaluate a saved model

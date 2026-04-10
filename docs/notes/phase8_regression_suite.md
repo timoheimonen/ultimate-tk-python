@@ -128,6 +128,7 @@ Current baseline already implemented:
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
 - Closed Phase 8: behavior-golden and render-golden slices are in place, regression bundles/policy are documented, and completion criteria are satisfied.
 - Next focus moves to Phase 9 data colocation and release hardening.
+- Post-phase maintenance: completed a DRY harness refactor in `tests/integration/test_headless_input_script_runtime.py` by centralizing repeated app/bootstrap/combat-state/tile setup helpers and updating scripted/menu scenario tests to use them; verification: `pytest tests/integration/test_headless_input_script_runtime.py -q` -> `43 passed`.
 
 ## Verification plan
 

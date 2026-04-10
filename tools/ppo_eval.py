@@ -15,17 +15,25 @@ from ultimatetk.ai.sb3_env_factory import build_sb3_env_factory
 from ultimatetk.ai.training_device import detect_torch_capabilities, resolve_torch_device
 
 
+DEFAULT_EVAL_EPISODES = 5
+DEFAULT_SEED = 123
+DEFAULT_DEVICE = "auto"
+DEFAULT_DETERMINISTIC = True
+DEFAULT_MAX_EPISODE_STEPS = 6000
+DEFAULT_TARGET_TICK_RATE = 40
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate PPO checkpoint on UltimateTKEnv")
     parser.add_argument("--model", required=True, help="Path to PPO .zip checkpoint")
-    parser.add_argument("--episodes", type=int, default=5, help="Evaluation episodes")
-    parser.add_argument("--seed", type=int, default=123, help="Base random seed")
-    parser.add_argument("--device", default="auto", choices=("auto", "cpu", "mps", "cuda"))
+    parser.add_argument("--episodes", type=int, default=DEFAULT_EVAL_EPISODES, help="Evaluation episodes")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="Base random seed")
+    parser.add_argument("--device", default=DEFAULT_DEVICE, choices=("auto", "cpu", "mps", "cuda"))
     parser.add_argument(
         "--deterministic",
         dest="deterministic",
         action="store_true",
-        default=True,
+        default=DEFAULT_DETERMINISTIC,
         help="Use deterministic policy actions (default)",
     )
     parser.add_argument(
@@ -34,8 +42,18 @@ def parse_args() -> argparse.Namespace:
         action="store_false",
         help="Use stochastic policy sampling instead of deterministic actions",
     )
-    parser.add_argument("--max-episode-steps", type=int, default=6000, help="Max steps per episode")
-    parser.add_argument("--target-tick-rate", type=int, default=40, help="Fixed simulation tick rate")
+    parser.add_argument(
+        "--max-episode-steps",
+        type=int,
+        default=DEFAULT_MAX_EPISODE_STEPS,
+        help="Max steps per episode",
+    )
+    parser.add_argument(
+        "--target-tick-rate",
+        type=int,
+        default=DEFAULT_TARGET_TICK_RATE,
+        help="Fixed simulation tick rate",
+    )
     parser.add_argument(
         "--disable-asset-manifest-check",
         action="store_true",

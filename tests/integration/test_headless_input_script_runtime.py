@@ -23,15 +23,57 @@ from ultimatetk.systems.player_control import ShotEvent, bullet_capacity_units_f
 
 
 class HeadlessInputScriptRuntimeTests(unittest.TestCase):
+    def _create_app_or_skip(self, config: RuntimeConfig) -> GameApplication:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+        return GameApplication.create(config=config, paths=paths)
+
+    def _enter_gameplay_or_skip(self, app: GameApplication) -> object:
+        app.scene_manager.update(0.025)
+        app.scene_manager.update(0.025)
+        if app.scene_manager.current_scene_name != "gameplay":
+            self.skipTest("failed to enter gameplay scene")
+        return app.scene_manager._current_scene  # type: ignore[attr-defined]
+
+    def _extract_combat_state_or_skip(
+        self,
+        gameplay_scene: object,
+    ) -> tuple[object, object, object, object, object, object]:
+        level = getattr(gameplay_scene, "_level", None)
+        player = getattr(gameplay_scene, "_player", None)
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        crates = getattr(gameplay_scene, "_crates", None)
+        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
+        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
+        if (
+            level is None
+            or player is None
+            or enemies is None
+            or crates is None
+            or enemy_projectiles is None
+            or player_explosives is None
+        ):
+            self.skipTest("gameplay scene did not initialize combat state")
+        return level, player, enemies, crates, enemy_projectiles, player_explosives
+
+    @staticmethod
+    def _set_block(blocks: list[Block], level: object, *, tile_x: int, tile_y: int, block_type: int) -> None:
+        level_x_size = level.level_x_size
+        level_y_size = level.level_y_size
+        if tile_x < 0 or tile_x >= level_x_size:
+            return
+        if tile_y < 0 or tile_y >= level_y_size:
+            return
+        index = tile_y * level_x_size + tile_x
+        old = blocks[index]
+        blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
+
     def _run_scripted_shield_energy_scenario(
         self,
         *,
         sell_after_collect: bool,
     ) -> tuple[int, int, int, str, str, bool]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         script_parts = [
             "20:+SHOP",
             "26:+DOWN",
@@ -59,44 +101,18 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
             max_seconds=3.8,
             input_script=";".join(script_parts),
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 9):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -142,53 +158,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_crate_collect_destroy_mix_scenario(self) -> tuple[int, int, int, int, bool]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.25,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -257,56 +243,26 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         wall_tiles: set[tuple[int, int]],
     ) -> tuple[int, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.6,
             input_script="20:+SHOOT;35:-SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
-            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+            self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -360,56 +316,26 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         wall_tiles: set[tuple[int, int]],
         crate_health: float,
     ) -> tuple[float, bool, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.6,
             input_script="20:+SHOOT;35:-SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
-            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+            self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -469,56 +395,26 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         crate_y: float = 62.0,
         crate_health: float = 12.0,
     ) -> tuple[float, bool, int, int, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.8,
             input_script="20:+SHOOT;35:-SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
-            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+            self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -592,55 +488,25 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         wall_tiles: set[tuple[int, int]],
     ) -> tuple[int, int, float]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.7,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
-            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+            self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -690,52 +556,22 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         pressure_trigger_ratio: float,
     ) -> tuple[float, float, float, float, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.9,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -790,53 +626,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         prior_seen: bool,
     ) -> tuple[float, float, int, bool]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.18,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 9):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
-        set_block(2, 3, WALL_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
+        self._set_block(blocks, level, tile_x=2, tile_y=3, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -882,52 +688,22 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         patrol_roll_value: int,
     ) -> tuple[float, float, float, float, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.35,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 16):
             for tile_x in range(0, 16):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -976,52 +752,22 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_enemy_patrol_turn_lock_scenario(self) -> tuple[int, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.08,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 20):
             for tile_x in range(0, 20):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1062,52 +808,22 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         return (enemies[0].angle, enemies[0].target_angle, enemies[0].walk_ticks)
 
     def _run_scripted_enemy_los_trace_step_scenario(self) -> list[int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.08,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1164,48 +880,18 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         player_x: float = 54.0,
         player_y: float = 76.0,
     ) -> tuple[int, int, float]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.6,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
-
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
 
         max_world_x = max(enemy_x, player_x)
         max_world_y = max(enemy_y, player_y)
@@ -1214,10 +900,10 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
 
         for tile_y in range(0, max_tile_y + 1):
             for tile_x in range(0, max_tile_x + 1):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
-            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+            self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1268,56 +954,26 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         wall_tiles: set[tuple[int, int]],
     ) -> tuple[int, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.8,
             input_script="20:+SHOOT;24:-SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 6):
             for tile_x in range(0, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         for tile_x, tile_y in wall_tiles:
-            set_block(tile_x, tile_y, WALL_BLOCK_TYPE)
+            self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=WALL_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1372,56 +1028,26 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
     def _run_scripted_enemy_strafe_fallback_scenario(
         self,
     ) -> tuple[tuple[tuple[int, bool], ...], int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.15,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
-        set_block(0, 2, WALL_BLOCK_TYPE)
-        set_block(2, 0, WALL_BLOCK_TYPE)
+        self._set_block(blocks, level, tile_x=0, tile_y=2, block_type=WALL_BLOCK_TYPE)
+        self._set_block(blocks, level, tile_x=2, tile_y=0, block_type=WALL_BLOCK_TYPE)
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
         enemies.clear()
@@ -1482,53 +1108,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         with_cover: bool,
     ) -> tuple[float, int, int, int, float]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.15,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1592,53 +1188,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
     def _run_scripted_dead_player_projectile_telemetry_gating_scenario(
         self,
     ) -> tuple[int, float, int, int, float, bool, float]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.2,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1695,53 +1261,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_unknown_owner_projectile_retention_scenario(self) -> tuple[int, int, int, float]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.2,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1802,53 +1338,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_dead_player_buffer_cleanup_scenario(self) -> tuple[int, int, int, int, float, bool]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.2,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -1913,53 +1419,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         *,
         lethal_first: bool = True,
     ) -> tuple[int, float, float, int, int, bool]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.2,
             input_script="8:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 12):
             for tile_x in range(0, 12):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2038,52 +1514,22 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
     def _run_scripted_multi_enemy_strafe_stagger_scenario(
         self,
     ) -> dict[int, tuple[int, ...]]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.2,
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(0, 16):
             for tile_x in range(0, 16):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2168,53 +1614,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
     def _run_scripted_mine_arm_transition_boundary_scenario(
         self,
     ) -> tuple[int, dict[int, tuple[tuple[int, ...], int, int]], int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.0,
             input_script="20:+SHOOT;35:-SHOOT;80:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2332,53 +1748,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         int,
         int,
     ]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.6,
             input_script="20:+SHOOT;35:-SHOOT;60:+SHOOT;75:-SHOOT;120:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 6):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2464,23 +1850,14 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_empty_weapon_fallback_scenario(self) -> tuple[int, int, int, int, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.9,
             input_script="20:+SHOOT;35:-SHOOT;60:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        gameplay_scene = self._enter_gameplay_or_skip(app)
         player = getattr(gameplay_scene, "_player", None)
         enemies = getattr(gameplay_scene, "_enemies", None)
         crates = getattr(gameplay_scene, "_crates", None)
@@ -2534,53 +1911,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_mine_simultaneous_edge_contacts_scenario(self) -> tuple[int, int, int, int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.0,
             input_script="20:+SHOOT;35:-SHOOT;80:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 8):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2636,53 +1983,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def _run_scripted_mine_chained_detonations_scenario(self) -> tuple[int, int, int, float, bool]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.8,
             input_script="20:+SHOOT;35:-SHOOT;60:+SHOOT;75:-SHOOT;120:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 12):
             for tile_x in range(1, 8):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2741,53 +2058,23 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
     def _run_scripted_mine_nearest_contact_ordering_scenario(
         self,
     ) -> tuple[tuple[tuple[float, float], ...], int]:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.0,
             input_script="20:+SHOOT;35:-SHOOT;80:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
-        level = getattr(gameplay_scene, "_level", None)
-        player = getattr(gameplay_scene, "_player", None)
-        enemies = getattr(gameplay_scene, "_enemies", None)
-        crates = getattr(gameplay_scene, "_crates", None)
-        enemy_projectiles = getattr(gameplay_scene, "_enemy_projectiles", None)
-        player_explosives = getattr(gameplay_scene, "_player_explosives", None)
-        if (
-            level is None
-            or player is None
-            or enemies is None
-            or crates is None
-            or enemy_projectiles is None
-            or player_explosives is None
-        ):
-            self.skipTest("gameplay scene did not initialize combat state")
+        gameplay_scene = self._enter_gameplay_or_skip(app)
+        level, player, enemies, crates, enemy_projectiles, player_explosives = self._extract_combat_state_or_skip(
+            gameplay_scene,
+        )
 
         blocks = list(level.blocks)
 
-        def set_block(tile_x: int, tile_y: int, block_type: int) -> None:
-            if tile_x < 0 or tile_x >= level.level_x_size:
-                return
-            if tile_y < 0 or tile_y >= level.level_y_size:
-                return
-            index = tile_y * level.level_x_size + tile_x
-            old = blocks[index]
-            blocks[index] = Block(type=block_type, num=old.num, shadow=old.shadow)
-
         for tile_y in range(1, 10):
             for tile_x in range(1, 8):
-                set_block(tile_x, tile_y, FLOOR_BLOCK_TYPE)
+                self._set_block(blocks, level, tile_x=tile_x, tile_y=tile_y, block_type=FLOOR_BLOCK_TYPE)
 
         gameplay_scene._level = replace(level, blocks=tuple(blocks))  # type: ignore[attr-defined]
 
@@ -2867,16 +2154,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def test_scripted_turn_changes_player_angle(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.6,
             input_script="5:+TURN_LEFT;11:-TURN_LEFT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
         exit_code = app.run()
 
@@ -2884,16 +2167,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertNotEqual(app.context.runtime.player_angle_degrees, 0)
 
     def test_scripted_shoot_increments_shot_counter(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=0.8,
             input_script="5:+SHOOT;40:-SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
         exit_code = app.run()
 
@@ -2902,16 +2181,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(app.context.runtime.enemies_total, app.context.runtime.enemies_alive)
 
     def test_scripted_shop_open_and_buy_attempt_sets_shop_runtime(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=1.0,
             input_script="15:+SHOP;16:+SHOOT;17:+SHOOT;18:+SHOOT;19:+SHOOT;20:+SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
         exit_code = app.run()
 
@@ -2968,23 +2243,14 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertFalse(weapon_one_owned)
 
     def test_scripted_mine_and_c4_update_explosive_runtime(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=True,
             max_seconds=2.5,
             input_script="20:+SHOOT;35:-SHOOT;40:WEAPON=9;55:+SHOOT;70:-SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
 
-        app.scene_manager.update(0.025)
-        app.scene_manager.update(0.025)
-        if app.scene_manager.current_scene_name != "gameplay":
-            self.skipTest("failed to enter gameplay scene")
-
-        gameplay_scene = app.scene_manager._current_scene  # type: ignore[attr-defined]
+        gameplay_scene = self._enter_gameplay_or_skip(app)
         player = getattr(gameplay_scene, "_player", None)
         enemies = getattr(gameplay_scene, "_enemies", None)
         if player is None or enemies is None:
@@ -3594,16 +2860,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(blocked_kills, 0)
 
     def test_scripted_main_menu_manual_start_enters_gameplay_without_autostart(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=False,
             max_seconds=1.0,
             input_script="0:+SHOOT;20:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
         app.scene_manager.update(0.025)
         self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
 
@@ -3614,16 +2876,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertGreater(app.context.runtime.player_health, 0)
 
     def test_scripted_level_completion_advances_session_index_for_manual_progression_flow(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=False,
             max_seconds=1.2,
             input_script="0:+SHOOT;8:+SHOOT;40:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
         app.scene_manager.update(0.025)
         self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
 
@@ -3646,16 +2904,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(app.scene_manager.current_scene_name, "gameplay")
 
     def test_scripted_run_complete_fallback_returns_to_main_menu_with_reset_index(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=False,
             max_seconds=1.2,
             input_script="0:+SHOOT;8:+SHOOT;40:QUIT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
         app.context.session.level_index = 9
         app.scene_manager.update(0.025)
         self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
@@ -3717,16 +2971,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         )
 
     def test_scripted_manual_progression_loop_reaches_run_complete_and_returns_to_menu(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=False,
             max_seconds=2.2,
             input_script="0:+SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
         app.context.session.level_index = 8
         app.scene_manager.update(0.025)
         self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
@@ -3748,16 +2998,12 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertFalse(app.context.runtime.progression_has_next_level)
 
     def test_scripted_main_menu_quit_selection_stops_run_without_core_quit_event(self) -> None:
-        paths = GamePaths.discover()
-        if not (paths.game_data_root / "palette.tab").exists():
-            self.skipTest("python/game_data not migrated yet")
-
         config = RuntimeConfig(
             autostart_gameplay=False,
             max_seconds=1.0,
             input_script="0:+MOVE_BACKWARD;1:+SHOOT",
         )
-        app = GameApplication.create(config=config, paths=paths)
+        app = self._create_app_or_skip(config)
         app.scene_manager.update(0.025)
         self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
 

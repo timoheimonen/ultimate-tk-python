@@ -17,32 +17,53 @@ from ultimatetk.ai.sb3_env_factory import build_sb3_env_factory
 from ultimatetk.ai.training_device import detect_torch_capabilities, resolve_torch_device
 
 
+DEFAULT_TOTAL_TIMESTEPS = 5_000_000
+DEFAULT_N_ENVS = 1
+DEFAULT_MAX_EPISODE_STEPS = 6000
+DEFAULT_TARGET_TICK_RATE = 40
+DEFAULT_CHECKPOINT_FREQ = 1_000_000
+DEFAULT_EVAL_FREQ = 25_000
+DEFAULT_EVAL_EPISODES = 5
+DEFAULT_SEED = 123
+DEFAULT_DEVICE = "auto"
+DEFAULT_N_STEPS = 2048
+DEFAULT_BATCH_SIZE = 128
+DEFAULT_LEARNING_RATE = 5e-5
+DEFAULT_LEARNING_RATE_START = 3e-4
+DEFAULT_DECAY_RATIO = 0.8
+DEFAULT_ENT_COEF = 0.01
+DEFAULT_ENT_COEF_START = 0.05
+DEFAULT_GAMMA = 0.99
+DEFAULT_GAE_LAMBDA = 0.95
+DEFAULT_CLIP_RANGE = 0.2
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train PPO policy on UltimateTK Gymnasium env")
     parser.add_argument("--run-name", default="", help="Run directory name under runs/ai/ppo")
     parser.add_argument("--runs-root", default="", help="Override runs root directory")
-    parser.add_argument("--total-timesteps", type=int, default=200_000, help="Training timesteps")
-    parser.add_argument("--n-envs", type=int, default=1, help="Number of parallel envs")
-    parser.add_argument("--max-episode-steps", type=int, default=6000, help="Max steps per episode")
-    parser.add_argument("--target-tick-rate", type=int, default=40, help="Fixed simulation tick rate")
-    parser.add_argument("--checkpoint-freq", type=int, default=50_000, help="Checkpoint frequency")
-    parser.add_argument("--eval-freq", type=int, default=25_000, help="Evaluation frequency")
-    parser.add_argument("--eval-episodes", type=int, default=5, help="Evaluation episodes per run")
-    parser.add_argument("--seed", type=int, default=123, help="Base random seed")
-    parser.add_argument("--device", default="auto", choices=("auto", "cpu", "mps", "cuda"))
+    parser.add_argument("--total-timesteps", type=int, default=DEFAULT_TOTAL_TIMESTEPS, help="Training timesteps")
+    parser.add_argument("--n-envs", type=int, default=DEFAULT_N_ENVS, help="Number of parallel envs")
+    parser.add_argument("--max-episode-steps", type=int, default=DEFAULT_MAX_EPISODE_STEPS, help="Max steps per episode")
+    parser.add_argument("--target-tick-rate", type=int, default=DEFAULT_TARGET_TICK_RATE, help="Fixed simulation tick rate")
+    parser.add_argument("--checkpoint-freq", type=int, default=DEFAULT_CHECKPOINT_FREQ, help="Checkpoint frequency")
+    parser.add_argument("--eval-freq", type=int, default=DEFAULT_EVAL_FREQ, help="Evaluation frequency")
+    parser.add_argument("--eval-episodes", type=int, default=DEFAULT_EVAL_EPISODES, help="Evaluation episodes per run")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="Base random seed")
+    parser.add_argument("--device", default=DEFAULT_DEVICE, choices=("auto", "cpu", "mps", "cuda"))
     parser.add_argument("--resume-from", default="", help="Path to .zip checkpoint to resume from")
-    parser.add_argument("--n-steps", type=int, default=1024, help="PPO rollout steps")
-    parser.add_argument("--batch-size", type=int, default=256, help="PPO batch size")
+    parser.add_argument("--n-steps", type=int, default=DEFAULT_N_STEPS, help="PPO rollout steps")
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="PPO batch size")
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=3e-4,
+        default=DEFAULT_LEARNING_RATE,
         help="Target/min PPO learning rate after linear decay",
     )
     parser.add_argument(
         "--learning-rate-start",
         type=float,
-        default=6e-4,
+        default=DEFAULT_LEARNING_RATE_START,
         help="Starting PPO learning rate before linear decay",
     )
     parser.add_argument(
@@ -54,19 +75,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--decay-ratio",
         type=float,
-        default=0.8,
+        default=DEFAULT_DECAY_RATIO,
         help="Default decay fraction of total timesteps when explicit decay steps are not set",
     )
     parser.add_argument(
         "--ent-coef",
         type=float,
-        default=0.005,
+        default=DEFAULT_ENT_COEF,
         help="Target/min entropy coefficient after linear decay",
     )
     parser.add_argument(
         "--ent-coef-start",
         type=float,
-        default=0.03,
+        default=DEFAULT_ENT_COEF_START,
         help="Starting entropy coefficient before linear decay",
     )
     parser.add_argument(
@@ -75,7 +96,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override entropy decay duration in timesteps (default: 80%% of total timesteps)",
     )
-    parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
+    parser.add_argument("--gamma", type=float, default=DEFAULT_GAMMA, help="Discount factor")
+    parser.add_argument("--gae-lambda", type=float, default=DEFAULT_GAE_LAMBDA, help="GAE lambda")
+    parser.add_argument("--clip-range", type=float, default=DEFAULT_CLIP_RANGE, help="PPO clipping range")
     parser.add_argument(
         "--disable-asset-manifest-check",
         action="store_true",
@@ -204,6 +227,10 @@ def main() -> int:
         raise ValueError("--ent-coef-start must be >= --ent-coef")
     if args.ent_coef_decay_steps is not None and args.ent_coef_decay_steps < 1:
         raise ValueError("--ent-coef-decay-steps must be >= 1")
+    if args.gae_lambda <= 0.0 or args.gae_lambda > 1.0:
+        raise ValueError("--gae-lambda must be in (0, 1]")
+    if args.clip_range <= 0.0 or args.clip_range > 1.0:
+        raise ValueError("--clip-range must be in (0, 1]")
 
     PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, vec_env_types = _import_training_dependencies()
     DummyVecEnv, VecMonitor = vec_env_types
@@ -294,6 +321,8 @@ def main() -> int:
             learning_rate=learning_rate_schedule,
             ent_coef=float(args.ent_coef_start),
             gamma=float(args.gamma),
+            gae_lambda=float(args.gae_lambda),
+            clip_range=float(args.clip_range),
         )
         reset_num_timesteps = True
 
@@ -356,6 +385,8 @@ def main() -> int:
         "ent_coef_decay_steps": int(effective_ent_decay_steps),
         "decay_ratio": float(args.decay_ratio),
         "gamma": float(args.gamma),
+        "gae_lambda": float(args.gae_lambda),
+        "clip_range": float(args.clip_range),
         "resume_from": resume_path,
         "render_training_scenes": bool(args.render_training_scenes),
     }
