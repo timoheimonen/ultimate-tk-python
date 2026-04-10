@@ -95,6 +95,9 @@ Current baseline already implemented:
   - Python-local-only runtime path hardening: satisfied.
   - Isolation regression coverage with deterministic checks: satisfied.
   - Milestone and docs handoff updates: satisfied.
+- Post-closeout runbook hardening:
+  - Added `python/tools/release_verification.py` as a single-command release verification runner for manifest + unit matrix + integration matrix.
+  - Added `python/docs/release_verification.md` to document release command usage and artifact hygiene expectations.
 
 ## Progress log
 
@@ -124,6 +127,9 @@ Current baseline already implemented:
 - Completed Phase 9 closeout and final handoff with a final hardened-path verification rerun:
   - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `48 passed`.
+- Validated the post-closeout release runbook command bundle:
+  - `python3 python/tools/release_verification.py` -> manifest regeneration + `181` phase unit tests + `48` phase integration tests passing.
+  - `python3 python/tools/release_verification.py --skip-integration` -> manifest regeneration + `181` phase unit tests passing.
 
 ## Verification plan
 
