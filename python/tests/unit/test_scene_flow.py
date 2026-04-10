@@ -335,6 +335,62 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(manager.current_scene_name, "main_menu")
         self.assertEqual(context.session.level_index, 0)
 
+    def test_manual_menu_progression_loop_returns_to_menu_and_restarts_from_level_one(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        context.session.level_index = 8
+        manager = SceneManager(BootScene(), context)
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+        self.assertEqual(context.session.level_index, 8)
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        if enemies is None:
+            self.skipTest("gameplay scene did not initialize enemies")
+        enemies.clear()
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "level_complete")
+        self.assertEqual(context.runtime.progression_event, "level_complete")
+        self.assertEqual(context.runtime.progression_from_level_index, 8)
+        self.assertEqual(context.runtime.progression_to_level_index, 9)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "gameplay")
+        self.assertEqual(context.session.level_index, 9)
+
+        gameplay_scene = manager._current_scene  # type: ignore[attr-defined]
+        enemies = getattr(gameplay_scene, "_enemies", None)
+        if enemies is None:
+            self.skipTest("gameplay scene did not initialize enemies")
+        enemies.clear()
+
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "run_complete")
+        self.assertEqual(context.runtime.progression_event, "run_complete")
+        self.assertEqual(context.runtime.progression_from_level_index, 9)
+        self.assertEqual(context.runtime.progression_to_level_index, 0)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        manager.update(0.025)
+        self.assertEqual(manager.current_scene_name, "main_menu")
+        self.assertEqual(context.session.level_index, 0)
+
+        manager.handle_events((AppEvent.action_pressed(InputAction.SHOOT),))
+        self.assertEqual(manager.current_scene_name, "gameplay")
+        self.assertEqual(context.session.level_index, 0)
+
     def test_gameplay_death_clears_active_projectiles_and_explosives_same_tick(self) -> None:
         config = RuntimeConfig(autostart_gameplay=True)
         paths = GamePaths(

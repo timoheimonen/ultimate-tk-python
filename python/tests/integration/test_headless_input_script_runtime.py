@@ -3674,6 +3674,37 @@ class HeadlessInputScriptRuntimeTests(unittest.TestCase):
         self.assertEqual(app.context.runtime.progression_event, "run_complete")
         self.assertFalse(app.context.runtime.progression_has_next_level)
 
+    def test_scripted_manual_progression_loop_reaches_run_complete_and_returns_to_menu(self) -> None:
+        paths = GamePaths.discover()
+        if not (paths.game_data_root / "palette.tab").exists():
+            self.skipTest("python/game_data not migrated yet")
+
+        config = RuntimeConfig(
+            autostart_gameplay=False,
+            max_seconds=2.2,
+            input_script="0:+SHOOT",
+        )
+        app = GameApplication.create(config=config, paths=paths)
+        app.context.session.level_index = 8
+        app.scene_manager.update(0.025)
+        self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
+
+        original_spawn_enemies = gameplay_scene_module.spawn_enemies_for_level
+
+        def spawn_enemies_for_progression_loop(level: object, *, player_x: float, player_y: float) -> object:
+            if app.context.session.level_index in (8, 9):
+                return ()
+            return original_spawn_enemies(level, player_x=player_x, player_y=player_y)
+
+        with patch.object(gameplay_scene_module, "spawn_enemies_for_level", side_effect=spawn_enemies_for_progression_loop):
+            exit_code = app.run()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(app.scene_manager.current_scene_name, "main_menu")
+        self.assertEqual(app.context.session.level_index, 0)
+        self.assertEqual(app.context.runtime.progression_event, "run_complete")
+        self.assertFalse(app.context.runtime.progression_has_next_level)
+
     def test_scripted_main_menu_quit_selection_stops_run_without_core_quit_event(self) -> None:
         paths = GamePaths.discover()
         if not (paths.game_data_root / "palette.tab").exists():

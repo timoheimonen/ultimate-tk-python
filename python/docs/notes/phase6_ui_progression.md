@@ -39,7 +39,7 @@ Current baseline already implemented:
    - Add explicit load/new-session behavior entry points.
    - Keep machine-specific paths and secrets out of persisted artifacts.
 
-5. Regression expansion and lock criteria (pending)
+5. Regression expansion and lock criteria (completed)
    - Add scene-flow unit tests for menu -> gameplay -> progression -> menu loops.
    - Add scripted headless integration scenarios for completion/death/progression transitions.
    - Lock Phase 5 combat/entity invariants while Phase 6 UI work is in flight.
@@ -90,7 +90,14 @@ Current baseline already implemented:
     - `python/tests/unit/test_session_store.py`
     - `python/tests/unit/test_app_session_persistence.py`
     - `python/tests/unit/test_cli_session_args.py`
-- Verification runs after Workstreams 1-3:
+- Completed Workstream 5 regression expansion and lock criteria:
+  - Added full manual progression-loop scene-flow coverage in `python/tests/unit/test_scene_flow.py`:
+    - `test_manual_menu_progression_loop_returns_to_menu_and_restarts_from_level_one`
+  - Added scripted headless progression-loop integration coverage in `python/tests/integration/test_headless_input_script_runtime.py`:
+    - `test_scripted_manual_progression_loop_reaches_run_complete_and_returns_to_menu`
+  - Added `python/runs/profiles/session.json` to `python/.gitignore` to keep machine-specific persisted profile artifacts out of commits.
+  - Re-ran and confirmed Phase 5 lock suites remain passing while Phase 6 changes landed.
+- Verification runs after Workstreams 1-5:
   - `python3 -m pytest tests/unit/test_scene_flow.py`
   - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py -k "main_menu or level_completion or run_complete"`
   - `python3 -m pytest tests/unit/test_combat.py tests/unit/test_scene_flow.py tests/unit/test_player_control.py`
