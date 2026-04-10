@@ -29,6 +29,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable game_data asset manifest enforcement",
     )
+    parser.add_argument(
+        "--render-scenes",
+        action="store_true",
+        help="Render scene frames during evaluation (off by default for max throughput)",
+    )
     return parser.parse_args()
 
 
@@ -57,6 +62,7 @@ def main() -> int:
         max_episode_steps=max(1, int(args.max_episode_steps)),
         target_tick_rate=max(1, int(args.target_tick_rate)),
         enforce_asset_manifest=not args.disable_asset_manifest_check,
+        render_enabled=bool(args.render_scenes),
     )()
 
     model_path = Path(args.model).expanduser().resolve()

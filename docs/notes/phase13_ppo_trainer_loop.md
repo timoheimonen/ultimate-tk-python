@@ -21,7 +21,7 @@ This phase builds a practical PPO training pipeline on top of the Phase 12 Gymna
 - Use Stable-Baselines3 PPO with `MultiInputPolicy` for dict observations (`rays`, `state`).
 - Add a Gym action wrapper to expose PPO-friendly `MultiDiscrete` action vectors while preserving internal env action schema.
 - Device selection token is explicit: `auto|cpu|mps|cuda`.
-- `auto` preference order: `cuda -> mps -> cpu`.
+- `auto` preference order: `cuda -> cpu` (MPS remains explicit opt-in via `--device mps`).
 
 ## Workstreams
 
@@ -76,6 +76,10 @@ This phase builds a practical PPO training pipeline on top of the Phase 12 Gymna
 - Added PPO tooling:
   - `tools/ppo_train.py`
   - `tools/ppo_eval.py`
+- Added throughput optimizations:
+  - training/eval env path now skips scene rendering by default (opt-in flags keep rendering available for debugging)
+  - training callbacks can be disabled (`--eval-freq 0`, `--checkpoint-freq 0`) for maximum step throughput
+  - `auto` device resolution now prefers `cpu` on non-CUDA hosts to avoid low-throughput MPS default behavior
 - Added tests:
   - `tests/unit/test_sb3_action_wrapper.py`
   - `tests/unit/test_training_device.py`
@@ -84,10 +88,14 @@ This phase builds a practical PPO training pipeline on top of the Phase 12 Gymna
   - `pyproject.toml`
   - `README.md`
   - `python_refactor.md`
+- Installed extra training dependency in active conda env:
+  - `conda install -y -n ultimatetk -c conda-forge tensorboard`
 
 ## Validation snapshot
 
 - `python3 -m pytest tests/unit/test_sb3_action_wrapper.py tests/unit/test_training_device.py` -> `8 passed`.
+- `python3 -m pytest tests/unit/test_training_device.py tests/unit/test_sb3_action_wrapper.py tests/unit/test_ppo_tools_cli.py` -> `10 passed`.
 - `python3 -m pytest tests/unit/test_gym_env.py tests/integration/test_gym_env_progression.py tests/integration/test_gym_env_shop_progression.py` -> `6 passed`.
-- `python3 tools/ppo_train.py --total-timesteps 512 --n-envs 1 --eval-freq 256 --checkpoint-freq 256 --eval-episodes 1 --device auto --run-name phase13_smoke2` -> smoke run passed (MPS path active, checkpoint/eval/final-model artifacts created).
-- `python3 tools/ppo_eval.py --model runs/ai/ppo/phase13_smoke2/final_model.zip --episodes 1 --deterministic --device auto` -> eval smoke passed.
+- `python3 tools/ppo_train.py --total-timesteps 512 --n-envs 1 --eval-freq 0 --checkpoint-freq 0 --device auto --run-name phase13_smoke_fast_auto` -> smoke run passed on uncapped path (`fps` reported as `1211`, final model artifact created).
+- `python3 tools/ppo_eval.py --model runs/ai/ppo/phase13_smoke_fast_auto/final_model.zip --episodes 1 --deterministic --device auto` -> eval smoke passed.
+- `python3 tools/release_verification.py --skip-integration` -> unit verification bundle passed (`183 passed`).

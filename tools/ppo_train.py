@@ -40,6 +40,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable game_data asset manifest enforcement",
     )
+    parser.add_argument(
+        "--render-training-scenes",
+        action="store_true",
+        help="Render scene frames during training (off by default for max throughput)",
+    )
     return parser.parse_args()
 
 
@@ -107,9 +112,14 @@ def main() -> int:
     eval_dir = run_dir / "eval"
     best_dir = run_dir / "best_model"
     tensorboard_dir = run_dir / "tensorboard"
-    checkpoints_dir.mkdir(parents=True, exist_ok=True)
-    eval_dir.mkdir(parents=True, exist_ok=True)
-    best_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_save_freq = max(0, int(args.checkpoint_freq))
+    eval_freq = max(0, int(args.eval_freq))
+
+    if checkpoint_save_freq > 0:
+        checkpoints_dir.mkdir(parents=True, exist_ok=True)
+    if eval_freq > 0:
+        eval_dir.mkdir(parents=True, exist_ok=True)
+        best_dir.mkdir(parents=True, exist_ok=True)
     tensorboard_enabled = _tensorboard_available()
     if tensorboard_enabled:
         tensorboard_dir.mkdir(parents=True, exist_ok=True)
@@ -119,17 +129,17 @@ def main() -> int:
         max_episode_steps=max(1, int(args.max_episode_steps)),
         target_tick_rate=max(1, int(args.target_tick_rate)),
         enforce_asset_manifest=not args.disable_asset_manifest_check,
+        render_enabled=bool(args.render_training_scenes),
     )
     train_env = DummyVecEnv([env_factory for _ in range(args.n_envs)])
     train_env = VecMonitor(train_env)
     train_env.seed(args.seed)
 
-    eval_env = DummyVecEnv([env_factory])
-    eval_env = VecMonitor(eval_env)
-    eval_env.seed(args.seed + 10_000)
-
-    checkpoint_save_freq = max(1, int(args.checkpoint_freq) // args.n_envs)
-    eval_freq = max(1, int(args.eval_freq) // args.n_envs)
+    eval_env = None
+    if eval_freq > 0:
+        eval_env = DummyVecEnv([env_factory])
+        eval_env = VecMonitor(eval_env)
+        eval_env.seed(args.seed + 10_000)
 
     resume_path = args.resume_from.strip()
     if resume_path:
@@ -155,24 +165,29 @@ def main() -> int:
         )
         reset_num_timesteps = True
 
-    callback = CallbackList(
-        [
+    callback_items: list[object] = []
+    if checkpoint_save_freq > 0:
+        callback_items.append(
             CheckpointCallback(
-                save_freq=checkpoint_save_freq,
+                save_freq=max(1, checkpoint_save_freq // args.n_envs),
                 save_path=str(checkpoints_dir),
                 name_prefix="ppo_model",
             ),
+        )
+    if eval_freq > 0:
+        assert eval_env is not None
+        callback_items.append(
             EvalCallback(
                 eval_env,
                 best_model_save_path=str(best_dir),
                 log_path=str(eval_dir),
-                eval_freq=eval_freq,
+                eval_freq=max(1, eval_freq // args.n_envs),
                 n_eval_episodes=int(args.eval_episodes),
                 deterministic=True,
                 render=False,
             ),
-        ],
-    )
+        )
+    callback = CallbackList(callback_items) if callback_items else None
 
     config_payload: dict[str, object] = {
         "run_dir": str(run_dir),
@@ -196,6 +211,7 @@ def main() -> int:
         "learning_rate": float(args.learning_rate),
         "gamma": float(args.gamma),
         "resume_from": resume_path,
+        "render_training_scenes": bool(args.render_training_scenes),
     }
     _write_run_config(run_dir / "run_config.json", config_payload)
 
@@ -213,11 +229,14 @@ def main() -> int:
         model.save(str(final_model_path))
     finally:
         train_env.close()
-        eval_env.close()
+        if eval_env is not None:
+            eval_env.close()
 
     print(f"Training complete. Artifacts: {run_dir}")
-    print(f"- checkpoints: {checkpoints_dir}")
-    print(f"- best model dir: {best_dir}")
+    if checkpoint_save_freq > 0:
+        print(f"- checkpoints: {checkpoints_dir}")
+    if eval_freq > 0:
+        print(f"- best model dir: {best_dir}")
     print(f"- final model: {run_dir / 'final_model.zip'}")
     return 0
 

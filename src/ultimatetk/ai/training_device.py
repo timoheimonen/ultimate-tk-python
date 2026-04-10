@@ -65,6 +65,4 @@ def resolve_torch_device(
 
     if caps.cuda_available:
         return "cuda"
-    if caps.mps_available:
-        return "mps"
     return "cpu"

@@ -14,7 +14,7 @@ from ultimatetk.ai.training_device import TorchCapabilities, resolve_torch_devic
 
 
 class TrainingDeviceTests(unittest.TestCase):
-    def test_auto_prefers_cuda_then_mps_then_cpu(self) -> None:
+    def test_auto_prefers_cuda_then_cpu(self) -> None:
         self.assertEqual(
             resolve_torch_device(
                 "auto",
@@ -35,7 +35,7 @@ class TrainingDeviceTests(unittest.TestCase):
                     mps_available=True,
                 ),
             ),
-            "mps",
+            "cpu",
         )
         self.assertEqual(
             resolve_torch_device(

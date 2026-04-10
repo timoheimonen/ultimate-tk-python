@@ -29,6 +29,7 @@ class TrainingRuntimeDriver:
     context: GameContext
     scene_manager: SceneManager
     fixed_dt_seconds: float
+    render_enabled: bool
     _carryover: PlayerCarryoverState | None = None
     _last_gameplay_scene_id: int = 0
 
@@ -40,6 +41,7 @@ class TrainingRuntimeDriver:
         target_tick_rate: int = 40,
         enforce_asset_manifest: bool = True,
         project_root: str | Path | None = None,
+        render_enabled: bool = False,
     ) -> "TrainingRuntimeDriver":
         if project_root is None:
             paths = GamePaths.discover()
@@ -74,6 +76,7 @@ class TrainingRuntimeDriver:
             context=context,
             scene_manager=scene_manager,
             fixed_dt_seconds=fixed_dt,
+            render_enabled=bool(render_enabled),
         )
         driver._refresh_carryover_snapshot()
         return driver
@@ -84,8 +87,9 @@ class TrainingRuntimeDriver:
         self.context.runtime.simulation_frame += 1
 
         self._restore_carryover_on_new_gameplay_scene()
-        self.scene_manager.render(0.0)
-        self.context.runtime.render_frame += 1
+        if self.render_enabled:
+            self.scene_manager.render(0.0)
+            self.context.runtime.render_frame += 1
         self.context.runtime.elapsed_seconds += self.fixed_dt_seconds
         self._refresh_carryover_snapshot()
 

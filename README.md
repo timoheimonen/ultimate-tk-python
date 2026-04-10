@@ -88,7 +88,7 @@ python3 -m pip install -e ".[ai_train]"
 Conda-first install for AI training in env `ultimatetk`:
 
 ```bash
-conda install -y -n ultimatetk -c conda-forge numpy gymnasium pytorch stable-baselines3
+conda install -y -n ultimatetk -c conda-forge numpy gymnasium pytorch stable-baselines3 tensorboard
 ```
 
 ## Gymnasium training env (Phase 12)
@@ -132,6 +132,12 @@ Train PPO with periodic checkpoints and eval:
 python3 tools/ppo_train.py --total-timesteps 200000 --n-envs 1 --device auto
 ```
 
+Max-throughput training (no scene rendering, no periodic eval/checkpoint callbacks):
+
+```bash
+python3 tools/ppo_train.py --total-timesteps 200000 --device auto --eval-freq 0 --checkpoint-freq 0
+```
+
 Resume from checkpoint:
 
 ```bash
@@ -146,7 +152,7 @@ python3 tools/ppo_eval.py --model runs/ai/ppo/<run>/final_model.zip --episodes 5
 
 Device notes:
 
-- Apple Silicon: use `--device auto` (prefers `mps` when available) or `--device mps`.
+- Apple Silicon: use `--device auto` for highest throughput (defaults to `cpu`), or `--device mps` if you explicitly want Metal acceleration.
 - CUDA hosts: use `--device auto` (prefers `cuda` when available) or `--device cuda`.
 - CPU fallback remains available via `--device cpu`.
 

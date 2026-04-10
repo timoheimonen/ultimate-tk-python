@@ -50,6 +50,7 @@ else:
             target_tick_rate: int = 40,
             enforce_asset_manifest: bool = True,
             project_root: str | None = None,
+            render_enabled: bool = False,
             reward_config: RewardConfig | None = None,
         ) -> None:
             super().__init__()
@@ -57,6 +58,7 @@ else:
             self._target_tick_rate = max(1, int(target_tick_rate))
             self._enforce_asset_manifest = bool(enforce_asset_manifest)
             self._project_root = project_root
+            self._render_enabled = bool(render_enabled)
 
             self._driver: TrainingRuntimeDriver | None = None
             self._action_codec = ActionCodec()
@@ -90,6 +92,7 @@ else:
                 target_tick_rate=self._target_tick_rate,
                 enforce_asset_manifest=self._enforce_asset_manifest,
                 project_root=self._project_root,
+                render_enabled=self._render_enabled,
             )
 
             runtime = self._driver.context.runtime
