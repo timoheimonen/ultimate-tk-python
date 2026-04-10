@@ -42,13 +42,46 @@ Current baseline already implemented:
    - Confirm no regressions in locked Phase 4/5/6/7 invariants.
    - Update `python_refactor.md` and this note with completion and Phase 9 handoff context.
 
+## Workstream 1 scenario catalog (draft)
+
+- Movement/camera behavior-golden set:
+  - `test_follow_camera_turn_in_place_firing_catches_up_faster_than_idle`
+  - `test_gameplay_action_idle_camera_catchup_is_faster_than_idle`
+  - `test_scripted_turn_changes_player_angle`
+- Combat cadence and ordering set:
+  - `test_enemy_strafe_direction_holds_across_short_reload_windows`
+  - `test_enemy_strafe_switch_tick_is_staggered_between_neighbor_enemy_ids`
+  - `test_scripted_multi_enemy_strafe_switches_are_staggered_during_reload`
+- Progression/shop flow set:
+  - `test_level_complete_scene_auto_returns_after_phase7_hold_ticks`
+  - `test_run_complete_scene_auto_returns_after_phase7_hold_ticks`
+  - `test_manual_progression_restart_keeps_shop_flow_stable_after_phase7_pacing`
+- Real-data renderer/parser smoke set:
+  - `python/tests/integration/test_real_data_render.py`
+  - `python/tests/integration/test_real_data_parse.py`
+
+## Acceptance envelope (Phase 8 draft)
+
+- Timing/order-sensitive counters and scene transitions remain exact-match assertions.
+- Camera/movement micro-feel checks keep monotonic and minimum-delta assertions (no broad tolerance widening).
+- Render/parser smoke checks remain deterministic pass/fail gates in baseline matrix until dedicated golden artifact policy lands.
+
 ## Kickoff checklist
 
-- [ ] Define canonical Phase 8 golden scenario catalog.
+- [x] Define canonical Phase 8 golden scenario catalog.
 - [ ] Implement first behavior-golden regression slice.
 - [ ] Implement first render-golden regression slice.
 - [ ] Publish Phase 8 command bundles and artifact policy.
-- [ ] Re-run full verification matrix after each closed workstream.
+- [x] Re-run full verification matrix after each closed workstream.
+
+## Progress log
+
+- Created Phase 8 kickoff plan and workstreams in `python/docs/notes/phase8_regression_suite.md`.
+- Drafted Workstream 1 canonical scenario catalog and initial acceptance envelope from existing lock suites.
+- Captured initial Phase 8 baseline verification snapshot:
+  - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `181 passed`.
+  - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py tests/integration/test_real_data_parse.py` -> `45 passed`.
+- Next immediate action: start Workstream 2 by adding the first explicit behavior-golden aggregate assertion slice.
 
 ## Verification plan
 
