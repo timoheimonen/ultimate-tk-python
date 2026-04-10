@@ -250,6 +250,7 @@ Applied via:
   - `python3 -m pytest tests/unit/test_gym_action_codec.py tests/unit/test_gym_observation.py tests/unit/test_gym_env.py tests/integration/test_gym_env_progression.py tests/integration/test_gym_env_shop_progression.py` -> `10 passed`.
   - `python3 tools/gym_random_policy_smoke.py --episodes 1 --max-steps 200` -> smoke run passed (`truncated=True`, `terminal_reason=time_limit`).
   - `python3 -m pytest tests/unit/test_gym_env.py` -> `4 passed` (includes fixed-seed deterministic replay check).
+  - Reward shaping follow-up: standardized negative-shaping config names to `*_cost`, added engagement-gated strafing reward (enemy-visible plus shooting/hit/projectile-threat context), added anti-stuck small-area cost tracking, and tightened idle anti-vibration thresholds (`idle_distance_epsilon=3.0`, `idle_ticks_threshold=45`) with updated reward unit coverage (`python3 -m pytest tests/unit/test_gym_reward.py` -> `9 passed`).
 
 ## Phase 12 closeout
 
