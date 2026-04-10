@@ -283,6 +283,30 @@ class SceneFlowTests(unittest.TestCase):
 
         self.assertEqual(context.runtime.progression_ticks_remaining, 20)
 
+    def test_level_complete_scene_auto_returns_after_phase7_hold_ticks(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        scene = LevelCompleteScene(from_level_index=0, to_level_index=1)
+
+        scene.on_enter(context)
+        transition = None
+        for _ in range(19):
+            transition = scene.update(context, 0.025)
+            self.assertIsNone(transition)
+
+        transition = scene.update(context, 0.025)
+
+        self.assertIsNotNone(transition)
+        assert transition is not None
+        self.assertEqual(context.runtime.progression_ticks_remaining, 0)
+        self.assertEqual(context.session.level_index, 1)
+        self.assertEqual(transition.next_scene.name, "gameplay")
+
     def test_level_completion_fallback_returns_to_menu_when_next_level_is_missing(self) -> None:
         config = RuntimeConfig(autostart_gameplay=False)
         paths = GamePaths(
@@ -334,6 +358,31 @@ class SceneFlowTests(unittest.TestCase):
         scene.on_enter(context)
 
         self.assertEqual(context.runtime.progression_ticks_remaining, 30)
+
+    def test_run_complete_scene_auto_returns_after_phase7_hold_ticks(self) -> None:
+        config = RuntimeConfig(autostart_gameplay=False)
+        paths = GamePaths(
+            python_root=PROJECT_ROOT,
+            game_data_root=PROJECT_ROOT / "game_data",
+            runs_root=PROJECT_ROOT / "runs",
+        )
+        context = GameContext(config=config, paths=paths)
+        context.session.level_index = 9
+        scene = RunCompleteScene(completed_level_index=9)
+
+        scene.on_enter(context)
+        transition = None
+        for _ in range(29):
+            transition = scene.update(context, 0.025)
+            self.assertIsNone(transition)
+
+        transition = scene.update(context, 0.025)
+
+        self.assertIsNotNone(transition)
+        assert transition is not None
+        self.assertEqual(context.runtime.progression_ticks_remaining, 0)
+        self.assertEqual(context.session.level_index, 0)
+        self.assertEqual(transition.next_scene.name, "main_menu")
 
     def test_gameplay_death_does_not_advance_session_index_when_progression_enabled(self) -> None:
         config = RuntimeConfig(autostart_gameplay=False)

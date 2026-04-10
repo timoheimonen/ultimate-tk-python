@@ -156,6 +156,15 @@ Current baseline already implemented:
   - `python3 -m pytest tests/unit/test_scene_flow.py -k gameplay_action_idle_camera_catchup_is_faster_than_idle` -> `1 passed`.
   - `python3 -m pytest tests/unit/test_player_control.py -k turn_in_place_firing_catches_up_faster_than_idle` -> `1 passed`.
 
+## Workstream 5 lock-expansion slice (progression auto-return timing)
+
+- Added explicit progression auto-return lock coverage for tuned hold windows:
+  - `test_level_complete_scene_auto_returns_after_phase7_hold_ticks`
+  - `test_run_complete_scene_auto_returns_after_phase7_hold_ticks`
+- These tests lock that no transition occurs before the final tuned hold tick, and that the transition/session index updates occur exactly at hold completion.
+- Validation focus for this slice:
+  - `python3 -m pytest tests/unit/test_scene_flow.py -k "level_complete_scene_auto_returns_after_phase7_hold_ticks or run_complete_scene_auto_returns_after_phase7_hold_ticks"` -> `2 passed`.
+
 ## Progress log
 
 - Created Phase 7 kickoff plan and workstream structure in `python/docs/notes/phase7_balancing_parity.md`.
@@ -216,7 +225,14 @@ Current baseline already implemented:
   - Re-ran phase verification command set after this lock slice:
     - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `178 passed`.
     - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
-- Next immediate action: continue Workstream 5 by evaluating whether additional economy pacing lock assertions are needed after reduced progression hold windows.
+- Continued Workstream 5 lock expansion with progression auto-return timing locks:
+  - Added scene-flow tests that enforce exact tuned hold duration behavior for `level_complete` and `run_complete` auto-return paths.
+  - Focused lock run:
+    - `python3 -m pytest tests/unit/test_scene_flow.py -k "level_complete_scene_auto_returns_after_phase7_hold_ticks or run_complete_scene_auto_returns_after_phase7_hold_ticks"` -> `2 passed`.
+  - Re-ran phase verification command set after this lock slice:
+    - `python3 -m pytest tests/unit/test_fixed_step_clock.py tests/unit/test_player_control.py tests/unit/test_combat.py tests/unit/test_scene_flow.py` -> `180 passed`.
+    - `python3 -m pytest tests/integration/test_headless_input_script_runtime.py tests/integration/test_real_data_render.py` -> `44 passed`.
+- Next immediate action: finalize Workstream 5 closeout notes and decide whether any remaining economy/shop pacing locks are required before Phase 7 handoff.
 
 ## Kickoff checklist
 
