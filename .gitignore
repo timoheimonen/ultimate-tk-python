@@ -11,3 +11,4 @@ runs/screenshots/*
 !runs/screenshots/.gitkeep
 .DS_Store
 .opencode/
+.vscode/
