@@ -205,6 +205,34 @@ PLAYER_MINE_PARTIAL_TRIGGER_COVERAGE_MIN = 0.25
 PLAYER_MINE_PARTIAL_TRIGGER_DISTANCE_RATIO = 0.55
 
 
+# ---------------------------------------------------------------------------
+# Shared entity helpers
+# ---------------------------------------------------------------------------
+
+def _apply_damage(entity: EnemyState | CrateState, damage: float) -> bool:
+    """Subtract *damage* from *entity*.  Return ``True`` when it was killed."""
+    if not entity.alive:
+        return False
+    entity.health -= damage
+    if entity.health <= 0:
+        entity.health = 0.0
+        entity.alive = False
+        return True
+    return False
+
+
+def _advance_flash_ticks(entities: Sequence[EnemyState] | Sequence[CrateState]) -> None:
+    """Decrement ``hit_flash_ticks`` on every entity that is still flashing."""
+    for entity in entities:
+        if entity.hit_flash_ticks > 0:
+            entity.hit_flash_ticks -= 1
+
+
+def _alive_count(entities: Sequence[EnemyState] | Sequence[CrateState]) -> int:
+    """Return the number of entities that are still alive."""
+    return sum(1 for entity in entities if entity.alive)
+
+
 @dataclass(slots=True)
 class EnemyState:
     enemy_id: int
@@ -238,14 +266,7 @@ class EnemyState:
         return self.y + (ENEMY_SIZE // 2)
 
     def apply_damage(self, damage: float) -> bool:
-        if not self.alive:
-            return False
-        self.health -= damage
-        if self.health <= 0:
-            self.health = 0.0
-            self.alive = False
-            return True
-        return False
+        return _apply_damage(self, damage)
 
 
 @dataclass(slots=True)
@@ -269,14 +290,7 @@ class CrateState:
         return self.y + (CRATE_SIZE // 2)
 
     def apply_damage(self, damage: float) -> bool:
-        if not self.alive:
-            return False
-        self.health -= damage
-        if self.health <= 0:
-            self.health = 0.0
-            self.alive = False
-            return True
-        return False
+        return _apply_damage(self, damage)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2520,23 +2534,19 @@ def _apply_crate_reward(player: PlayerState, crate: CrateState) -> CrateCollectR
 
 
 def advance_enemy_effects(enemies: Sequence[EnemyState]) -> None:
-    for enemy in enemies:
-        if enemy.hit_flash_ticks > 0:
-            enemy.hit_flash_ticks -= 1
+    _advance_flash_ticks(enemies)
 
 
 def advance_crate_effects(crates: Sequence[CrateState]) -> None:
-    for crate in crates:
-        if crate.hit_flash_ticks > 0:
-            crate.hit_flash_ticks -= 1
+    _advance_flash_ticks(crates)
 
 
 def alive_enemy_count(enemies: Sequence[EnemyState]) -> int:
-    return sum(1 for enemy in enemies if enemy.alive)
+    return _alive_count(enemies)
 
 
 def alive_crate_count(crates: Sequence[CrateState]) -> int:
-    return sum(1 for crate in crates if crate.alive)
+    return _alive_count(crates)
 
 
 def _expand_enemy_type_counts(level: LevelData, *, max_enemies: int) -> list[int]:
