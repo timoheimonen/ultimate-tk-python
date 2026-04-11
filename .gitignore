@@ -10,3 +10,4 @@ runs/ai/
 runs/screenshots/*
 !runs/screenshots/.gitkeep
 .DS_Store
+.opencode/
