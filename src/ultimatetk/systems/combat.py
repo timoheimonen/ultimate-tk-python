@@ -47,6 +47,10 @@ ENEMY_PATROL_BURST_BASE_TICKS = 20
 ENEMY_PATROL_BURST_EXTRA_TICKS = 40
 ENEMY_STRAFE_DIRECTION_HOLD_TICKS = 5
 ENEMY_STRAFE_RELOAD_STAGGER_TICKS = 1
+ENEMY_SHOT_ORIGIN_OFFSET = 10.0
+ENEMY_STRAFE_SPEED_SCALE = 0.7
+ENEMY_FOLLOW_DISTANCE_MIN = 40.0
+ENEMY_FOLLOW_DISTANCE_RANGE_RATIO = 0.55
 
 CRATE_SIZE = 14
 CRATE_COLLISION_INSET = 2
@@ -197,6 +201,8 @@ PLAYER_EXPLOSIVE_RAY_TRACE_STEP = 2
 PLAYER_EXPLOSIVE_NARROW_LANE_CLEAR_RATIO = 0.72
 PLAYER_EXPLOSIVE_NARROW_LANE_DAMAGE_SCALE = 0.6
 PLAYER_SPLASH_EDGE_CONTACT_DAMAGE_SCALE = 0.6
+
+PLAYER_EXPLOSIVE_BLAST_CENTER_OFFSET = 5.0
 
 PLAYER_C4_FALLOFF_EXPONENT = 1.05
 PLAYER_MINE_FALLOFF_EXPONENT = 1.1
@@ -616,7 +622,7 @@ def resolve_shot_against_enemies(
     *,
     crates: Sequence[CrateState] | None = None,
 ) -> ShotResolution:
-    angle_radians = math.radians(shot.angle % 360)
+    angle_radians = _angle_to_radians(shot.angle)
     damage = weapon_damage_for_slot(shot.weapon_slot)
 
     px = int(shot.origin_x)
@@ -753,7 +759,7 @@ def update_enemy_behavior(
                 enemy.pressure_ticks -= 1
 
             attack_range = weapon_range_for_slot(weapon_slot)
-            follow_distance = max(40.0, attack_range * 0.55)
+            follow_distance = max(ENEMY_FOLLOW_DISTANCE_MIN, attack_range * ENEMY_FOLLOW_DISTANCE_RANGE_RATIO)
             engage_distance = min(follow_distance, float(attack_range))
             should_apply_pressure = _enemy_should_apply_post_shot_pressure(
                 enemy,
@@ -779,7 +785,7 @@ def update_enemy_behavior(
                     enemy,
                     level,
                     angle=strafe_angle,
-                    speed=enemy_speed_for_type(enemy.type_index) * 0.7,
+                    speed=enemy_speed_for_type(enemy.type_index) * ENEMY_STRAFE_SPEED_SCALE,
                     enemies=enemies,
                     player=player,
                 )
@@ -788,7 +794,7 @@ def update_enemy_behavior(
                         enemy,
                         level,
                         angle=(strafe_angle + 180) % 360,
-                        speed=enemy_speed_for_type(enemy.type_index) * 0.7,
+                        speed=enemy_speed_for_type(enemy.type_index) * ENEMY_STRAFE_SPEED_SCALE,
                         enemies=enemies,
                         player=player,
                     )
@@ -876,12 +882,12 @@ def resolve_enemy_shot_against_player(
             damage=0.0,
         )
 
-    angle_radians = math.radians((enemy.angle if angle is None else angle) % 360)
+    angle_radians = _angle_to_radians(enemy.angle if angle is None else angle)
     ray_damage = weapon_damage_for_slot(weapon_slot) if damage is None else max(0.0, damage)
     trace_distance = weapon_range_for_slot(weapon_slot) if max_distance is None else max(0, max_distance)
 
-    origin_x = enemy.center_x + (10.0 * math.sin(angle_radians))
-    origin_y = enemy.center_y + (10.0 * math.cos(angle_radians))
+    origin_x = enemy.center_x + (ENEMY_SHOT_ORIGIN_OFFSET * math.sin(angle_radians))
+    origin_y = enemy.center_y + (ENEMY_SHOT_ORIGIN_OFFSET * math.cos(angle_radians))
 
     px = int(origin_x)
     py = int(origin_y)
@@ -1010,8 +1016,8 @@ def spawn_enemy_projectiles(
         angle_radians = math.radians(shot_angle)
         vx = math.sin(angle_radians)
         vy = math.cos(angle_radians)
-        origin_x = enemy.center_x + (10.0 * vx)
-        origin_y = enemy.center_y + (10.0 * vy)
+        origin_x = enemy.center_x + (ENEMY_SHOT_ORIGIN_OFFSET * vx)
+        origin_y = enemy.center_y + (ENEMY_SHOT_ORIGIN_OFFSET * vy)
         projectiles.append(
             EnemyProjectile(
                 owner_enemy_id=enemy.enemy_id,
@@ -1294,10 +1300,10 @@ def _detonate_player_explosive(
 
 
 def _player_explosive_blast_center(explosive: PlayerExplosive) -> tuple[float, float]:
-    angle_radians = math.radians(explosive.angle % 360)
+    angle_radians = _angle_to_radians(explosive.angle)
     return (
-        explosive.x - (5.0 * math.sin(angle_radians)),
-        explosive.y - (5.0 * math.cos(angle_radians)),
+        explosive.x - (PLAYER_EXPLOSIVE_BLAST_CENTER_OFFSET * math.sin(angle_radians)),
+        explosive.y - (PLAYER_EXPLOSIVE_BLAST_CENTER_OFFSET * math.cos(angle_radians)),
     )
 
 
@@ -1784,7 +1790,7 @@ def _move_enemy_with_strafe_fallback(
         return True
 
     strafe_angle = _enemy_strafe_angle(enemy)
-    strafe_speed = max(0.1, speed * 0.7)
+    strafe_speed = max(0.1, speed * ENEMY_STRAFE_SPEED_SCALE)
     moved = _move_enemy_with_collision(
         enemy,
         level,
@@ -1931,7 +1937,7 @@ def _enemy_separation_adjusted_angle(
     move_angle: int,
     enemies: Sequence[EnemyState],
 ) -> int:
-    desired_radians = math.radians(move_angle % 360)
+    desired_radians = _angle_to_radians(move_angle)
     vec_x = math.sin(desired_radians)
     vec_y = math.cos(desired_radians)
 
@@ -1968,7 +1974,7 @@ def _move_enemy_with_collision(
     enemies: Sequence[EnemyState],
     player: PlayerState,
 ) -> bool:
-    angle_radians = math.radians(angle % 360)
+    angle_radians = _angle_to_radians(angle)
     new_x = enemy.x + (speed * math.sin(angle_radians))
     new_y = enemy.y + (speed * math.cos(angle_radians))
 
@@ -2118,6 +2124,11 @@ def _line_of_sight_clear(
     if crates is not None and _crate_at_point(crates, x=end_px, y=end_py) is not None:
         return False
     return True
+
+
+def _angle_to_radians(angle_degrees: int) -> float:
+    """Normalise *angle_degrees* into [0, 360) then convert to radians."""
+    return math.radians(angle_degrees % 360)
 
 
 def _angle_to_point(origin_x: float, origin_y: float, target_x: float, target_y: float) -> int:
@@ -2550,24 +2561,17 @@ def _expand_crate_type_counts(
     max_crates: int,
 ) -> list[tuple[int, int]]:
     requested: list[tuple[int, int]] = []
-
-    for type2, count in enumerate(level.normal_crate_counts.weapon_crates):
-        for _ in range(max(0, int(count))):
-            requested.append((0, type2))
-            if len(requested) >= max_crates:
-                return requested
-
-    for type2, count in enumerate(level.normal_crate_counts.bullet_crates):
-        for _ in range(max(0, int(count))):
-            requested.append((1, type2))
-            if len(requested) >= max_crates:
-                return requested
-
-    for _ in range(max(0, int(level.normal_crate_counts.energy_crates))):
-        requested.append((2, 0))
-        if len(requested) >= max_crates:
-            return requested
-
+    crate_sources: list[tuple[int, Sequence[float] | tuple[float]]] = [
+        (0, level.normal_crate_counts.weapon_crates),
+        (1, level.normal_crate_counts.bullet_crates),
+        (2, (level.normal_crate_counts.energy_crates,)),
+    ]
+    for type1, counts in crate_sources:
+        for type2, count in enumerate(counts):
+            for _ in range(max(0, int(count))):
+                requested.append((type1, type2))
+                if len(requested) >= max_crates:
+                    return requested
     return requested
 
 
