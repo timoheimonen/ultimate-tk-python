@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import random
-from typing import Iterable
+from typing import Iterable, Sequence, TypeVar
 
 from ultimatetk.core.events import InputAction
 from ultimatetk.formats.lev import DIFF_BULLETS, DIFF_WEAPONS, LevelData
@@ -240,6 +240,36 @@ SHOP_BLOCK_REASON_TARGET_ON = "TARGET ON"
 SHOP_BLOCK_REASON_TARGET_OFF = "TARGET OFF"
 SHOP_BLOCK_REASON_INVALID = "INVALID"
 
+_T = TypeVar("_T")
+
+
+def _table_lookup(table: tuple[_T, ...], index: int, *, fallback_index: int = 0) -> _T:
+    if 0 <= index < len(table):
+        return table[index]
+    return table[fallback_index]
+
+
+def _table_lookup_or_none(table: tuple[_T, ...], index: int) -> _T | None:
+    if 0 <= index < len(table):
+        return table[index]
+    return None
+
+
+def _is_valid_index(index: int, seq: Sequence[object]) -> bool:
+    return 0 <= index < len(seq)
+
+
+def _valid_weapon_slot(player: PlayerState, weapon_slot: int) -> bool:
+    return _is_valid_index(weapon_slot, player.weapons)
+
+
+def _valid_shop_weapon_slot(player: PlayerState, weapon_slot: int) -> bool:
+    return weapon_slot > 0 and _valid_weapon_slot(player, weapon_slot)
+
+
+def _valid_bullet_type(player: PlayerState, bullet_type_index: int) -> bool:
+    return _is_valid_index(bullet_type_index, player.bullets)
+
 
 def _default_weapon_slots() -> list[bool]:
     slots = [False] * PLAYER_WEAPON_SLOTS
@@ -326,75 +356,66 @@ def spawn_player_from_level(level: LevelData, player_index: int = 0) -> PlayerSt
 
 
 def weapon_profile_for_slot(weapon_slot: int) -> WeaponProfile:
-    if 0 <= weapon_slot < len(WEAPON_PROFILES):
-        return WEAPON_PROFILES[weapon_slot]
-    return WEAPON_PROFILES[0]
+    return _table_lookup(WEAPON_PROFILES, weapon_slot)
 
 
 def weapon_bullet_type_index_for_slot(weapon_slot: int) -> int | None:
-    if 0 <= weapon_slot < len(WEAPON_BULLET_TYPE):
-        bullet_type = WEAPON_BULLET_TYPE[weapon_slot]
-        if bullet_type > 0:
-            return bullet_type - 1
+    bullet_type = _table_lookup_or_none(WEAPON_BULLET_TYPE, weapon_slot)
+    if bullet_type is not None and bullet_type > 0:
+        return bullet_type - 1
     return None
 
 
 def weapon_shop_cost_for_slot(weapon_slot: int) -> int:
-    if 0 <= weapon_slot < len(WEAPON_SHOP_COSTS):
-        return WEAPON_SHOP_COSTS[weapon_slot]
-    return WEAPON_SHOP_COSTS[0]
+    return _table_lookup(WEAPON_SHOP_COSTS, weapon_slot)
 
 
 def weapon_shop_name_for_slot(weapon_slot: int) -> str:
-    if 0 <= weapon_slot < len(WEAPON_SHOP_NAMES):
-        return WEAPON_SHOP_NAMES[weapon_slot]
+    name = _table_lookup_or_none(WEAPON_SHOP_NAMES, weapon_slot)
+    if name is not None:
+        return name
     if weapon_slot > 0:
         return f"Weapon {weapon_slot}"
     return WEAPON_SHOP_NAMES[0]
 
 
 def weapon_shop_short_label_for_slot(weapon_slot: int) -> str:
-    if 0 <= weapon_slot < len(WEAPON_SHOP_SHORT_LABELS):
-        return WEAPON_SHOP_SHORT_LABELS[weapon_slot]
+    label = _table_lookup_or_none(WEAPON_SHOP_SHORT_LABELS, weapon_slot)
+    if label is not None:
+        return label
     return "??"
 
 
 def bullet_capacity_units_for_type(bullet_type_index: int) -> int:
-    if 0 <= bullet_type_index < len(BULLET_TYPE_MAX_UNITS):
-        return BULLET_TYPE_MAX_UNITS[bullet_type_index]
-    return BULLET_TYPE_MAX_UNITS[0]
+    return _table_lookup(BULLET_TYPE_MAX_UNITS, bullet_type_index)
 
 
 def bullet_shop_cost_for_type(bullet_type_index: int) -> int:
-    if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_COSTS):
-        return BULLET_TYPE_SHOP_COSTS[bullet_type_index]
-    return BULLET_TYPE_SHOP_COSTS[0]
+    return _table_lookup(BULLET_TYPE_SHOP_COSTS, bullet_type_index)
 
 
 def bullet_shop_units_for_type(bullet_type_index: int) -> int:
-    if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_UNITS_PER_PURCHASE):
-        return BULLET_TYPE_SHOP_UNITS_PER_PURCHASE[bullet_type_index]
-    return BULLET_TYPE_SHOP_UNITS_PER_PURCHASE[0]
+    return _table_lookup(BULLET_TYPE_SHOP_UNITS_PER_PURCHASE, bullet_type_index)
 
 
 def bullet_shop_name_for_type(bullet_type_index: int) -> str:
-    if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_NAMES):
-        return BULLET_TYPE_SHOP_NAMES[bullet_type_index]
+    name = _table_lookup_or_none(BULLET_TYPE_SHOP_NAMES, bullet_type_index)
+    if name is not None:
+        return name
     if bullet_type_index >= 0:
         return f"Ammo {bullet_type_index + 1}"
     return "Ammo"
 
 
 def bullet_shop_short_label_for_type(bullet_type_index: int) -> str:
-    if 0 <= bullet_type_index < len(BULLET_TYPE_SHOP_SHORT_LABELS):
-        return BULLET_TYPE_SHOP_SHORT_LABELS[bullet_type_index]
+    label = _table_lookup_or_none(BULLET_TYPE_SHOP_SHORT_LABELS, bullet_type_index)
+    if label is not None:
+        return label
     return "??"
 
 
 def shop_column_count_for_row(row: int) -> int:
-    if 0 <= row < len(SHOP_ROW_COLUMN_COUNTS):
-        return SHOP_ROW_COLUMN_COUNTS[row]
-    return SHOP_ROW_COLUMN_COUNTS[SHOP_ROW_WEAPONS]
+    return _table_lookup(SHOP_ROW_COLUMN_COUNTS, row, fallback_index=SHOP_ROW_WEAPONS)
 
 
 def clamp_shop_selection(row: int, column: int) -> tuple[int, int]:
@@ -421,7 +442,7 @@ def move_shop_selection(
 def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) -> int:
     if amount <= 0:
         return 0
-    if bullet_type_index < 0 or bullet_type_index >= len(player.bullets):
+    if not _valid_bullet_type(player, bullet_type_index):
         return 0
 
     capacity = bullet_capacity_units_for_type(bullet_type_index)
@@ -435,7 +456,7 @@ def grant_bullet_ammo(player: PlayerState, bullet_type_index: int, amount: int) 
 
 
 def buy_bullet_ammo_from_shop(player: PlayerState, bullet_type_index: int) -> int:
-    if bullet_type_index < 0 or bullet_type_index >= len(player.bullets):
+    if not _valid_bullet_type(player, bullet_type_index):
         return 0
 
     cost = max(0, bullet_shop_cost_for_type(bullet_type_index))
@@ -452,7 +473,7 @@ def buy_bullet_ammo_from_shop(player: PlayerState, bullet_type_index: int) -> in
 
 
 def sell_bullet_ammo_to_shop(player: PlayerState, bullet_type_index: int) -> int:
-    if bullet_type_index < 0 or bullet_type_index >= len(player.bullets):
+    if not _valid_bullet_type(player, bullet_type_index):
         return 0
 
     current = max(0, player.bullets[bullet_type_index])
@@ -498,7 +519,7 @@ def weapon_sell_price_for_slot(sell_prices: ShopSellPriceTable, weapon_slot: int
 
 
 def buy_weapon_from_shop(player: PlayerState, weapon_slot: int) -> bool:
-    if weapon_slot <= 0 or weapon_slot >= len(player.weapons):
+    if not _valid_shop_weapon_slot(player, weapon_slot):
         return False
     if player.weapons[weapon_slot]:
         return False
@@ -513,7 +534,7 @@ def buy_weapon_from_shop(player: PlayerState, weapon_slot: int) -> bool:
 
 
 def sell_weapon_to_shop(player: PlayerState, weapon_slot: int, sell_prices: ShopSellPriceTable) -> bool:
-    if weapon_slot <= 0 or weapon_slot >= len(player.weapons):
+    if not _valid_shop_weapon_slot(player, weapon_slot):
         return False
     if not player.weapons[weapon_slot]:
         return False
@@ -704,7 +725,7 @@ def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:
         return -1, 0, 0
-    if bullet_type < 0 or bullet_type >= len(player.bullets):
+    if not _valid_bullet_type(player, bullet_type):
         return -1, 0, 0
 
     capacity = bullet_capacity_units_for_type(bullet_type)
@@ -729,7 +750,7 @@ def current_weapon_has_ammo(player: PlayerState) -> bool:
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:
         return True
-    if bullet_type >= len(player.bullets):
+    if not _valid_bullet_type(player, bullet_type):
         return False
     return player.bullets[bullet_type] > 0
 
@@ -738,7 +759,7 @@ def consume_current_weapon_ammo(player: PlayerState) -> bool:
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:
         return True
-    if bullet_type >= len(player.bullets):
+    if not _valid_bullet_type(player, bullet_type):
         return False
     if player.bullets[bullet_type] <= 0:
         return False
@@ -854,7 +875,7 @@ def cycle_weapon_slot(player: PlayerState) -> bool:
 
 
 def select_weapon_slot_if_owned(player: PlayerState, weapon_slot: int) -> bool:
-    if weapon_slot < 0 or weapon_slot >= len(player.weapons):
+    if not _valid_weapon_slot(player, weapon_slot):
         return False
     if player.weapons[weapon_slot]:
         if player.current_weapon == weapon_slot:
