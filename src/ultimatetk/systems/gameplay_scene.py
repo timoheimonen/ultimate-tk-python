@@ -409,11 +409,8 @@ class GameplayScene(BaseScene):
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
 
-    def on_enter(self, context: GameContext) -> None:
-        context.runtime.mode = AppMode.GAMEPLAY
-        context.runtime.last_render_digest = 0
-        context.runtime.last_render_width = 0
-        context.runtime.last_render_height = 0
+    def _publish_zeroed_runtime_state(self, context: GameContext) -> None:
+        """Set all player/combat/shop runtime fields to neutral defaults."""
         context.runtime.player_world_x = 0
         context.runtime.player_world_y = 0
         context.runtime.player_angle_degrees = 0
@@ -433,12 +430,7 @@ class GameplayScene(BaseScene):
         context.runtime.shop_active = False
         context.runtime.shop_selection_row = 0
         context.runtime.shop_selection_column = 0
-        context.runtime.shop_last_action = ""
-        context.runtime.shop_last_category = ""
-        context.runtime.shop_last_success = False
-        context.runtime.shop_last_units = 0
-        context.runtime.shop_last_cash_delta = 0
-        context.runtime.shop_last_reason = ""
+        self._publish_zeroed_shop_last_fields(context)
         context.runtime.player_health = 0
         context.runtime.player_dead = False
         context.runtime.player_hits_total = 0
@@ -463,6 +455,23 @@ class GameplayScene(BaseScene):
         context.runtime.player_explosive_detonations_total = 0
         context.runtime.game_over_active = False
         context.runtime.game_over_ticks_remaining = 0
+
+    @staticmethod
+    def _publish_zeroed_shop_last_fields(context: GameContext) -> None:
+        """Reset all ``shop_last_*`` runtime fields to neutral defaults."""
+        context.runtime.shop_last_action = ""
+        context.runtime.shop_last_category = ""
+        context.runtime.shop_last_success = False
+        context.runtime.shop_last_units = 0
+        context.runtime.shop_last_cash_delta = 0
+        context.runtime.shop_last_reason = ""
+
+    def on_enter(self, context: GameContext) -> None:
+        context.runtime.mode = AppMode.GAMEPLAY
+        context.runtime.last_render_digest = 0
+        context.runtime.last_render_width = 0
+        context.runtime.last_render_height = 0
+        self._publish_zeroed_runtime_state(context)
         context.runtime.progression_event = ""
         context.runtime.progression_from_level_index = -1
         context.runtime.progression_to_level_index = -1
@@ -2026,56 +2035,8 @@ class GameplayScene(BaseScene):
 
     def _publish_player_runtime_state(self, context: GameContext) -> None:
         if self._player is None:
-            context.runtime.player_world_x = 0
-            context.runtime.player_world_y = 0
-            context.runtime.player_angle_degrees = 0
-            context.runtime.player_weapon_slot = 0
-            context.runtime.player_current_ammo_type_index = -1
-            context.runtime.player_current_ammo_units = 0
-            context.runtime.player_current_ammo_capacity = 0
-            ammo_capacities = bullet_ammo_capacities_snapshot()
-            context.runtime.player_ammo_pools = tuple(0 for _ in ammo_capacities)
-            context.runtime.player_ammo_capacities = ammo_capacities
-            context.runtime.player_load_count = 0
-            context.runtime.player_fire_ticks = 0
+            self._publish_zeroed_runtime_state(context)
             context.runtime.player_shoot_hold_active = False
-            context.runtime.player_shots_fired_total = 0
-            context.runtime.player_cash = 0
-            context.runtime.player_shield = 0
-            context.runtime.player_target_system_enabled = False
-            context.runtime.shop_active = False
-            context.runtime.shop_selection_row = 0
-            context.runtime.shop_selection_column = 0
-            context.runtime.shop_last_action = ""
-            context.runtime.shop_last_category = ""
-            context.runtime.shop_last_success = False
-            context.runtime.shop_last_units = 0
-            context.runtime.shop_last_cash_delta = 0
-            context.runtime.shop_last_reason = ""
-            context.runtime.player_health = 0
-            context.runtime.player_dead = False
-            context.runtime.player_hits_total = 0
-            context.runtime.player_hits_taken_total = 0
-            context.runtime.player_damage_taken_total = 0.0
-            context.runtime.enemies_total = 0
-            context.runtime.enemies_alive = 0
-            context.runtime.enemies_killed_by_player = 0
-            context.runtime.crates_total = 0
-            context.runtime.crates_alive = 0
-            context.runtime.crates_destroyed_by_player = 0
-            context.runtime.crates_collected_by_player = 0
-            context.runtime.enemy_shots_fired_total = 0
-            context.runtime.enemy_hits_total = 0
-            context.runtime.enemy_damage_to_player_total = 0.0
-            context.runtime.enemy_projectiles_active = 0
-            context.runtime.player_explosives_active = 0
-            context.runtime.player_mines_active = 0
-            context.runtime.player_mines_armed = 0
-            context.runtime.player_c4_active = 0
-            context.runtime.player_c4_hot = 0
-            context.runtime.player_explosive_detonations_total = 0
-            context.runtime.game_over_active = False
-            context.runtime.game_over_ticks_remaining = 0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
@@ -2100,12 +2061,7 @@ class GameplayScene(BaseScene):
         context.runtime.shop_selection_row = self._shop_row
         context.runtime.shop_selection_column = self._shop_column
         if self._shop_last_transaction is None:
-            context.runtime.shop_last_action = ""
-            context.runtime.shop_last_category = ""
-            context.runtime.shop_last_success = False
-            context.runtime.shop_last_units = 0
-            context.runtime.shop_last_cash_delta = 0
-            context.runtime.shop_last_reason = ""
+            self._publish_zeroed_shop_last_fields(context)
         else:
             context.runtime.shop_last_action = self._shop_last_transaction.action
             context.runtime.shop_last_category = self._shop_last_transaction.category
