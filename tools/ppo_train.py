@@ -30,13 +30,14 @@ DEFAULT_N_STEPS = 4096
 DEFAULT_BATCH_SIZE = 512
 DEFAULT_LEARNING_RATE = 0.00005
 DEFAULT_LEARNING_RATE_START = 0.0003
-DEFAULT_DECAY_RATIO = 0.5
+DEFAULT_DECAY_RATIO = 0.8
 DEFAULT_ENT_COEF = 0.01
 DEFAULT_ENT_COEF_START = 0.05
 DEFAULT_GAMMA = 0.99
 DEFAULT_GAE_LAMBDA = 0.95
 DEFAULT_CLIP_RANGE = 0.2
 DEFAULT_WEAPON_MODE = "normal_mode"
+DEFAULT_LEVEL_INDEX_POOL: tuple[int, ...] = tuple(range(10))
 WEAPON_MODE_CHOICES: tuple[str, ...] = (
     DEFAULT_WEAPON_MODE,
     "fist",
@@ -134,6 +135,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Render scene frames during training (off by default for max throughput)",
     )
+    parser.add_argument(
+        "--randomize-level-on-reset",
+        action="store_true",
+        help="Randomize starting level on every episode reset for training envs",
+    )
+    parser.add_argument(
+        "--level-index-pool",
+        default=",".join(str(index) for index in DEFAULT_LEVEL_INDEX_POOL),
+        help="Comma-separated level indices used when --randomize-level-on-reset is enabled",
+    )
     return parser.parse_args()
 
 
@@ -179,6 +190,21 @@ def _build_run_dir(args: argparse.Namespace) -> Path:
 
 def _write_run_config(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _parse_level_index_pool(raw_value: str) -> tuple[int, ...]:
+    tokens = [token.strip() for token in str(raw_value).split(",")]
+    values: list[int] = []
+    for token in tokens:
+        if not token:
+            continue
+        parsed = int(token)
+        if parsed < 0:
+            raise ValueError("--level-index-pool must contain non-negative indices")
+        values.append(parsed)
+    if not values:
+        raise ValueError("--level-index-pool must contain at least one level index")
+    return tuple(sorted(set(values)))
 
 
 def _linear_decay_value(*, start: float, end: float, decay_steps: int, step: int) -> float:
@@ -257,6 +283,8 @@ def main() -> int:
     if args.clip_range <= 0.0 or args.clip_range > 1.0:
         raise ValueError("--clip-range must be in (0, 1]")
 
+    level_index_pool = _parse_level_index_pool(args.level_index_pool)
+
     PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, vec_env_types = _import_training_dependencies()
     DummyVecEnv, VecMonitor = vec_env_types
 
@@ -285,6 +313,8 @@ def main() -> int:
         enforce_asset_manifest=not args.disable_asset_manifest_check,
         render_enabled=bool(args.render_training_scenes),
         weapon_mode=str(args.weapon_mode),
+        randomize_level_on_reset=bool(args.randomize_level_on_reset),
+        level_index_pool=level_index_pool,
     )
     train_env = DummyVecEnv([env_factory for _ in range(args.n_envs)])
     train_env = VecMonitor(train_env)
@@ -292,7 +322,17 @@ def main() -> int:
 
     eval_env = None
     if eval_freq > 0:
-        eval_env = DummyVecEnv([env_factory])
+        eval_env_factory = build_sb3_env_factory(
+            project_root=PROJECT_ROOT,
+            max_episode_steps=max(1, int(args.max_episode_steps)),
+            target_tick_rate=max(1, int(args.target_tick_rate)),
+            enforce_asset_manifest=not args.disable_asset_manifest_check,
+            render_enabled=bool(args.render_training_scenes),
+            weapon_mode=str(args.weapon_mode),
+            randomize_level_on_reset=False,
+            level_index_pool=level_index_pool,
+        )
+        eval_env = DummyVecEnv([eval_env_factory])
         eval_env = VecMonitor(eval_env)
         eval_env.seed(args.seed + 10_000)
 
@@ -414,6 +454,8 @@ def main() -> int:
         "gae_lambda": float(args.gae_lambda),
         "clip_range": float(args.clip_range),
         "weapon_mode": str(args.weapon_mode),
+        "randomize_level_on_reset": bool(args.randomize_level_on_reset),
+        "level_index_pool": [int(index) for index in level_index_pool],
         "resume_from": resume_path,
         "render_training_scenes": bool(args.render_training_scenes),
     }

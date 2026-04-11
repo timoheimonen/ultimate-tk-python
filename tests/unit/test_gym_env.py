@@ -185,6 +185,37 @@ class GymEnvTests(unittest.TestCase):
         finally:
             env.close()
 
+    def test_randomized_reset_selects_level_from_pool(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            randomize_level_on_reset=True,
+            level_index_pool=(0, 1, 2),
+        )
+        try:
+            seen: set[int] = set()
+            for seed in range(100, 124):
+                _, info = env.reset(seed=seed)
+                level_index = int(info.get("level_index", -1))
+                self.assertIn(level_index, (0, 1, 2))
+                seen.add(level_index)
+            self.assertGreater(len(seen), 1)
+        finally:
+            env.close()
+
+    def test_reset_option_level_index_overrides_randomized_selection(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            randomize_level_on_reset=True,
+            level_index_pool=(0, 1, 2),
+        )
+        try:
+            _, info = env.reset(seed=77, options={"level_index": 2})
+            self.assertEqual(int(info.get("level_index", -1)), 2)
+        finally:
+            env.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,8 @@ else:
             render_enabled: bool = False,
             weapon_mode: str = "normal_mode",
             reward_config: RewardConfig | None = None,
+            randomize_level_on_reset: bool = False,
+            level_index_pool: tuple[int, ...] | None = None,
         ) -> None:
             super().__init__()
             self._max_episode_steps = max(1, int(max_episode_steps))
@@ -61,6 +63,12 @@ else:
             self._project_root = project_root
             self._render_enabled = bool(render_enabled)
             self._weapon_mode = str(weapon_mode)
+            self._randomize_level_on_reset = bool(randomize_level_on_reset)
+            if level_index_pool is None:
+                self._level_index_pool = (0,)
+            else:
+                cleaned_pool = tuple(sorted({max(0, int(index)) for index in level_index_pool}))
+                self._level_index_pool = cleaned_pool or (0,)
 
             self._driver: TrainingRuntimeDriver | None = None
             self._action_codec = ActionCodec()
@@ -84,7 +92,12 @@ else:
                 np.random.seed(seed % (2**32))
 
             options_dict = options or {}
-            level_index = max(0, int(options_dict.get("level_index", 0)))
+            if "level_index" in options_dict:
+                level_index = max(0, int(options_dict.get("level_index", 0)))
+            elif self._randomize_level_on_reset and self._level_index_pool:
+                level_index = int(random.choice(self._level_index_pool))
+            else:
+                level_index = 0
 
             if self._driver is not None:
                 self._driver.close()

@@ -10,25 +10,25 @@ from ultimatetk.core.state import RuntimeState
 
 @dataclass(frozen=True, slots=True)
 class RewardConfig:
-    step_cost: float = 0.001
-    kill_reward: float = 5.0
-    hit_reward: float = 0.5
-    look_at_enemy_reward: float = 0.005
-    strafing_reward: float = 0.0005
-    crate_reward: float = 0.10
-    damage_cost: float = 0.01
-    death_cost: float = 5.0
-    level_complete_reward: float = 15.0
-    run_complete_reward: float = 25.0
+    step_cost: float = 0.0008
+    kill_reward: float = 4.0
+    hit_reward: float = 0.35
+    look_at_enemy_reward: float = 0.0015
+    strafing_reward: float = 0.0008
+    crate_reward: float = 0.12
+    damage_cost: float = 0.03
+    death_cost: float = 8.0
+    level_complete_reward: float = 18.0
+    run_complete_reward: float = 30.0
     strafing_threat_tti_threshold: float = 0.35
     idle_ticks_threshold: int = 45
-    idle_cost: float = 0.02
+    idle_cost: float = 0.03
     idle_distance_epsilon: float = 3.0
-    stationary_shoot_no_hit_cost: float = 0.03
-    stationary_shoot_no_hit_grace_ticks: int = 12
-    stuck_ticks_threshold: int = 180
+    stationary_shoot_no_hit_cost: float = 0.04
+    stationary_shoot_no_hit_grace_ticks: int = 10
+    stuck_ticks_threshold: int = 150
     stuck_radius_epsilon: float = 24.0
-    stuck_cost: float = 0.05
+    stuck_cost: float = 0.08
 
 
 @dataclass(frozen=True, slots=True)
