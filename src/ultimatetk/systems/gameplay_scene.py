@@ -82,6 +82,17 @@ from ultimatetk.systems.player_control import (
 
 
 @dataclass(frozen=True, slots=True)
+class _ShopCellInfo:
+    """Pre-computed descriptor for a single shop grid cell."""
+    label: str
+    icon_kind: str
+    counter: str
+    buy_cost: int
+    locked: bool
+    locked_state: str  # "owned", "full", "max", "locked", or "" if not locked
+
+
+@dataclass(frozen=True, slots=True)
 class GameplayStateView:
     level: LevelData
     player: PlayerState
@@ -1134,6 +1145,7 @@ class GameplayScene(BaseScene):
                 cell_x = grid_x + (column * cell_pitch)
                 selected = row == self._shop_row and column == self._shop_column
                 selected_pulse = ((self._spot_phase // 15) % 2) == 0
+                info = self._shop_cell_info(row, column)
                 cell_state = self._shop_cell_state(row, column)
                 (
                     fill_color,
@@ -1186,17 +1198,16 @@ class GameplayScene(BaseScene):
                     marker_color,
                 )
 
-                icon_kind = self._shop_cell_icon_kind(row, column)
-                if icon_kind:
+                if info.icon_kind:
                     self._draw_shop_cell_icon(
                         pixels,
                         x=cell_x + 2,
                         y=row_y + 2,
-                        kind=icon_kind,
+                        kind=info.icon_kind,
                         color=icon_color,
                     )
 
-                cell_label = self._shop_cell_aligned_text(self._shop_cell_label_text(row, column))
+                cell_label = self._shop_cell_aligned_text(info.label)
                 if cell_label:
                     label_x = self._shop_cell_text_x(cell_x, cell_label)
                     self._draw_shop_text(
@@ -1207,7 +1218,7 @@ class GameplayScene(BaseScene):
                         label_color,
                     )
 
-                counter_text = self._shop_cell_counter_text(row, column)
+                counter_text = info.counter
                 if counter_text:
                     counter_label = self._shop_cell_aligned_text(counter_text, pad_numeric=True)
                     counter_x = self._shop_cell_text_x(cell_x, counter_label)
@@ -1281,32 +1292,68 @@ class GameplayScene(BaseScene):
             return "OTHER"
         return "UNKNOWN"
 
-    def _shop_cell_label_text(self, row: int, column: int) -> str:
+    def _shop_cell_info(self, row: int, column: int) -> _ShopCellInfo:
+        """Compute all display properties for a single shop cell."""
         if row == SHOP_ROW_WEAPONS:
-            return weapon_shop_short_label_for_slot(column + 1)
+            weapon_slot = column + 1
+            label = weapon_shop_short_label_for_slot(weapon_slot)
+            icon_kind = self._weapon_shop_icon_kind(weapon_slot)
+            buy_cost = weapon_shop_cost_for_slot(weapon_slot)
+            locked = (
+                self._player is not None
+                and weapon_slot < len(self._player.weapons)
+                and self._player.weapons[weapon_slot]
+            )
+            counter = "ON" if locked else ""
+            locked_state = "owned" if locked else ""
+            return _ShopCellInfo(label, icon_kind, counter, buy_cost, locked, locked_state)
 
         if row == SHOP_ROW_AMMO:
-            return bullet_shop_short_label_for_type(column)
+            label = bullet_shop_short_label_for_type(column)
+            icon_kind = self._ammo_shop_icon_kind(column)
+            buy_cost = bullet_shop_cost_for_type(column)
+            locked = False
+            counter = ""
+            if self._player is not None:
+                if column >= len(self._player.bullets):
+                    locked = True
+                else:
+                    stock = max(0, self._player.bullets[column])
+                    locked = stock >= bullet_capacity_units_for_type(column)
+                    if stock > 0:
+                        units_per_trade = max(1, bullet_shop_units_for_type(column))
+                        stock_packs = min(99, max(1, stock // units_per_trade) if stock > 0 else 0)
+                        counter = f"{stock_packs:02d}"
+            locked_state = "full" if locked else ""
+            return _ShopCellInfo(label, icon_kind, counter, buy_cost, locked, locked_state)
 
-        if row == SHOP_ROW_OTHER and column == 0:
-            return "SH"
+        # SHOP_ROW_OTHER
+        if column == 0:
+            buy_cost = (
+                shield_shop_buy_cost_for_level(self._player.shield)
+                if self._player is not None
+                else 0
+            )
+            locked = self._player is not None and self._player.shield >= SHOP_SHIELD_MAX_LEVEL
+            counter = ""
+            if self._player is not None and self._player.shield > 0:
+                counter = f"{min(99, self._player.shield):02d}"
+            locked_state = "max" if locked else ""
+            return _ShopCellInfo("SH", "shield", counter, buy_cost, locked, locked_state)
 
-        if row == SHOP_ROW_OTHER and column == 1:
-            return "TG"
-        return ""
+        if column == 1:
+            locked = self._player is not None and self._player.target_system_enabled
+            counter = "ON" if locked else ""
+            locked_state = "owned" if locked else ""
+            return _ShopCellInfo("TG", "target", counter, SHOP_TARGET_SYSTEM_COST, locked, locked_state)
+
+        return _ShopCellInfo("", "", "", 0, False, "")
+
+    def _shop_cell_label_text(self, row: int, column: int) -> str:
+        return self._shop_cell_info(row, column).label
 
     def _shop_cell_icon_kind(self, row: int, column: int) -> str:
-        if row == SHOP_ROW_WEAPONS:
-            return self._weapon_shop_icon_kind(column + 1)
-
-        if row == SHOP_ROW_AMMO:
-            return self._ammo_shop_icon_kind(column)
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            return "shield"
-        if row == SHOP_ROW_OTHER and column == 1:
-            return "target"
-        return ""
+        return self._shop_cell_info(row, column).icon_kind
 
     def _weapon_shop_icon_kind(self, weapon_slot: int) -> str:
         if 0 <= weapon_slot < len(self._WEAPON_ICON_KINDS):
@@ -1383,76 +1430,15 @@ class GameplayScene(BaseScene):
         return cell_x + max(0, (self._SHOP_CELL_SIZE - (draw_chars * 8)) // 2)
 
     def _shop_cell_counter_text(self, row: int, column: int) -> str:
-        if self._player is None:
-            return ""
-
-        if row == SHOP_ROW_WEAPONS:
-            weapon_slot = column + 1
-            if weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]:
-                return "ON"
-            return ""
-
-        if row == SHOP_ROW_AMMO:
-            if column >= len(self._player.bullets):
-                return ""
-            stock = max(0, self._player.bullets[column])
-            if stock <= 0:
-                return ""
-
-            units_per_trade = max(1, bullet_shop_units_for_type(column))
-            stock_packs = stock // units_per_trade
-            if stock_packs < 1:
-                stock_packs = 1
-            stock_packs = min(99, stock_packs)
-            return f"{stock_packs:02d}"
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            if self._player.shield > 0:
-                return f"{min(99, self._player.shield):02d}"
-            return ""
-
-        if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
-            return "ON"
-        return ""
+        return self._shop_cell_info(row, column).counter
 
     def _shop_cell_is_locked(self, row: int, column: int) -> bool:
         if self._player is None:
             return True
-
-        if row == SHOP_ROW_WEAPONS:
-            weapon_slot = column + 1
-            return weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]
-
-        if row == SHOP_ROW_AMMO:
-            if column >= len(self._player.bullets):
-                return True
-            return self._player.bullets[column] >= bullet_capacity_units_for_type(column)
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            return self._player.shield >= SHOP_SHIELD_MAX_LEVEL
-
-        if row == SHOP_ROW_OTHER and column == 1:
-            return self._player.target_system_enabled
-
-        return False
+        return self._shop_cell_info(row, column).locked
 
     def _shop_cell_buy_cost(self, row: int, column: int) -> int:
-        if self._player is None:
-            return 0
-
-        if row == SHOP_ROW_WEAPONS:
-            return weapon_shop_cost_for_slot(column + 1)
-
-        if row == SHOP_ROW_AMMO:
-            return bullet_shop_cost_for_type(column)
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            return shield_shop_buy_cost_for_level(self._player.shield)
-
-        if row == SHOP_ROW_OTHER and column == 1:
-            return SHOP_TARGET_SYSTEM_COST
-
-        return 0
+        return self._shop_cell_info(row, column).buy_cost
 
     def _shop_cell_is_affordable(self, row: int, column: int) -> bool:
         if self._player is None:
@@ -1471,21 +1457,11 @@ class GameplayScene(BaseScene):
     def _shop_cell_state(self, row: int, column: int) -> str:
         if self._player is None:
             return "locked"
-
-        if self._shop_cell_is_locked(row, column):
-            if row == SHOP_ROW_WEAPONS:
-                return "owned"
-            if row == SHOP_ROW_AMMO:
-                return "full"
-            if row == SHOP_ROW_OTHER and column == 0:
-                return "max"
-            if row == SHOP_ROW_OTHER and column == 1:
-                return "owned"
-            return "locked"
-
+        info = self._shop_cell_info(row, column)
+        if info.locked:
+            return info.locked_state or "locked"
         if not self._shop_cell_is_affordable(row, column):
             return "no_cash"
-
         return "buy"
 
     def _shop_cell_visual_colors(
