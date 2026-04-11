@@ -600,57 +600,8 @@ def sell_target_system_to_shop(player: PlayerState, sell_prices: ShopSellPriceTa
 def buy_selected_shop_item(player: PlayerState, row: int, column: int) -> ShopTransactionEvent:
     row, column = clamp_shop_selection(row, column)
     cash_before = player.cash
-    reason = SHOP_BLOCK_REASON_NONE
-
-    if row == SHOP_ROW_WEAPONS:
-        weapon_slot = column + 1
-        if weapon_slot <= 0 or weapon_slot >= len(player.weapons):
-            reason = SHOP_BLOCK_REASON_INVALID
-        elif player.weapons[weapon_slot]:
-            reason = SHOP_BLOCK_REASON_OWNED
-        elif player.cash < weapon_shop_cost_for_slot(weapon_slot):
-            reason = SHOP_BLOCK_REASON_NO_CASH
-
-        success = buy_weapon_from_shop(player, column + 1)
-        units = 1 if success else 0
-        category = "weapon"
-    elif row == SHOP_ROW_AMMO:
-        if column < 0 or column >= len(player.bullets):
-            reason = SHOP_BLOCK_REASON_INVALID
-        elif player.cash < bullet_shop_cost_for_type(column):
-            reason = SHOP_BLOCK_REASON_NO_CASH
-        else:
-            capacity = bullet_capacity_units_for_type(column)
-            current = max(0, player.bullets[column])
-            if current >= capacity:
-                reason = SHOP_BLOCK_REASON_FULL
-
-        units = buy_bullet_ammo_from_shop(player, column)
-        success = units > 0
-        category = "ammo"
-    elif column == 0:
-        if player.shield >= SHOP_SHIELD_MAX_LEVEL:
-            reason = SHOP_BLOCK_REASON_MAX_LEVEL
-        elif player.cash < shield_shop_buy_cost_for_level(player.shield):
-            reason = SHOP_BLOCK_REASON_NO_CASH
-
-        success = buy_shield_from_shop(player)
-        units = 1 if success else 0
-        category = "shield"
-    else:
-        if player.target_system_enabled:
-            reason = SHOP_BLOCK_REASON_TARGET_ON
-        elif player.cash < SHOP_TARGET_SYSTEM_COST:
-            reason = SHOP_BLOCK_REASON_NO_CASH
-
-        success = buy_target_system_from_shop(player)
-        units = 1 if success else 0
-        category = "target"
-
-    if success:
-        reason = SHOP_BLOCK_REASON_NONE
-
-    return ShopTransactionEvent(
+    success, units, category, reason = _resolve_shop_buy_row(player, row, column)
+    return _shop_event(
         action="buy",
         category=category,
         row=row,
@@ -670,46 +621,8 @@ def sell_selected_shop_item(
 ) -> ShopTransactionEvent:
     row, column = clamp_shop_selection(row, column)
     cash_before = player.cash
-    reason = SHOP_BLOCK_REASON_NONE
-
-    if row == SHOP_ROW_WEAPONS:
-        weapon_slot = column + 1
-        if weapon_slot <= 0 or weapon_slot >= len(player.weapons):
-            reason = SHOP_BLOCK_REASON_INVALID
-        elif not player.weapons[weapon_slot]:
-            reason = SHOP_BLOCK_REASON_NOT_OWNED
-
-        success = sell_weapon_to_shop(player, column + 1, sell_prices)
-        units = 1 if success else 0
-        category = "weapon"
-    elif row == SHOP_ROW_AMMO:
-        if column < 0 or column >= len(player.bullets):
-            reason = SHOP_BLOCK_REASON_INVALID
-        elif player.bullets[column] <= 0:
-            reason = SHOP_BLOCK_REASON_NO_STOCK
-
-        units = sell_bullet_ammo_to_shop(player, column)
-        success = units > 0
-        category = "ammo"
-    elif column == 0:
-        if player.shield <= 0:
-            reason = SHOP_BLOCK_REASON_NO_SHIELD
-
-        success = sell_shield_to_shop(player, sell_prices)
-        units = 1 if success else 0
-        category = "shield"
-    else:
-        if not player.target_system_enabled:
-            reason = SHOP_BLOCK_REASON_TARGET_OFF
-
-        success = sell_target_system_to_shop(player, sell_prices)
-        units = 1 if success else 0
-        category = "target"
-
-    if success:
-        reason = SHOP_BLOCK_REASON_NONE
-
-    return ShopTransactionEvent(
+    success, units, category, reason = _resolve_shop_sell_row(player, row, column, sell_prices)
+    return _shop_event(
         action="sell",
         category=category,
         row=row,
@@ -719,6 +632,154 @@ def sell_selected_shop_item(
         cash_delta=player.cash - cash_before,
         reason=reason,
     )
+
+
+def _shop_event(
+    *,
+    action: str,
+    category: str,
+    row: int,
+    column: int,
+    success: bool,
+    units: int,
+    cash_delta: int,
+    reason: str,
+) -> ShopTransactionEvent:
+    event_reason = SHOP_BLOCK_REASON_NONE if success else reason
+    return ShopTransactionEvent(
+        action=action,
+        category=category,
+        row=row,
+        column=column,
+        success=success,
+        units=units,
+        cash_delta=cash_delta,
+        reason=event_reason,
+    )
+
+
+def _resolve_shop_buy_row(player: PlayerState, row: int, column: int) -> tuple[bool, int, str, str]:
+    if row == SHOP_ROW_WEAPONS:
+        return _buy_weapon_row(player, column)
+    if row == SHOP_ROW_AMMO:
+        return _buy_ammo_row(player, column)
+    if column == 0:
+        return _buy_shield_row(player)
+    return _buy_target_row(player)
+
+
+def _resolve_shop_sell_row(
+    player: PlayerState,
+    row: int,
+    column: int,
+    sell_prices: ShopSellPriceTable,
+) -> tuple[bool, int, str, str]:
+    if row == SHOP_ROW_WEAPONS:
+        return _sell_weapon_row(player, column, sell_prices)
+    if row == SHOP_ROW_AMMO:
+        return _sell_ammo_row(player, column)
+    if column == 0:
+        return _sell_shield_row(player, sell_prices)
+    return _sell_target_row(player, sell_prices)
+
+
+def _buy_weapon_row(player: PlayerState, column: int) -> tuple[bool, int, str, str]:
+    weapon_slot = column + 1
+    reason = SHOP_BLOCK_REASON_NONE
+    if not _valid_shop_weapon_slot(player, weapon_slot):
+        reason = SHOP_BLOCK_REASON_INVALID
+    elif player.weapons[weapon_slot]:
+        reason = SHOP_BLOCK_REASON_OWNED
+    elif player.cash < weapon_shop_cost_for_slot(weapon_slot):
+        reason = SHOP_BLOCK_REASON_NO_CASH
+
+    success = buy_weapon_from_shop(player, weapon_slot)
+    return success, 1 if success else 0, "weapon", reason
+
+
+def _buy_ammo_row(player: PlayerState, column: int) -> tuple[bool, int, str, str]:
+    reason = SHOP_BLOCK_REASON_NONE
+    if not _valid_bullet_type(player, column):
+        reason = SHOP_BLOCK_REASON_INVALID
+    elif player.cash < bullet_shop_cost_for_type(column):
+        reason = SHOP_BLOCK_REASON_NO_CASH
+    else:
+        capacity = bullet_capacity_units_for_type(column)
+        current = max(0, player.bullets[column])
+        if current >= capacity:
+            reason = SHOP_BLOCK_REASON_FULL
+
+    units = buy_bullet_ammo_from_shop(player, column)
+    success = units > 0
+    return success, units, "ammo", reason
+
+
+def _buy_shield_row(player: PlayerState) -> tuple[bool, int, str, str]:
+    reason = SHOP_BLOCK_REASON_NONE
+    if player.shield >= SHOP_SHIELD_MAX_LEVEL:
+        reason = SHOP_BLOCK_REASON_MAX_LEVEL
+    elif player.cash < shield_shop_buy_cost_for_level(player.shield):
+        reason = SHOP_BLOCK_REASON_NO_CASH
+
+    success = buy_shield_from_shop(player)
+    return success, 1 if success else 0, "shield", reason
+
+
+def _buy_target_row(player: PlayerState) -> tuple[bool, int, str, str]:
+    reason = SHOP_BLOCK_REASON_NONE
+    if player.target_system_enabled:
+        reason = SHOP_BLOCK_REASON_TARGET_ON
+    elif player.cash < SHOP_TARGET_SYSTEM_COST:
+        reason = SHOP_BLOCK_REASON_NO_CASH
+
+    success = buy_target_system_from_shop(player)
+    return success, 1 if success else 0, "target", reason
+
+
+def _sell_weapon_row(
+    player: PlayerState,
+    column: int,
+    sell_prices: ShopSellPriceTable,
+) -> tuple[bool, int, str, str]:
+    weapon_slot = column + 1
+    reason = SHOP_BLOCK_REASON_NONE
+    if not _valid_shop_weapon_slot(player, weapon_slot):
+        reason = SHOP_BLOCK_REASON_INVALID
+    elif not player.weapons[weapon_slot]:
+        reason = SHOP_BLOCK_REASON_NOT_OWNED
+
+    success = sell_weapon_to_shop(player, weapon_slot, sell_prices)
+    return success, 1 if success else 0, "weapon", reason
+
+
+def _sell_ammo_row(player: PlayerState, column: int) -> tuple[bool, int, str, str]:
+    reason = SHOP_BLOCK_REASON_NONE
+    if not _valid_bullet_type(player, column):
+        reason = SHOP_BLOCK_REASON_INVALID
+    elif player.bullets[column] <= 0:
+        reason = SHOP_BLOCK_REASON_NO_STOCK
+
+    units = sell_bullet_ammo_to_shop(player, column)
+    success = units > 0
+    return success, units, "ammo", reason
+
+
+def _sell_shield_row(player: PlayerState, sell_prices: ShopSellPriceTable) -> tuple[bool, int, str, str]:
+    reason = SHOP_BLOCK_REASON_NONE
+    if player.shield <= 0:
+        reason = SHOP_BLOCK_REASON_NO_SHIELD
+
+    success = sell_shield_to_shop(player, sell_prices)
+    return success, 1 if success else 0, "shield", reason
+
+
+def _sell_target_row(player: PlayerState, sell_prices: ShopSellPriceTable) -> tuple[bool, int, str, str]:
+    reason = SHOP_BLOCK_REASON_NONE
+    if not player.target_system_enabled:
+        reason = SHOP_BLOCK_REASON_TARGET_OFF
+
+    success = sell_target_system_to_shop(player, sell_prices)
+    return success, 1 if success else 0, "target", reason
 
 
 def current_weapon_ammo_snapshot(player: PlayerState) -> tuple[int, int, int]:
