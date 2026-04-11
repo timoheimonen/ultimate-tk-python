@@ -353,8 +353,6 @@ class GameplayScene(BaseScene):
 
         self._player: PlayerState | None = None
         self._held_actions: set[InputAction] = set()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot: int | None = None
         self._shop_active = False
         self._shop_row = 0
         self._shop_column = 0
@@ -363,14 +361,29 @@ class GameplayScene(BaseScene):
             shield_base=0,
             target_system=0,
         )
+        self._shop_last_transaction: ShopTransactionEvent | None = None
+        self._static_sprites: tuple[WorldSprite, ...] = ()
+        self._progression_enabled = False
+        self._reset_input_flags()
+        self._reset_entity_holders()
+        self._reset_stat_counters()
+
+    # ------------------------------------------------------------------
+    # State reset helpers
+    # ------------------------------------------------------------------
+
+    def _reset_input_flags(self) -> None:
+        """Clear all per-tick input/shop-navigation request flags."""
+        self._cycle_weapon_requested = False
+        self._pending_weapon_slot: int | None = None
         self._shop_nav_row_delta = 0
         self._shop_nav_column_delta = 0
         self._shop_buy_requested = False
         self._shop_sell_requested = False
         self._shop_toggle_requested = False
-        self._shop_last_transaction: ShopTransactionEvent | None = None
 
-        self._static_sprites: tuple[WorldSprite, ...] = ()
+    def _reset_entity_holders(self) -> None:
+        """Reset asset caches and entity lists to empty defaults."""
         self._ui_font: FontFile | None = None
         self._target_pixels: bytes | None = None
         self._target_width = 0
@@ -382,6 +395,9 @@ class GameplayScene(BaseScene):
         self._crates: list[CrateState] = []
         self._enemy_projectiles: list[EnemyProjectile] = []
         self._player_explosives: list[PlayerExplosive] = []
+
+    def _reset_stat_counters(self) -> None:
+        """Zero all gameplay stat accumulators."""
         self._player_explosive_detonations = 0
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
@@ -392,7 +408,6 @@ class GameplayScene(BaseScene):
         self._enemy_damage_to_player = 0.0
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
-        self._progression_enabled = False
 
     def on_enter(self, context: GameContext) -> None:
         context.runtime.mode = AppMode.GAMEPLAY
@@ -455,8 +470,7 @@ class GameplayScene(BaseScene):
         context.runtime.progression_ticks_remaining = 0
 
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
+        self._reset_input_flags()
         self._shop_active = False
         self._shop_row = 0
         self._shop_column = 0
@@ -465,33 +479,9 @@ class GameplayScene(BaseScene):
             shield_base=0,
             target_system=0,
         )
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
-        self._shop_toggle_requested = False
         self._shop_last_transaction = None
-        self._target_pixels = None
-        self._ui_font = None
-        self._target_width = 0
-        self._target_height = 0
-        self._crate_frames = ()
-        self._rambo_frames = ()
-        self._enemy_frames = {}
-        self._enemies = []
-        self._crates = []
-        self._enemy_projectiles = []
-        self._player_explosives = []
-        self._player_explosive_detonations = 0
-        self._enemy_hits_by_player = 0
-        self._enemies_killed_by_player = 0
-        self._crates_destroyed_by_player = 0
-        self._crates_collected_by_player = 0
-        self._enemy_shots_fired = 0
-        self._enemy_hits_on_player = 0
-        self._enemy_damage_to_player = 0.0
-        self._game_over_active = False
-        self._game_over_ticks_remaining = 0
+        self._reset_entity_holders()
+        self._reset_stat_counters()
         self._progression_enabled = not context.config.autostart_gameplay
         self._static_sprites = ()
         self._spot_phase = 0
@@ -537,8 +527,9 @@ class GameplayScene(BaseScene):
 
         self._level = level
         self._player = spawn_player_from_level(level)
-        sell_seed = (context.session.episode_index * 1000) + context.session.level_index
-        self._shop_sell_prices = generate_shop_sell_prices(random_seed=sell_seed)
+        self._shop_sell_prices = generate_shop_sell_prices(
+            random_seed=self._sell_seed(context),
+        )
         self._shop_row, self._shop_column = clamp_shop_selection(0, 0)
 
         options = repo.try_load_options()
@@ -586,20 +577,14 @@ class GameplayScene(BaseScene):
             self._render_flags.shadows,
             len(self._enemies),
             len(self._crates),
-            sell_seed,
+            self._sell_seed(context),
         )
 
     def on_exit(self, context: GameContext) -> None:
         del context
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
+        self._reset_input_flags()
         self._shop_active = False
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
-        self._shop_toggle_requested = False
         self._shop_last_transaction = None
         self._ui_font = None
         self._game_over_active = False
@@ -718,13 +703,7 @@ class GameplayScene(BaseScene):
         else:
             context.runtime.mode = AppMode.GAME_OVER
 
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
-        self._shop_toggle_requested = False
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
+        self._reset_input_flags()
 
         self._spot_phase = (self._spot_phase + 2) % 360
         self._camera_x, self._camera_y = follow_player_camera(
@@ -1903,25 +1882,18 @@ class GameplayScene(BaseScene):
 
         if self._shop_active:
             self._shop_active = False
-            self._shop_nav_row_delta = 0
-            self._shop_nav_column_delta = 0
-            self._shop_buy_requested = False
-            self._shop_sell_requested = False
+            self._reset_input_flags()
             context.logger.info("Shop closed")
             return
 
         if not self._shop_sell_prices.weapon_slots:
-            sell_seed = (context.session.episode_index * 1000) + context.session.level_index
-            self._shop_sell_prices = generate_shop_sell_prices(random_seed=sell_seed)
+            self._shop_sell_prices = generate_shop_sell_prices(
+                random_seed=self._sell_seed(context),
+            )
 
         self._shop_active = True
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
+        self._reset_input_flags()
         self._shop_row, self._shop_column = clamp_shop_selection(self._shop_row, self._shop_column)
         context.logger.info("Shop opened row=%d col=%d", self._shop_row, self._shop_column)
 
@@ -1978,13 +1950,7 @@ class GameplayScene(BaseScene):
         self._game_over_ticks_remaining = self._GAME_OVER_RETURN_TICKS
         self._shop_active = False
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
-        self._shop_toggle_requested = False
+        self._reset_input_flags()
         self._enemy_projectiles.clear()
         self._player_explosives.clear()
         context.runtime.mode = AppMode.GAME_OVER
@@ -2052,6 +2018,11 @@ class GameplayScene(BaseScene):
     @staticmethod
     def _level_name_for_session_index(level_index: int) -> str:
         return f"LEVEL{max(1, level_index + 1)}.LEV"
+
+    @staticmethod
+    def _sell_seed(context: GameContext) -> int:
+        """Deterministic seed for shop sell-price generation."""
+        return (context.session.episode_index * 1000) + context.session.level_index
 
     def _publish_player_runtime_state(self, context: GameContext) -> None:
         if self._player is None:
