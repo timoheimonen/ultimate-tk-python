@@ -51,6 +51,7 @@ else:
             enforce_asset_manifest: bool = True,
             project_root: str | None = None,
             render_enabled: bool = False,
+            weapon_mode: str = "normal_mode",
             reward_config: RewardConfig | None = None,
         ) -> None:
             super().__init__()
@@ -59,6 +60,7 @@ else:
             self._enforce_asset_manifest = bool(enforce_asset_manifest)
             self._project_root = project_root
             self._render_enabled = bool(render_enabled)
+            self._weapon_mode = str(weapon_mode)
 
             self._driver: TrainingRuntimeDriver | None = None
             self._action_codec = ActionCodec()
@@ -93,6 +95,7 @@ else:
                 enforce_asset_manifest=self._enforce_asset_manifest,
                 project_root=self._project_root,
                 render_enabled=self._render_enabled,
+                weapon_mode=self._weapon_mode,
             )
 
             runtime = self._driver.context.runtime

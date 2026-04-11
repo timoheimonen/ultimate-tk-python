@@ -293,6 +293,7 @@ class PlayerState:
     shield: int = 0
     target_system_enabled: bool = False
     dead: bool = False
+    infinite_ammo: bool = False
     current_weapon: int = 0
     weapons: list[bool] = field(default_factory=_default_weapon_slots)
     bullets: list[int] = field(default_factory=_default_bullet_amounts)
@@ -808,6 +809,8 @@ def bullet_ammo_pools_snapshot(player: PlayerState) -> tuple[int, ...]:
 
 
 def current_weapon_has_ammo(player: PlayerState) -> bool:
+    if player.infinite_ammo:
+        return True
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:
         return True
@@ -817,6 +820,8 @@ def current_weapon_has_ammo(player: PlayerState) -> bool:
 
 
 def consume_current_weapon_ammo(player: PlayerState) -> bool:
+    if player.infinite_ammo:
+        return True
     bullet_type = weapon_bullet_type_index_for_slot(player.current_weapon)
     if bullet_type is None:
         return True

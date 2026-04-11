@@ -36,6 +36,22 @@ DEFAULT_ENT_COEF_START = 0.05
 DEFAULT_GAMMA = 0.99
 DEFAULT_GAE_LAMBDA = 0.95
 DEFAULT_CLIP_RANGE = 0.2
+DEFAULT_WEAPON_MODE = "normal_mode"
+WEAPON_MODE_CHOICES: tuple[str, ...] = (
+    DEFAULT_WEAPON_MODE,
+    "fist",
+    "pistola",
+    "shotgun",
+    "uzi",
+    "auto_rifle",
+    "grenade_launcher",
+    "auto_grenadier",
+    "heavy_launcher",
+    "auto_shotgun",
+    "c4_activator",
+    "flame_thrower",
+    "mine_dropper",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -99,6 +115,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gamma", type=float, default=DEFAULT_GAMMA, help="Discount factor")
     parser.add_argument("--gae-lambda", type=float, default=DEFAULT_GAE_LAMBDA, help="GAE lambda")
     parser.add_argument("--clip-range", type=float, default=DEFAULT_CLIP_RANGE, help="PPO clipping range")
+    parser.add_argument(
+        "--weapon-mode",
+        default=DEFAULT_WEAPON_MODE,
+        choices=WEAPON_MODE_CHOICES,
+        help=(
+            "Training weapon mode. normal_mode keeps current gameplay behavior; "
+            "other modes force selected weapon with infinite ammo and disable crates"
+        ),
+    )
     parser.add_argument(
         "--disable-asset-manifest-check",
         action="store_true",
@@ -259,6 +284,7 @@ def main() -> int:
         target_tick_rate=max(1, int(args.target_tick_rate)),
         enforce_asset_manifest=not args.disable_asset_manifest_check,
         render_enabled=bool(args.render_training_scenes),
+        weapon_mode=str(args.weapon_mode),
     )
     train_env = DummyVecEnv([env_factory for _ in range(args.n_envs)])
     train_env = VecMonitor(train_env)
@@ -387,6 +413,7 @@ def main() -> int:
         "gamma": float(args.gamma),
         "gae_lambda": float(args.gae_lambda),
         "clip_range": float(args.clip_range),
+        "weapon_mode": str(args.weapon_mode),
         "resume_from": resume_path,
         "render_training_scenes": bool(args.render_training_scenes),
     }

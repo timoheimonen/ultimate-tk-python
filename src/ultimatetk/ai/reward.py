@@ -18,7 +18,7 @@ class RewardConfig:
     crate_reward: float = 0.10
     damage_cost: float = 0.01
     death_cost: float = 5.0
-    level_complete_reward: float = 5.0
+    level_complete_reward: float = 15.0
     run_complete_reward: float = 25.0
     strafing_threat_tti_threshold: float = 0.35
     idle_ticks_threshold: int = 45
