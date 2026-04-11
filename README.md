@@ -164,8 +164,8 @@ python3 tools/ppo_train.py \
   --n-envs 1 \
   --device auto \
   --seed 123 \
-  --n-steps 2048 \
-  --batch-size 128 \
+  --n-steps 4096 \
+  --batch-size 512 \
   --gamma 0.99 \
   --gae-lambda 0.95 \
   --clip-range 0.2 \
@@ -176,6 +176,8 @@ python3 tools/ppo_train.py \
   --ent-coef 0.01 \
   --max-episode-steps 6000 \
   --target-tick-rate 40 \
+  --randomize-level-on-reset \
+  --level-index-pool 0,1,2,3,4,5,6,7,8,9 \
   --checkpoint-freq 1000000 \
   --eval-freq 25000 \
   --eval-episodes 5
@@ -193,8 +195,8 @@ Common flags and defaults:
 - `--n-envs 1`
 - `--device auto`
 - `--seed 123`
-- `--n-steps 2048`
-- `--batch-size 128`
+- `--n-steps 4096`
+- `--batch-size 512`
 - `--gamma 0.99`
 - `--gae-lambda 0.95`
 - `--clip-range 0.2`
@@ -205,6 +207,8 @@ Common flags and defaults:
 - `--ent-coef 0.01`
 - `--max-episode-steps 6000`
 - `--target-tick-rate 40`
+- `--randomize-level-on-reset` (off by default)
+- `--level-index-pool 0,1,2,3,4,5,6,7,8,9`
 - `--checkpoint-freq 1000000`
 - `--eval-freq 25000`
 - `--eval-episodes 5`
@@ -213,6 +217,13 @@ Note:
 
 - Run management flags: `--run-name`, `--runs-root`, `--resume-from`, `--disable-asset-manifest-check`, `--render-training-scenes`
 - Scenario flag: `--weapon-mode`
+- Level randomization flags: `--randomize-level-on-reset`, `--level-index-pool`
+
+Level randomization behavior:
+
+- With `--randomize-level-on-reset`, each training episode reset samples a start level from `--level-index-pool`.
+- `--level-index-pool` accepts comma-separated non-negative level indices (duplicates are ignored).
+- Evaluation callback env stays fixed at level index `0` for stable metric comparison across runs.
 
 Weapon mode choices (`--weapon-mode` for both `ppo_train.py` and `ppo_eval.py`):
 
