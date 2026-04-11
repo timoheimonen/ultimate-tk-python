@@ -1075,60 +1075,72 @@ def move_player_with_collision(
 
     edge = PLAYER_COLLISION_EDGE
     center_inset = PLAYER_COLLISION_CENTER_INSET
+    player.y = _move_player_axis_with_collision(
+        level,
+        moving_value=player.y,
+        fixed_value=player.x,
+        delta=move_y,
+        edge=edge,
+        center_inset=center_inset,
+        vertical=True,
+    )
+    player.x = _move_player_axis_with_collision(
+        level,
+        moving_value=player.x,
+        fixed_value=player.y,
+        delta=move_x,
+        edge=edge,
+        center_inset=center_inset,
+        vertical=False,
+    )
 
-    if move_y != 0.0:
-        new_y = player.y + move_y
-        rny = int(new_y)
-        rnx = int(player.x)
-        if new_y < player.y:
-            if _is_floor_triplet(
-                level,
-                x1=rnx + 14 - center_inset,
-                y1=rny + edge,
-                x2=rnx + 14 + center_inset,
-                y2=rny + edge,
-                x3=rnx + 14,
-                y3=rny + edge,
-            ):
-                player.y = new_y
-        if new_y > player.y:
-            if _is_floor_triplet(
-                level,
-                x1=rnx + 14 - center_inset,
-                y1=rny + 28 - edge,
-                x2=rnx + 14 + center_inset,
-                y2=rny + 28 - edge,
-                x3=rnx + 14,
-                y3=rny + 28 - edge,
-            ):
-                player.y = new_y
 
-    if move_x != 0.0:
-        new_x = player.x + move_x
-        rnx = int(new_x)
-        rny = int(player.y)
-        if new_x < player.x:
-            if _is_floor_triplet(
-                level,
-                x1=rnx + edge,
-                y1=rny + 14 - center_inset,
-                x2=rnx + edge,
-                y2=rny + 14 + center_inset,
-                x3=rnx + edge,
-                y3=rny + 14,
-            ):
-                player.x = new_x
-        if new_x > player.x:
-            if _is_floor_triplet(
-                level,
-                x1=rnx + 28 - edge,
-                y1=rny + 14 - center_inset,
-                x2=rnx + 28 - edge,
-                y2=rny + 14 + center_inset,
-                x3=rnx + 28 - edge,
-                y3=rny + 14,
-            ):
-                player.x = new_x
+def _move_player_axis_with_collision(
+    level: LevelData,
+    *,
+    moving_value: float,
+    fixed_value: float,
+    delta: float,
+    edge: int,
+    center_inset: int,
+    vertical: bool,
+) -> float:
+    if delta == 0.0:
+        return moving_value
+
+    next_value = moving_value + delta
+    if next_value == moving_value:
+        return moving_value
+
+    moving_probe = int(next_value)
+    fixed_probe = int(fixed_value)
+    center_offset = PLAYER_CENTER_OFFSET
+    edge_offset = edge if next_value < moving_value else PLAYER_COLLISION_SIZE - edge
+
+    if vertical:
+        if _is_floor_triplet(
+            level,
+            x1=fixed_probe + center_offset - center_inset,
+            y1=moving_probe + edge_offset,
+            x2=fixed_probe + center_offset + center_inset,
+            y2=moving_probe + edge_offset,
+            x3=fixed_probe + center_offset,
+            y3=moving_probe + edge_offset,
+        ):
+            return next_value
+        return moving_value
+
+    if _is_floor_triplet(
+        level,
+        x1=moving_probe + edge_offset,
+        y1=fixed_probe + center_offset - center_inset,
+        x2=moving_probe + edge_offset,
+        y2=fixed_probe + center_offset + center_inset,
+        x3=moving_probe + edge_offset,
+        y3=fixed_probe + center_offset,
+    ):
+        return next_value
+    return moving_value
 
 
 def follow_player_camera(
@@ -1191,25 +1203,20 @@ def follow_player_camera(
         dead_zone=dead_zone_y,
     )
 
-    if abs(camera_x - target_camera_x) > half_width:
-        camera_x = target_camera_x
-    else:
-        camera_x = _approach_camera_axis(
-            camera_x,
-            target_camera_x,
-            dead_zone=dead_zone_x,
-            catchup_divisor=catchup_divisor_x,
-        )
-
-    if abs(camera_y - target_camera_y) > half_height:
-        camera_y = target_camera_y
-    else:
-        camera_y = _approach_camera_axis(
-            camera_y,
-            target_camera_y,
-            dead_zone=dead_zone_y,
-            catchup_divisor=catchup_divisor_y,
-        )
+    camera_x = _follow_camera_axis(
+        camera_x,
+        target_camera_x,
+        snap_distance=half_width,
+        dead_zone=dead_zone_x,
+        catchup_divisor=catchup_divisor_x,
+    )
+    camera_y = _follow_camera_axis(
+        camera_y,
+        target_camera_y,
+        snap_distance=half_height,
+        dead_zone=dead_zone_y,
+        catchup_divisor=catchup_divisor_y,
+    )
 
     camera_x = _clamp(camera_x, 0, max_camera_x)
     camera_y = _clamp(camera_y, 0, max_camera_y)
@@ -1241,6 +1248,24 @@ def _approach_camera_axis(
     if delta > 0:
         return current + step
     return current - step
+
+
+def _follow_camera_axis(
+    current: int,
+    target: int,
+    *,
+    snap_distance: int,
+    dead_zone: int,
+    catchup_divisor: int,
+) -> int:
+    if abs(current - target) > snap_distance:
+        return target
+    return _approach_camera_axis(
+        current,
+        target,
+        dead_zone=dead_zone,
+        catchup_divisor=catchup_divisor,
+    )
 
 
 def _camera_edge_release_dead_zone(*, current: int, target: int, max_camera: int, dead_zone: int) -> int:
