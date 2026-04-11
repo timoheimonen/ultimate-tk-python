@@ -14,12 +14,29 @@ if str(SRC_ROOT) not in sys.path:
 
 from ultimatetk.ai.action_codec import ActionCodec
 from ultimatetk.ai.observation import blank_observation, extract_observation
-from ultimatetk.ai.runtime_driver import TrainingRuntimeDriver
+from ultimatetk.ai.runtime_driver import WEAPON_MODE_NORMAL, TrainingRuntimeDriver
 from ultimatetk.ai.sb3_action_wrapper import sb3_vector_to_env_action
 from ultimatetk.ai.training_device import detect_torch_capabilities, resolve_torch_device
 from ultimatetk.core.events import EventType
 from ultimatetk.core.platform_pygame import PygamePlatformBackend
 from ultimatetk.core.state import AppMode
+
+
+WEAPON_MODE_CHOICES: tuple[str, ...] = (
+    WEAPON_MODE_NORMAL,
+    "fist",
+    "pistola",
+    "shotgun",
+    "uzi",
+    "auto_rifle",
+    "grenade_launcher",
+    "auto_grenadier",
+    "heavy_launcher",
+    "auto_shotgun",
+    "c4_activator",
+    "flame_thrower",
+    "mine_dropper",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +47,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--window-scale", type=int, default=3, help="Pygame window scale")
     parser.add_argument("--level-index", type=int, default=0, help="Start level index")
     parser.add_argument("--seed", type=int, default=123, help="Reserved for future deterministic hooks")
+    parser.add_argument(
+        "--weapon-mode",
+        default=WEAPON_MODE_NORMAL,
+        choices=WEAPON_MODE_CHOICES,
+        help=(
+            "Playback weapon mode. normal_mode keeps current gameplay behavior; "
+            "other modes force selected weapon with infinite ammo and disable crates"
+        ),
+    )
     parser.add_argument("--max-steps", type=int, default=0, help="Optional step cap (0 disables)")
     parser.add_argument("--max-seconds", type=float, default=0.0, help="Optional wall-clock cap (0 disables)")
     parser.add_argument(
@@ -95,6 +121,7 @@ def main() -> int:
         enforce_asset_manifest=not args.disable_asset_manifest_check,
         project_root=PROJECT_ROOT,
         render_enabled=True,
+        weapon_mode=str(args.weapon_mode),
     )
     action_codec = ActionCodec()
     action_codec.reset()

@@ -12,6 +12,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ultimatetk.ai.sb3_env_factory import build_sb3_env_factory
+from ultimatetk.ai.runtime_driver import WEAPON_MODE_NORMAL, WEAPON_MODE_TO_SLOT
 from ultimatetk.ai.training_device import detect_torch_capabilities, resolve_torch_device
 
 
@@ -21,6 +22,7 @@ DEFAULT_DEVICE = "auto"
 DEFAULT_DETERMINISTIC = True
 DEFAULT_MAX_EPISODE_STEPS = 6000
 DEFAULT_TARGET_TICK_RATE = 40
+WEAPON_MODE_CHOICES: tuple[str, ...] = (WEAPON_MODE_NORMAL, *WEAPON_MODE_TO_SLOT.keys())
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,6 +66,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Render scene frames during evaluation (off by default for max throughput)",
     )
+    parser.add_argument(
+        "--weapon-mode",
+        default=WEAPON_MODE_NORMAL,
+        choices=WEAPON_MODE_CHOICES,
+        help=(
+            "Evaluation weapon mode. normal_mode keeps current gameplay behavior; "
+            "other modes force selected weapon with infinite ammo and disable crates"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -93,6 +104,7 @@ def main() -> int:
         target_tick_rate=max(1, int(args.target_tick_rate)),
         enforce_asset_manifest=not args.disable_asset_manifest_check,
         render_enabled=bool(args.render_scenes),
+        weapon_mode=str(args.weapon_mode),
     )()
 
     model_path = Path(args.model).expanduser().resolve()
@@ -145,13 +157,14 @@ def main() -> int:
     mean_steps = sum(episode_lengths) / float(len(episode_lengths))
     completion_rate = completion_count / float(len(episode_rewards))
     print(
-        "aggregate episodes=%d mean_reward=%.3f mean_steps=%.1f completion_rate=%.3f device=%s"
+        "aggregate episodes=%d mean_reward=%.3f mean_steps=%.1f completion_rate=%.3f device=%s weapon_mode=%s"
         % (
             len(episode_rewards),
             mean_reward,
             mean_steps,
             completion_rate,
             device,
+            str(args.weapon_mode),
         ),
     )
     return 0

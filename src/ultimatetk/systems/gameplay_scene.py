@@ -82,6 +82,17 @@ from ultimatetk.systems.player_control import (
 
 
 @dataclass(frozen=True, slots=True)
+class _ShopCellInfo:
+    """Pre-computed descriptor for a single shop grid cell."""
+    label: str
+    icon_kind: str
+    counter: str
+    buy_cost: int
+    locked: bool
+    locked_state: str  # "owned", "full", "max", "locked", or "" if not locked
+
+
+@dataclass(frozen=True, slots=True)
 class GameplayStateView:
     level: LevelData
     player: PlayerState
@@ -131,6 +142,33 @@ class GameplayScene(BaseScene):
     _HUD_WARN_COLOR = 28
     _HUD_OK_COLOR = 112
     _C4_HOT_FUSE_TICKS = 12
+    # Indexed by weapon_slot (1-based, so index 0 is the fallback/fist).
+    _WEAPON_ICON_KINDS: tuple[str, ...] = (
+        "w_generic",   # 0 = fist (fallback)
+        "w_pistol",    # 1
+        "w_shotgun",   # 2
+        "w_uzi",       # 3
+        "w_rifle",     # 4
+        "w_gl",        # 5
+        "w_ag",        # 6
+        "w_hl",        # 7
+        "w_as",        # 8
+        "w_c4",        # 9
+        "w_flame",     # 10
+        "w_mine",      # 11
+    )
+    # Indexed by ammo_type (0-based).
+    _AMMO_ICON_KINDS: tuple[str, ...] = (
+        "a_9mm",       # 0
+        "a_12mm",      # 1
+        "a_shell",     # 2
+        "a_lg",        # 3
+        "a_mg",        # 4
+        "a_hg",        # 5
+        "a_c4",        # 6
+        "a_gas",       # 7
+        "a_mine",      # 8
+    )
     _SHOP_ICON_BITMAPS: dict[str, tuple[str, ...]] = {
         "w_pistol": (
             "..###..",
@@ -353,8 +391,6 @@ class GameplayScene(BaseScene):
 
         self._player: PlayerState | None = None
         self._held_actions: set[InputAction] = set()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot: int | None = None
         self._shop_active = False
         self._shop_row = 0
         self._shop_column = 0
@@ -363,14 +399,29 @@ class GameplayScene(BaseScene):
             shield_base=0,
             target_system=0,
         )
+        self._shop_last_transaction: ShopTransactionEvent | None = None
+        self._static_sprites: tuple[WorldSprite, ...] = ()
+        self._progression_enabled = False
+        self._reset_input_flags()
+        self._reset_entity_holders()
+        self._reset_stat_counters()
+
+    # ------------------------------------------------------------------
+    # State reset helpers
+    # ------------------------------------------------------------------
+
+    def _reset_input_flags(self) -> None:
+        """Clear all per-tick input/shop-navigation request flags."""
+        self._cycle_weapon_requested = False
+        self._pending_weapon_slot: int | None = None
         self._shop_nav_row_delta = 0
         self._shop_nav_column_delta = 0
         self._shop_buy_requested = False
         self._shop_sell_requested = False
         self._shop_toggle_requested = False
-        self._shop_last_transaction: ShopTransactionEvent | None = None
 
-        self._static_sprites: tuple[WorldSprite, ...] = ()
+    def _reset_entity_holders(self) -> None:
+        """Reset asset caches and entity lists to empty defaults."""
         self._ui_font: FontFile | None = None
         self._target_pixels: bytes | None = None
         self._target_width = 0
@@ -382,6 +433,18 @@ class GameplayScene(BaseScene):
         self._crates: list[CrateState] = []
         self._enemy_projectiles: list[EnemyProjectile] = []
         self._player_explosives: list[PlayerExplosive] = []
+
+    @staticmethod
+    def _clamp01(value: float) -> float:
+        """Clamp *value* to the ``[0.0, 1.0]`` range."""
+        if value < 0.0:
+            return 0.0
+        if value > 1.0:
+            return 1.0
+        return value
+
+    def _reset_stat_counters(self) -> None:
+        """Zero all gameplay stat accumulators."""
         self._player_explosive_detonations = 0
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
@@ -392,13 +455,26 @@ class GameplayScene(BaseScene):
         self._enemy_damage_to_player = 0.0
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
-        self._progression_enabled = False
 
-    def on_enter(self, context: GameContext) -> None:
-        context.runtime.mode = AppMode.GAMEPLAY
-        context.runtime.last_render_digest = 0
-        context.runtime.last_render_width = 0
-        context.runtime.last_render_height = 0
+    def _count_player_explosives(self) -> tuple[int, int, int, int]:
+        """Return ``(mines_active, mines_armed, c4_active, c4_hot)``."""
+        mines_active = 0
+        mines_armed = 0
+        c4_active = 0
+        c4_hot = 0
+        for explosive in self._player_explosives:
+            if explosive.kind == "mine":
+                mines_active += 1
+                if explosive.arming_ticks <= 0:
+                    mines_armed += 1
+            elif explosive.kind == "c4":
+                c4_active += 1
+                if explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS:
+                    c4_hot += 1
+        return mines_active, mines_armed, c4_active, c4_hot
+
+    def _publish_zeroed_runtime_state(self, context: GameContext) -> None:
+        """Set all player/combat/shop runtime fields to neutral defaults."""
         context.runtime.player_world_x = 0
         context.runtime.player_world_y = 0
         context.runtime.player_angle_degrees = 0
@@ -418,12 +494,7 @@ class GameplayScene(BaseScene):
         context.runtime.shop_active = False
         context.runtime.shop_selection_row = 0
         context.runtime.shop_selection_column = 0
-        context.runtime.shop_last_action = ""
-        context.runtime.shop_last_category = ""
-        context.runtime.shop_last_success = False
-        context.runtime.shop_last_units = 0
-        context.runtime.shop_last_cash_delta = 0
-        context.runtime.shop_last_reason = ""
+        self._publish_zeroed_shop_last_fields(context)
         context.runtime.player_health = 0
         context.runtime.player_dead = False
         context.runtime.player_hits_total = 0
@@ -448,6 +519,23 @@ class GameplayScene(BaseScene):
         context.runtime.player_explosive_detonations_total = 0
         context.runtime.game_over_active = False
         context.runtime.game_over_ticks_remaining = 0
+
+    @staticmethod
+    def _publish_zeroed_shop_last_fields(context: GameContext) -> None:
+        """Reset all ``shop_last_*`` runtime fields to neutral defaults."""
+        context.runtime.shop_last_action = ""
+        context.runtime.shop_last_category = ""
+        context.runtime.shop_last_success = False
+        context.runtime.shop_last_units = 0
+        context.runtime.shop_last_cash_delta = 0
+        context.runtime.shop_last_reason = ""
+
+    def on_enter(self, context: GameContext) -> None:
+        context.runtime.mode = AppMode.GAMEPLAY
+        context.runtime.last_render_digest = 0
+        context.runtime.last_render_width = 0
+        context.runtime.last_render_height = 0
+        self._publish_zeroed_runtime_state(context)
         context.runtime.progression_event = ""
         context.runtime.progression_from_level_index = -1
         context.runtime.progression_to_level_index = -1
@@ -455,8 +543,7 @@ class GameplayScene(BaseScene):
         context.runtime.progression_ticks_remaining = 0
 
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
+        self._reset_input_flags()
         self._shop_active = False
         self._shop_row = 0
         self._shop_column = 0
@@ -465,33 +552,9 @@ class GameplayScene(BaseScene):
             shield_base=0,
             target_system=0,
         )
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
-        self._shop_toggle_requested = False
         self._shop_last_transaction = None
-        self._target_pixels = None
-        self._ui_font = None
-        self._target_width = 0
-        self._target_height = 0
-        self._crate_frames = ()
-        self._rambo_frames = ()
-        self._enemy_frames = {}
-        self._enemies = []
-        self._crates = []
-        self._enemy_projectiles = []
-        self._player_explosives = []
-        self._player_explosive_detonations = 0
-        self._enemy_hits_by_player = 0
-        self._enemies_killed_by_player = 0
-        self._crates_destroyed_by_player = 0
-        self._crates_collected_by_player = 0
-        self._enemy_shots_fired = 0
-        self._enemy_hits_on_player = 0
-        self._enemy_damage_to_player = 0.0
-        self._game_over_active = False
-        self._game_over_ticks_remaining = 0
+        self._reset_entity_holders()
+        self._reset_stat_counters()
         self._progression_enabled = not context.config.autostart_gameplay
         self._static_sprites = ()
         self._spot_phase = 0
@@ -537,8 +600,9 @@ class GameplayScene(BaseScene):
 
         self._level = level
         self._player = spawn_player_from_level(level)
-        sell_seed = (context.session.episode_index * 1000) + context.session.level_index
-        self._shop_sell_prices = generate_shop_sell_prices(random_seed=sell_seed)
+        self._shop_sell_prices = generate_shop_sell_prices(
+            random_seed=self._sell_seed(context),
+        )
         self._shop_row, self._shop_column = clamp_shop_selection(0, 0)
 
         options = repo.try_load_options()
@@ -586,20 +650,14 @@ class GameplayScene(BaseScene):
             self._render_flags.shadows,
             len(self._enemies),
             len(self._crates),
-            sell_seed,
+            self._sell_seed(context),
         )
 
     def on_exit(self, context: GameContext) -> None:
         del context
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
+        self._reset_input_flags()
         self._shop_active = False
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
-        self._shop_toggle_requested = False
         self._shop_last_transaction = None
         self._ui_font = None
         self._game_over_active = False
@@ -718,13 +776,7 @@ class GameplayScene(BaseScene):
         else:
             context.runtime.mode = AppMode.GAME_OVER
 
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
-        self._shop_toggle_requested = False
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
+        self._reset_input_flags()
 
         self._spot_phase = (self._spot_phase + 2) % 360
         self._camera_x, self._camera_y = follow_player_camera(
@@ -1093,6 +1145,7 @@ class GameplayScene(BaseScene):
                 cell_x = grid_x + (column * cell_pitch)
                 selected = row == self._shop_row and column == self._shop_column
                 selected_pulse = ((self._spot_phase // 15) % 2) == 0
+                info = self._shop_cell_info(row, column)
                 cell_state = self._shop_cell_state(row, column)
                 (
                     fill_color,
@@ -1145,17 +1198,16 @@ class GameplayScene(BaseScene):
                     marker_color,
                 )
 
-                icon_kind = self._shop_cell_icon_kind(row, column)
-                if icon_kind:
+                if info.icon_kind:
                     self._draw_shop_cell_icon(
                         pixels,
                         x=cell_x + 2,
                         y=row_y + 2,
-                        kind=icon_kind,
+                        kind=info.icon_kind,
                         color=icon_color,
                     )
 
-                cell_label = self._shop_cell_aligned_text(self._shop_cell_label_text(row, column))
+                cell_label = self._shop_cell_aligned_text(info.label)
                 if cell_label:
                     label_x = self._shop_cell_text_x(cell_x, cell_label)
                     self._draw_shop_text(
@@ -1166,7 +1218,7 @@ class GameplayScene(BaseScene):
                         label_color,
                     )
 
-                counter_text = self._shop_cell_counter_text(row, column)
+                counter_text = info.counter
                 if counter_text:
                     counter_label = self._shop_cell_aligned_text(counter_text, pad_numeric=True)
                     counter_x = self._shop_cell_text_x(cell_x, counter_label)
@@ -1240,78 +1292,78 @@ class GameplayScene(BaseScene):
             return "OTHER"
         return "UNKNOWN"
 
-    def _shop_cell_label_text(self, row: int, column: int) -> str:
+    def _shop_cell_info(self, row: int, column: int) -> _ShopCellInfo:
+        """Compute all display properties for a single shop cell."""
         if row == SHOP_ROW_WEAPONS:
-            return weapon_shop_short_label_for_slot(column + 1)
+            weapon_slot = column + 1
+            label = weapon_shop_short_label_for_slot(weapon_slot)
+            icon_kind = self._weapon_shop_icon_kind(weapon_slot)
+            buy_cost = weapon_shop_cost_for_slot(weapon_slot)
+            locked = (
+                self._player is not None
+                and weapon_slot < len(self._player.weapons)
+                and self._player.weapons[weapon_slot]
+            )
+            counter = "ON" if locked else ""
+            locked_state = "owned" if locked else ""
+            return _ShopCellInfo(label, icon_kind, counter, buy_cost, locked, locked_state)
 
         if row == SHOP_ROW_AMMO:
-            return bullet_shop_short_label_for_type(column)
+            label = bullet_shop_short_label_for_type(column)
+            icon_kind = self._ammo_shop_icon_kind(column)
+            buy_cost = bullet_shop_cost_for_type(column)
+            locked = False
+            counter = ""
+            if self._player is not None:
+                if column >= len(self._player.bullets):
+                    locked = True
+                else:
+                    stock = max(0, self._player.bullets[column])
+                    locked = stock >= bullet_capacity_units_for_type(column)
+                    if stock > 0:
+                        units_per_trade = max(1, bullet_shop_units_for_type(column))
+                        stock_packs = min(99, max(1, stock // units_per_trade) if stock > 0 else 0)
+                        counter = f"{stock_packs:02d}"
+            locked_state = "full" if locked else ""
+            return _ShopCellInfo(label, icon_kind, counter, buy_cost, locked, locked_state)
 
-        if row == SHOP_ROW_OTHER and column == 0:
-            return "SH"
+        # SHOP_ROW_OTHER
+        if column == 0:
+            buy_cost = (
+                shield_shop_buy_cost_for_level(self._player.shield)
+                if self._player is not None
+                else 0
+            )
+            locked = self._player is not None and self._player.shield >= SHOP_SHIELD_MAX_LEVEL
+            counter = ""
+            if self._player is not None and self._player.shield > 0:
+                counter = f"{min(99, self._player.shield):02d}"
+            locked_state = "max" if locked else ""
+            return _ShopCellInfo("SH", "shield", counter, buy_cost, locked, locked_state)
 
-        if row == SHOP_ROW_OTHER and column == 1:
-            return "TG"
-        return ""
+        if column == 1:
+            locked = self._player is not None and self._player.target_system_enabled
+            counter = "ON" if locked else ""
+            locked_state = "owned" if locked else ""
+            return _ShopCellInfo("TG", "target", counter, SHOP_TARGET_SYSTEM_COST, locked, locked_state)
+
+        return _ShopCellInfo("", "", "", 0, False, "")
+
+    def _shop_cell_label_text(self, row: int, column: int) -> str:
+        return self._shop_cell_info(row, column).label
 
     def _shop_cell_icon_kind(self, row: int, column: int) -> str:
-        if row == SHOP_ROW_WEAPONS:
-            return self._weapon_shop_icon_kind(column + 1)
-
-        if row == SHOP_ROW_AMMO:
-            return self._ammo_shop_icon_kind(column)
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            return "shield"
-        if row == SHOP_ROW_OTHER and column == 1:
-            return "target"
-        return ""
+        return self._shop_cell_info(row, column).icon_kind
 
     def _weapon_shop_icon_kind(self, weapon_slot: int) -> str:
-        if weapon_slot == 1:
-            return "w_pistol"
-        if weapon_slot == 2:
-            return "w_shotgun"
-        if weapon_slot == 3:
-            return "w_uzi"
-        if weapon_slot == 4:
-            return "w_rifle"
-        if weapon_slot == 5:
-            return "w_gl"
-        if weapon_slot == 6:
-            return "w_ag"
-        if weapon_slot == 7:
-            return "w_hl"
-        if weapon_slot == 8:
-            return "w_as"
-        if weapon_slot == 9:
-            return "w_c4"
-        if weapon_slot == 10:
-            return "w_flame"
-        if weapon_slot == 11:
-            return "w_mine"
-        return "w_generic"
+        if 0 <= weapon_slot < len(self._WEAPON_ICON_KINDS):
+            return self._WEAPON_ICON_KINDS[weapon_slot]
+        return self._WEAPON_ICON_KINDS[0]
 
     def _ammo_shop_icon_kind(self, ammo_type: int) -> str:
-        if ammo_type == 0:
-            return "a_9mm"
-        if ammo_type == 1:
-            return "a_12mm"
-        if ammo_type == 2:
-            return "a_shell"
-        if ammo_type == 3:
-            return "a_lg"
-        if ammo_type == 4:
-            return "a_mg"
-        if ammo_type == 5:
-            return "a_hg"
-        if ammo_type == 6:
-            return "a_c4"
-        if ammo_type == 7:
-            return "a_gas"
-        if ammo_type == 8:
-            return "a_mine"
-        return "a_9mm"
+        if 0 <= ammo_type < len(self._AMMO_ICON_KINDS):
+            return self._AMMO_ICON_KINDS[ammo_type]
+        return self._AMMO_ICON_KINDS[0]
 
     def _draw_shop_cell_icon(self, pixels: bytearray, *, x: int, y: int, kind: str, color: int) -> None:
         if not kind:
@@ -1378,76 +1430,15 @@ class GameplayScene(BaseScene):
         return cell_x + max(0, (self._SHOP_CELL_SIZE - (draw_chars * 8)) // 2)
 
     def _shop_cell_counter_text(self, row: int, column: int) -> str:
-        if self._player is None:
-            return ""
-
-        if row == SHOP_ROW_WEAPONS:
-            weapon_slot = column + 1
-            if weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]:
-                return "ON"
-            return ""
-
-        if row == SHOP_ROW_AMMO:
-            if column >= len(self._player.bullets):
-                return ""
-            stock = max(0, self._player.bullets[column])
-            if stock <= 0:
-                return ""
-
-            units_per_trade = max(1, bullet_shop_units_for_type(column))
-            stock_packs = stock // units_per_trade
-            if stock_packs < 1:
-                stock_packs = 1
-            stock_packs = min(99, stock_packs)
-            return f"{stock_packs:02d}"
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            if self._player.shield > 0:
-                return f"{min(99, self._player.shield):02d}"
-            return ""
-
-        if row == SHOP_ROW_OTHER and column == 1 and self._player.target_system_enabled:
-            return "ON"
-        return ""
+        return self._shop_cell_info(row, column).counter
 
     def _shop_cell_is_locked(self, row: int, column: int) -> bool:
         if self._player is None:
             return True
-
-        if row == SHOP_ROW_WEAPONS:
-            weapon_slot = column + 1
-            return weapon_slot < len(self._player.weapons) and self._player.weapons[weapon_slot]
-
-        if row == SHOP_ROW_AMMO:
-            if column >= len(self._player.bullets):
-                return True
-            return self._player.bullets[column] >= bullet_capacity_units_for_type(column)
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            return self._player.shield >= SHOP_SHIELD_MAX_LEVEL
-
-        if row == SHOP_ROW_OTHER and column == 1:
-            return self._player.target_system_enabled
-
-        return False
+        return self._shop_cell_info(row, column).locked
 
     def _shop_cell_buy_cost(self, row: int, column: int) -> int:
-        if self._player is None:
-            return 0
-
-        if row == SHOP_ROW_WEAPONS:
-            return weapon_shop_cost_for_slot(column + 1)
-
-        if row == SHOP_ROW_AMMO:
-            return bullet_shop_cost_for_type(column)
-
-        if row == SHOP_ROW_OTHER and column == 0:
-            return shield_shop_buy_cost_for_level(self._player.shield)
-
-        if row == SHOP_ROW_OTHER and column == 1:
-            return SHOP_TARGET_SYSTEM_COST
-
-        return 0
+        return self._shop_cell_info(row, column).buy_cost
 
     def _shop_cell_is_affordable(self, row: int, column: int) -> bool:
         if self._player is None:
@@ -1466,21 +1457,11 @@ class GameplayScene(BaseScene):
     def _shop_cell_state(self, row: int, column: int) -> str:
         if self._player is None:
             return "locked"
-
-        if self._shop_cell_is_locked(row, column):
-            if row == SHOP_ROW_WEAPONS:
-                return "owned"
-            if row == SHOP_ROW_AMMO:
-                return "full"
-            if row == SHOP_ROW_OTHER and column == 0:
-                return "max"
-            if row == SHOP_ROW_OTHER and column == 1:
-                return "owned"
-            return "locked"
-
+        info = self._shop_cell_info(row, column)
+        if info.locked:
+            return info.locked_state or "locked"
         if not self._shop_cell_is_affordable(row, column):
             return "no_cash"
-
         return "buy"
 
     def _shop_cell_visual_colors(
@@ -1570,42 +1551,30 @@ class GameplayScene(BaseScene):
                 ammo_packs = 1
             ammo_label = f"{ammo_packs:02d}"
             if ammo_capacity > 0:
-                ammo_ratio = max(0.0, min(1.0, ammo_units / ammo_capacity))
+                ammo_ratio = self._clamp01(ammo_units / ammo_capacity)
 
         health_ratio = 0.0
         health_capacity = player_health_capacity(self._player)
         if health_capacity > 0.0:
-            health_ratio = max(0.0, min(1.0, self._player.health / health_capacity))
+            health_ratio = self._clamp01(self._player.health / health_capacity)
 
         reload_ratio = 1.0
         if weapon_profile.loading_time > 0:
-            reload_ratio = max(0.0, min(1.0, self._player.load_count / weapon_profile.loading_time))
+            reload_ratio = self._clamp01(self._player.load_count / weapon_profile.loading_time)
 
         hp_color = self._HUD_OK_COLOR if health_ratio > 0.3 else self._HUD_WARN_COLOR
         am_color = self._HUD_OK_COLOR if ammo_ratio > 0.2 or ammo_type < 0 else self._HUD_WARN_COLOR
         load_color = self._HUD_OK_COLOR if reload_ratio >= 1.0 else self._HUD_TEXT_COLOR
 
-        mines_active = 0
-        mines_armed = 0
-        c4_active = 0
-        c4_hot = 0
-        for explosive in self._player_explosives:
-            if explosive.kind == "mine":
-                mines_active += 1
-                if explosive.arming_ticks <= 0:
-                    mines_armed += 1
-            elif explosive.kind == "c4":
-                c4_active += 1
-                if explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS:
-                    c4_hot += 1
+        mines_active, mines_armed, c4_active, c4_hot = self._count_player_explosives()
 
         mine_ready_ratio = 0.0
         if mines_active > 0:
-            mine_ready_ratio = max(0.0, min(1.0, mines_armed / mines_active))
+            mine_ready_ratio = self._clamp01(mines_armed / mines_active)
 
         c4_hot_ratio = 0.0
         if c4_active > 0:
-            c4_hot_ratio = max(0.0, min(1.0, c4_hot / c4_active))
+            c4_hot_ratio = self._clamp01(c4_hot / c4_active)
 
         mine_meter_color = self._HUD_OK_COLOR if mine_ready_ratio >= 1.0 else self._HUD_TEXT_COLOR
         c4_meter_color = self._HUD_WARN_COLOR if c4_hot_ratio > 0.0 else self._HUD_TEXT_COLOR
@@ -1748,7 +1717,7 @@ class GameplayScene(BaseScene):
 
         inner_width = width - 2
         inner_height = height - 2
-        fill_width = int(inner_width * max(0.0, min(1.0, ratio)))
+        fill_width = int(inner_width * self._clamp01(ratio))
         if fill_width <= 0:
             return
 
@@ -1903,25 +1872,18 @@ class GameplayScene(BaseScene):
 
         if self._shop_active:
             self._shop_active = False
-            self._shop_nav_row_delta = 0
-            self._shop_nav_column_delta = 0
-            self._shop_buy_requested = False
-            self._shop_sell_requested = False
+            self._reset_input_flags()
             context.logger.info("Shop closed")
             return
 
         if not self._shop_sell_prices.weapon_slots:
-            sell_seed = (context.session.episode_index * 1000) + context.session.level_index
-            self._shop_sell_prices = generate_shop_sell_prices(random_seed=sell_seed)
+            self._shop_sell_prices = generate_shop_sell_prices(
+                random_seed=self._sell_seed(context),
+            )
 
         self._shop_active = True
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
+        self._reset_input_flags()
         self._shop_row, self._shop_column = clamp_shop_selection(self._shop_row, self._shop_column)
         context.logger.info("Shop opened row=%d col=%d", self._shop_row, self._shop_column)
 
@@ -1978,13 +1940,7 @@ class GameplayScene(BaseScene):
         self._game_over_ticks_remaining = self._GAME_OVER_RETURN_TICKS
         self._shop_active = False
         self._held_actions.clear()
-        self._cycle_weapon_requested = False
-        self._pending_weapon_slot = None
-        self._shop_nav_row_delta = 0
-        self._shop_nav_column_delta = 0
-        self._shop_buy_requested = False
-        self._shop_sell_requested = False
-        self._shop_toggle_requested = False
+        self._reset_input_flags()
         self._enemy_projectiles.clear()
         self._player_explosives.clear()
         context.runtime.mode = AppMode.GAME_OVER
@@ -2053,58 +2009,15 @@ class GameplayScene(BaseScene):
     def _level_name_for_session_index(level_index: int) -> str:
         return f"LEVEL{max(1, level_index + 1)}.LEV"
 
+    @staticmethod
+    def _sell_seed(context: GameContext) -> int:
+        """Deterministic seed for shop sell-price generation."""
+        return (context.session.episode_index * 1000) + context.session.level_index
+
     def _publish_player_runtime_state(self, context: GameContext) -> None:
         if self._player is None:
-            context.runtime.player_world_x = 0
-            context.runtime.player_world_y = 0
-            context.runtime.player_angle_degrees = 0
-            context.runtime.player_weapon_slot = 0
-            context.runtime.player_current_ammo_type_index = -1
-            context.runtime.player_current_ammo_units = 0
-            context.runtime.player_current_ammo_capacity = 0
-            ammo_capacities = bullet_ammo_capacities_snapshot()
-            context.runtime.player_ammo_pools = tuple(0 for _ in ammo_capacities)
-            context.runtime.player_ammo_capacities = ammo_capacities
-            context.runtime.player_load_count = 0
-            context.runtime.player_fire_ticks = 0
+            self._publish_zeroed_runtime_state(context)
             context.runtime.player_shoot_hold_active = False
-            context.runtime.player_shots_fired_total = 0
-            context.runtime.player_cash = 0
-            context.runtime.player_shield = 0
-            context.runtime.player_target_system_enabled = False
-            context.runtime.shop_active = False
-            context.runtime.shop_selection_row = 0
-            context.runtime.shop_selection_column = 0
-            context.runtime.shop_last_action = ""
-            context.runtime.shop_last_category = ""
-            context.runtime.shop_last_success = False
-            context.runtime.shop_last_units = 0
-            context.runtime.shop_last_cash_delta = 0
-            context.runtime.shop_last_reason = ""
-            context.runtime.player_health = 0
-            context.runtime.player_dead = False
-            context.runtime.player_hits_total = 0
-            context.runtime.player_hits_taken_total = 0
-            context.runtime.player_damage_taken_total = 0.0
-            context.runtime.enemies_total = 0
-            context.runtime.enemies_alive = 0
-            context.runtime.enemies_killed_by_player = 0
-            context.runtime.crates_total = 0
-            context.runtime.crates_alive = 0
-            context.runtime.crates_destroyed_by_player = 0
-            context.runtime.crates_collected_by_player = 0
-            context.runtime.enemy_shots_fired_total = 0
-            context.runtime.enemy_hits_total = 0
-            context.runtime.enemy_damage_to_player_total = 0.0
-            context.runtime.enemy_projectiles_active = 0
-            context.runtime.player_explosives_active = 0
-            context.runtime.player_mines_active = 0
-            context.runtime.player_mines_armed = 0
-            context.runtime.player_c4_active = 0
-            context.runtime.player_c4_hot = 0
-            context.runtime.player_explosive_detonations_total = 0
-            context.runtime.game_over_active = False
-            context.runtime.game_over_ticks_remaining = 0
             return
 
         context.runtime.player_world_x = int(self._player.center_x)
@@ -2129,12 +2042,7 @@ class GameplayScene(BaseScene):
         context.runtime.shop_selection_row = self._shop_row
         context.runtime.shop_selection_column = self._shop_column
         if self._shop_last_transaction is None:
-            context.runtime.shop_last_action = ""
-            context.runtime.shop_last_category = ""
-            context.runtime.shop_last_success = False
-            context.runtime.shop_last_units = 0
-            context.runtime.shop_last_cash_delta = 0
-            context.runtime.shop_last_reason = ""
+            self._publish_zeroed_shop_last_fields(context)
         else:
             context.runtime.shop_last_action = self._shop_last_transaction.action
             context.runtime.shop_last_category = self._shop_last_transaction.category
@@ -2158,16 +2066,7 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
         context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
-        mines_active = sum(1 for explosive in self._player_explosives if explosive.kind == "mine")
-        mines_armed = sum(
-            1 for explosive in self._player_explosives if explosive.kind == "mine" and explosive.arming_ticks <= 0
-        )
-        c4_active = sum(1 for explosive in self._player_explosives if explosive.kind == "c4")
-        c4_hot = sum(
-            1
-            for explosive in self._player_explosives
-            if explosive.kind == "c4" and explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS
-        )
+        mines_active, mines_armed, c4_active, c4_hot = self._count_player_explosives()
         context.runtime.player_mines_active = mines_active
         context.runtime.player_mines_armed = mines_armed
         context.runtime.player_c4_active = c4_active

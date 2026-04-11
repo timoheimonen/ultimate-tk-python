@@ -2,6 +2,10 @@
 
 Python port of **Ultimate Tapan kaikki**, with Gymnasium/PPO tooling for AI training and visible model playback.
 
+<video src="videos/Ultimate-TK-Python-AI-GYM.mp4" width="600" controls muted autoplay loop>
+  Your browser does not support video.
+</video>
+
 ![game](screenshots/game_pygame.png)
 
 ## Origin, Credits, License
@@ -156,6 +160,33 @@ Uses default training settings from `tools/ppo_train.py`.
 
 ### PPO training parameters (`tools/ppo_train.py`)
 
+Baseline command with explicit common defaults:
+
+```bash
+python3 tools/ppo_train.py \
+  --total-timesteps 5000000 \
+  --n-envs 1 \
+  --device auto \
+  --seed 123 \
+  --n-steps 4096 \
+  --batch-size 512 \
+  --gamma 0.99 \
+  --gae-lambda 0.95 \
+  --clip-range 0.2 \
+  --learning-rate-start 0.0003 \
+  --learning-rate 0.00005 \
+  --decay-ratio 0.8 \
+  --ent-coef-start 0.05 \
+  --ent-coef 0.01 \
+  --max-episode-steps 6000 \
+  --target-tick-rate 40 \
+  --randomize-level-on-reset \
+  --level-index-pool 0,1,2,3,4,5,6,7,8,9 \
+  --checkpoint-freq 1000000 \
+  --eval-freq 25000 \
+  --eval-episodes 5
+```
+
 Example:
 
 ```bash
@@ -168,8 +199,8 @@ Common flags and defaults:
 - `--n-envs 1`
 - `--device auto`
 - `--seed 123`
-- `--n-steps 2048`
-- `--batch-size 128`
+- `--n-steps 4096`
+- `--batch-size 512`
 - `--gamma 0.99`
 - `--gae-lambda 0.95`
 - `--clip-range 0.2`
@@ -180,6 +211,8 @@ Common flags and defaults:
 - `--ent-coef 0.01`
 - `--max-episode-steps 6000`
 - `--target-tick-rate 40`
+- `--randomize-level-on-reset` (off by default)
+- `--level-index-pool 0,1,2,3,4,5,6,7,8,9`
 - `--checkpoint-freq 1000000`
 - `--eval-freq 25000`
 - `--eval-episodes 5`
@@ -187,6 +220,37 @@ Common flags and defaults:
 Note:
 
 - Run management flags: `--run-name`, `--runs-root`, `--resume-from`, `--disable-asset-manifest-check`, `--render-training-scenes`
+- Scenario flag: `--weapon-mode`
+- Level randomization flags: `--randomize-level-on-reset`, `--level-index-pool`
+
+Level randomization behavior:
+
+- With `--randomize-level-on-reset`, each training episode reset samples a start level from `--level-index-pool`.
+- `--level-index-pool` accepts comma-separated non-negative level indices (duplicates are ignored).
+- Evaluation callback env stays fixed at level index `0` for stable metric comparison across runs.
+
+Weapon mode choices (`--weapon-mode` for both `ppo_train.py` and `ppo_eval.py`):
+
+- `normal_mode` (default): keeps the normal weapon/ammo system, crates enabled, and standard level behavior
+- `fist`
+- `pistola`
+- `shotgun`
+- `uzi`
+- `auto_rifle`
+- `grenade_launcher`
+- `auto_grenadier`
+- `heavy_launcher`
+- `auto_shotgun`
+- `c4_activator`
+- `flame_thrower`
+- `mine_dropper`
+
+Behavior in non-`normal_mode` weapon modes:
+
+- Selected weapon is forced/equipped from episode start
+- Player ammo is true infinite (no ammo consumption)
+- Crates are disabled/removed
+- Shop remains unavailable to AI via the current action space (same as before)
 
 ### Max-throughput training mode (uncapped training loop)
 
@@ -209,13 +273,14 @@ python3 tools/ppo_eval.py --model runs/ai/ppo/<run>/final_model.zip --episodes 5
 ### Play a saved AI model in pygame (normal FPS cap)
 
 ```bash
-python3 tools/ppo_play_pygame.py --model runs/ai/ppo/<run>/final_model.zip --target-fps 40 --window-scale 3 --device auto
+python3 tools/ppo_play_pygame.py --model runs/ai/ppo/<run>/final_model.zip --target-fps 40 --window-scale 3 --device auto --weapon-mode normal_mode
 ```
 
 Useful playback flags:
 
 - `--max-seconds 30` limit playback wall time
 - `--max-steps 2000` limit simulation steps
+- `--weapon-mode auto_rifle` match playback scenario to training/eval mode
 - `--allow-manual-input` mix keyboard input with AI actions for debugging
 - `--stochastic` enable sampling mode (default playback/eval is deterministic)
 

@@ -149,6 +149,73 @@ class GymEnvTests(unittest.TestCase):
         trace_b = rollout()
         self.assertEqual(trace_a, trace_b)
 
+    def test_weapon_mode_forces_selected_weapon_with_infinite_ammo_and_no_crates(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            weapon_mode="auto_rifle",
+        )
+        try:
+            env.reset(seed=31)
+
+            assert env._driver is not None
+            scene = env._driver.scene_manager.current_scene
+            if not isinstance(scene, GameplayScene) or scene._player is None:  # type: ignore[attr-defined]
+                self.skipTest("gameplay scene did not initialize")
+
+            player = scene._player  # type: ignore[attr-defined]
+            self.assertTrue(player.infinite_ammo)
+            self.assertEqual(player.current_weapon, 4)
+            self.assertEqual(len(scene._crates), 0)  # type: ignore[attr-defined]
+            self.assertEqual(env._driver.context.runtime.crates_total, 0)
+
+            ammo_before = tuple(player.bullets)
+            shoot_hold = np.array([0, 0, 0, 0, 0, 0, 1, 0], dtype=np.int8)
+            idle_hold = np.zeros((8,), dtype=np.int8)
+            no_trigger = np.zeros((1,), dtype=np.int8)
+
+            for _ in range(8):
+                env.step({"hold": shoot_hold, "trigger": no_trigger, "weapon_select": 0})
+            env.step({"hold": idle_hold, "trigger": no_trigger, "weapon_select": 0})
+
+            self.assertGreater(player.shots_fired_total, 0)
+            self.assertEqual(tuple(player.bullets), ammo_before)
+            self.assertEqual(player.current_weapon, 4)
+            self.assertEqual(len(scene._crates), 0)  # type: ignore[attr-defined]
+        finally:
+            env.close()
+
+    def test_randomized_reset_selects_level_from_pool(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            randomize_level_on_reset=True,
+            level_index_pool=(0, 1, 2),
+        )
+        try:
+            seen: set[int] = set()
+            for seed in range(100, 124):
+                _, info = env.reset(seed=seed)
+                level_index = int(info.get("level_index", -1))
+                self.assertIn(level_index, (0, 1, 2))
+                seen.add(level_index)
+            self.assertGreater(len(seen), 1)
+        finally:
+            env.close()
+
+    def test_reset_option_level_index_overrides_randomized_selection(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            randomize_level_on_reset=True,
+            level_index_pool=(0, 1, 2),
+        )
+        try:
+            _, info = env.reset(seed=77, options={"level_index": 2})
+            self.assertEqual(int(info.get("level_index", -1)), 2)
+        finally:
+            env.close()
+
 
 if __name__ == "__main__":
     unittest.main()

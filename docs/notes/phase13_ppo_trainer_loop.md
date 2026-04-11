@@ -89,6 +89,13 @@ This phase builds a practical PPO training pipeline on top of the Phase 12 Gymna
   - `pyproject.toml`
   - `README.md`
   - `python_refactor.md`
+- Added configurable weapon-mode training scenarios:
+  - `tools/ppo_train.py` now exposes `--weapon-mode` with snake_case weapon slots plus `normal_mode`
+  - `TrainingRuntimeDriver` now applies non-`normal_mode` overrides (selected-weapon lock, true infinite player ammo, crate suppression)
+  - env-factory/gym wiring propagates weapon mode from trainer to runtime (`src/ultimatetk/ai/sb3_env_factory.py`, `src/ultimatetk/ai/gym_env.py`)
+- Added evaluation weapon-mode parity:
+  - `tools/ppo_eval.py` now exposes `--weapon-mode` with the same choices as training
+  - eval env wiring now forwards weapon mode to runtime so checkpoint evaluation can mirror training scenario constraints exactly
 - Installed extra training dependency in active conda env:
   - `conda install -y -n ultimatetk -c conda-forge tensorboard`
 
@@ -97,6 +104,7 @@ This phase builds a practical PPO training pipeline on top of the Phase 12 Gymna
 - `python3 -m pytest tests/unit/test_sb3_action_wrapper.py tests/unit/test_training_device.py` -> `8 passed`.
 - `python3 -m pytest tests/unit/test_training_device.py tests/unit/test_sb3_action_wrapper.py tests/unit/test_ppo_tools_cli.py` -> `10 passed`.
 - `python3 -m pytest tests/unit/test_gym_env.py tests/integration/test_gym_env_progression.py tests/integration/test_gym_env_shop_progression.py` -> `6 passed`.
+- `python3 -m pytest tests/unit/test_gym_env.py tests/unit/test_ppo_tools_cli.py` -> `8 passed`.
 - `python3 tools/ppo_train.py --total-timesteps 512 --n-envs 1 --eval-freq 0 --checkpoint-freq 0 --device auto --run-name phase13_smoke_fast_auto` -> smoke run passed on uncapped path (`fps` reported as `1211`, final model artifact created).
 - `python3 tools/ppo_eval.py --model runs/ai/ppo/phase13_smoke_fast_auto/final_model.zip --episodes 1 --deterministic --device auto` -> eval smoke passed.
 - `python3 tools/release_verification.py --skip-integration` -> unit verification bundle passed (`183 passed`).

@@ -15,6 +15,9 @@ def build_sb3_env_factory(
     target_tick_rate: int,
     enforce_asset_manifest: bool,
     render_enabled: bool = False,
+    weapon_mode: str = "normal_mode",
+    randomize_level_on_reset: bool = False,
+    level_index_pool: tuple[int, ...] | None = None,
 ) -> Callable[[], Any]:
     resolved_root = str(Path(project_root).expanduser().resolve())
 
@@ -25,6 +28,9 @@ def build_sb3_env_factory(
             target_tick_rate=target_tick_rate,
             enforce_asset_manifest=enforce_asset_manifest,
             render_enabled=render_enabled,
+            weapon_mode=weapon_mode,
+            randomize_level_on_reset=randomize_level_on_reset,
+            level_index_pool=level_index_pool,
         )
         return SB3ActionWrapper(env)
 
