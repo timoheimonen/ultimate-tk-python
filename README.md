@@ -156,6 +156,31 @@ Uses default training settings from `tools/ppo_train.py`.
 
 ### PPO training parameters (`tools/ppo_train.py`)
 
+Baseline command with explicit common defaults:
+
+```bash
+python3 tools/ppo_train.py \
+  --total-timesteps 5000000 \
+  --n-envs 1 \
+  --device auto \
+  --seed 123 \
+  --n-steps 2048 \
+  --batch-size 128 \
+  --gamma 0.99 \
+  --gae-lambda 0.95 \
+  --clip-range 0.2 \
+  --learning-rate-start 0.0003 \
+  --learning-rate 0.00005 \
+  --decay-ratio 0.8 \
+  --ent-coef-start 0.05 \
+  --ent-coef 0.01 \
+  --max-episode-steps 6000 \
+  --target-tick-rate 40 \
+  --checkpoint-freq 1000000 \
+  --eval-freq 25000 \
+  --eval-episodes 5
+```
+
 Example:
 
 ```bash
@@ -187,6 +212,30 @@ Common flags and defaults:
 Note:
 
 - Run management flags: `--run-name`, `--runs-root`, `--resume-from`, `--disable-asset-manifest-check`, `--render-training-scenes`
+- Scenario flag: `--weapon-mode`
+
+Weapon mode choices (`--weapon-mode` for both `ppo_train.py` and `ppo_eval.py`):
+
+- `normal_mode` (default): keeps the normal weapon/ammo system, crates enabled, and standard level behavior
+- `fist`
+- `pistola`
+- `shotgun`
+- `uzi`
+- `auto_rifle`
+- `grenade_launcher`
+- `auto_grenadier`
+- `heavy_launcher`
+- `auto_shotgun`
+- `c4_activator`
+- `flame_thrower`
+- `mine_dropper`
+
+Behavior in non-`normal_mode` weapon modes:
+
+- Selected weapon is forced/equipped from episode start
+- Player ammo is true infinite (no ammo consumption)
+- Crates are disabled/removed
+- Shop remains unavailable to AI via the current action space (same as before)
 
 ### Max-throughput training mode (uncapped training loop)
 
