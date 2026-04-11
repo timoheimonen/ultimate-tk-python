@@ -409,6 +409,23 @@ class GameplayScene(BaseScene):
         self._game_over_active = False
         self._game_over_ticks_remaining = 0
 
+    def _count_player_explosives(self) -> tuple[int, int, int, int]:
+        """Return ``(mines_active, mines_armed, c4_active, c4_hot)``."""
+        mines_active = 0
+        mines_armed = 0
+        c4_active = 0
+        c4_hot = 0
+        for explosive in self._player_explosives:
+            if explosive.kind == "mine":
+                mines_active += 1
+                if explosive.arming_ticks <= 0:
+                    mines_armed += 1
+            elif explosive.kind == "c4":
+                c4_active += 1
+                if explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS:
+                    c4_hot += 1
+        return mines_active, mines_armed, c4_active, c4_hot
+
     def _publish_zeroed_runtime_state(self, context: GameContext) -> None:
         """Set all player/combat/shop runtime fields to neutral defaults."""
         context.runtime.player_world_x = 0
@@ -1573,19 +1590,7 @@ class GameplayScene(BaseScene):
         am_color = self._HUD_OK_COLOR if ammo_ratio > 0.2 or ammo_type < 0 else self._HUD_WARN_COLOR
         load_color = self._HUD_OK_COLOR if reload_ratio >= 1.0 else self._HUD_TEXT_COLOR
 
-        mines_active = 0
-        mines_armed = 0
-        c4_active = 0
-        c4_hot = 0
-        for explosive in self._player_explosives:
-            if explosive.kind == "mine":
-                mines_active += 1
-                if explosive.arming_ticks <= 0:
-                    mines_armed += 1
-            elif explosive.kind == "c4":
-                c4_active += 1
-                if explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS:
-                    c4_hot += 1
+        mines_active, mines_armed, c4_active, c4_hot = self._count_player_explosives()
 
         mine_ready_ratio = 0.0
         if mines_active > 0:
@@ -2085,16 +2090,7 @@ class GameplayScene(BaseScene):
         context.runtime.enemy_hits_total = self._enemy_hits_on_player
         context.runtime.enemy_damage_to_player_total = self._enemy_damage_to_player
         context.runtime.enemy_projectiles_active = len(self._enemy_projectiles)
-        mines_active = sum(1 for explosive in self._player_explosives if explosive.kind == "mine")
-        mines_armed = sum(
-            1 for explosive in self._player_explosives if explosive.kind == "mine" and explosive.arming_ticks <= 0
-        )
-        c4_active = sum(1 for explosive in self._player_explosives if explosive.kind == "c4")
-        c4_hot = sum(
-            1
-            for explosive in self._player_explosives
-            if explosive.kind == "c4" and explosive.fuse_ticks <= self._C4_HOT_FUSE_TICKS
-        )
+        mines_active, mines_armed, c4_active, c4_hot = self._count_player_explosives()
         context.runtime.player_mines_active = mines_active
         context.runtime.player_mines_armed = mines_armed
         context.runtime.player_c4_active = c4_active
