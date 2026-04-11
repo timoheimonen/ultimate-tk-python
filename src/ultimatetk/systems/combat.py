@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Sequence
+from typing import Sequence, TypeVar
+
+_T = TypeVar("_T")
 
 from ultimatetk.formats.lev import CrateInfo, DIFF_ENEMIES, LevelData
 from ultimatetk.rendering.constants import FLOOR_BLOCK_TYPE, TILE_SIZE
@@ -377,70 +379,55 @@ class CrateCollectReport:
     energy_collected: float = 0.0
 
 
+def _table_lookup(table: tuple[_T, ...], index: int) -> _T:
+    """Return ``table[index]`` with bounds-safe fallback to ``table[0]``."""
+    if 0 <= index < len(table):
+        return table[index]
+    return table[0]
+
+
 def enemy_health_for_type(type_index: int) -> float:
-    if 0 <= type_index < len(ENEMY_HEALTH):
-        return ENEMY_HEALTH[type_index]
-    return ENEMY_HEALTH[0]
+    return _table_lookup(ENEMY_HEALTH, type_index)
 
 
 def weapon_damage_for_slot(weapon_slot: int) -> float:
-    if 0 <= weapon_slot < len(WEAPON_DAMAGE):
-        return WEAPON_DAMAGE[weapon_slot]
-    return WEAPON_DAMAGE[0]
+    return _table_lookup(WEAPON_DAMAGE, weapon_slot)
 
 
 def weapon_range_for_slot(weapon_slot: int) -> int:
-    if 0 <= weapon_slot < len(WEAPON_RANGE):
-        return WEAPON_RANGE[weapon_slot]
-    return WEAPON_RANGE[0]
+    return _table_lookup(WEAPON_RANGE, weapon_slot)
 
 
 def weapon_pellet_count_for_slot(weapon_slot: int) -> int:
-    if 0 <= weapon_slot < len(WEAPON_PELLET_COUNT):
-        return WEAPON_PELLET_COUNT[weapon_slot]
-    return WEAPON_PELLET_COUNT[0]
+    return _table_lookup(WEAPON_PELLET_COUNT, weapon_slot)
 
 
 def weapon_angle_spread_for_slot(weapon_slot: int) -> int:
-    if 0 <= weapon_slot < len(WEAPON_ANGLE_SPREAD):
-        return WEAPON_ANGLE_SPREAD[weapon_slot]
-    return WEAPON_ANGLE_SPREAD[0]
+    return _table_lookup(WEAPON_ANGLE_SPREAD, weapon_slot)
 
 
 def weapon_explosive_splash_radius_for_slot(weapon_slot: int) -> int:
-    if 0 <= weapon_slot < len(WEAPON_EXPLOSIVE_SPLASH_RADIUS):
-        return WEAPON_EXPLOSIVE_SPLASH_RADIUS[weapon_slot]
-    return WEAPON_EXPLOSIVE_SPLASH_RADIUS[0]
+    return _table_lookup(WEAPON_EXPLOSIVE_SPLASH_RADIUS, weapon_slot)
 
 
 def weapon_projectile_speed_for_slot(weapon_slot: int) -> float:
-    if 0 <= weapon_slot < len(WEAPON_PROJECTILE_SPEED):
-        return WEAPON_PROJECTILE_SPEED[weapon_slot]
-    return WEAPON_PROJECTILE_SPEED[0]
+    return _table_lookup(WEAPON_PROJECTILE_SPEED, weapon_slot)
 
 
 def weapon_projectile_radius_for_slot(weapon_slot: int) -> int:
-    if 0 <= weapon_slot < len(WEAPON_PROJECTILE_RADIUS):
-        return WEAPON_PROJECTILE_RADIUS[weapon_slot]
-    return WEAPON_PROJECTILE_RADIUS[0]
+    return _table_lookup(WEAPON_PROJECTILE_RADIUS, weapon_slot)
 
 
 def crate_bullet_pack_amount_for_type(type_index: int) -> int:
-    if 0 <= type_index < len(CRATE_BULLET_PACK_AMOUNTS):
-        return CRATE_BULLET_PACK_AMOUNTS[type_index]
-    return CRATE_BULLET_PACK_AMOUNTS[0]
+    return _table_lookup(CRATE_BULLET_PACK_AMOUNTS, type_index)
 
 
 def enemy_weapon_for_type(type_index: int) -> int:
-    if 0 <= type_index < len(ENEMY_WEAPON_SLOT):
-        return ENEMY_WEAPON_SLOT[type_index]
-    return ENEMY_WEAPON_SLOT[0]
+    return _table_lookup(ENEMY_WEAPON_SLOT, type_index)
 
 
 def enemy_speed_for_type(type_index: int) -> float:
-    if 0 <= type_index < len(ENEMY_SPEED):
-        return ENEMY_SPEED[type_index]
-    return ENEMY_SPEED[0]
+    return _table_lookup(ENEMY_SPEED, type_index)
 
 
 def spawn_enemies_for_level(
@@ -660,6 +647,18 @@ def resolve_shot_against_enemies(
     return ShotResolution(enemy_id=None, crate_id=None, impact_x=px, impact_y=py, damage=0.0)
 
 
+def _reset_enemy_engagement(enemy: EnemyState) -> None:
+    """Clear all engagement-related state on *enemy*."""
+    enemy.sees_player = False
+    enemy.pressure_ticks = 0
+    enemy.chase_ticks = 0
+    enemy.investigate_ticks = 0
+    enemy.investigate_x = None
+    enemy.investigate_y = None
+    enemy.shoot_count = 0
+    enemy.strafe_ticks = 0
+
+
 def update_enemy_behavior(
     level: LevelData,
     enemies: Sequence[EnemyState],
@@ -675,25 +674,11 @@ def update_enemy_behavior(
 
     for enemy in enemies:
         if not enemy.alive:
-            enemy.sees_player = False
-            enemy.pressure_ticks = 0
-            enemy.chase_ticks = 0
-            enemy.investigate_ticks = 0
-            enemy.investigate_x = None
-            enemy.investigate_y = None
-            enemy.shoot_count = 0
-            enemy.strafe_ticks = 0
+            _reset_enemy_engagement(enemy)
             continue
 
         if player.dead:
-            enemy.sees_player = False
-            enemy.pressure_ticks = 0
-            enemy.chase_ticks = 0
-            enemy.investigate_ticks = 0
-            enemy.investigate_x = None
-            enemy.investigate_y = None
-            enemy.shoot_count = 0
-            enemy.strafe_ticks = 0
+            _reset_enemy_engagement(enemy)
             _advance_enemy_patrol(
                 enemy,
                 level,
@@ -1371,14 +1356,7 @@ def _closest_point_on_enemy_collision_bounds(
     x: float,
     y: float,
 ) -> tuple[float, float]:
-    left = enemy.x + ENEMY_COLLISION_INSET
-    right = enemy.x + ENEMY_SIZE - ENEMY_COLLISION_INSET
-    top = enemy.y + ENEMY_COLLISION_INSET
-    bottom = enemy.y + ENEMY_SIZE - ENEMY_COLLISION_INSET
-    return (
-        _clamp_float(x, left, right),
-        _clamp_float(y, top, bottom),
-    )
+    return _closest_point_on_rect(x, y, enemy.x, enemy.y, ENEMY_SIZE, ENEMY_SIZE, ENEMY_COLLISION_INSET)
 
 
 def _alive_enemies_by_blast_distance(
@@ -1447,6 +1425,67 @@ def _clamp_float(value: float, low: float, high: float) -> float:
     if value > high:
         return high
     return value
+
+
+def _point_in_rect(
+    x: float,
+    y: float,
+    rect_x: float,
+    rect_y: float,
+    width: int,
+    height: int,
+    inset: int = 0,
+) -> bool:
+    """Return ``True`` when (*x*, *y*) is strictly inside the inset rect."""
+    if x <= rect_x + inset:
+        return False
+    if x >= rect_x + width - inset:
+        return False
+    if y <= rect_y + inset:
+        return False
+    if y >= rect_y + height - inset:
+        return False
+    return True
+
+
+def _projectile_overlaps_rect(
+    proj_x: float,
+    proj_y: float,
+    proj_radius: int,
+    rect_x: float,
+    rect_y: float,
+    width: int,
+    height: int,
+    inset: int = 0,
+) -> bool:
+    """Return ``True`` when a projectile circle overlaps the inset rect."""
+    radius = max(0, proj_radius)
+    if proj_x <= rect_x + inset - radius:
+        return False
+    if proj_x >= rect_x + width - inset + radius:
+        return False
+    if proj_y <= rect_y + inset - radius:
+        return False
+    if proj_y >= rect_y + height - inset + radius:
+        return False
+    return True
+
+
+def _closest_point_on_rect(
+    x: float,
+    y: float,
+    rect_x: float,
+    rect_y: float,
+    width: int,
+    height: int,
+    inset: int = 0,
+) -> tuple[float, float]:
+    """Return the point on the inset rect boundary closest to (*x*, *y*)."""
+    left = rect_x + inset
+    right = rect_x + width - inset
+    top = rect_y + inset
+    bottom = rect_y + height - inset
+    return (_clamp_float(x, left, right), _clamp_float(y, top, bottom))
 
 
 def _player_explosive_damage(
@@ -2170,13 +2209,8 @@ def _closest_point_on_player_collision_bounds(
     x: float,
     y: float,
 ) -> tuple[float, float]:
-    left = player.x + ENEMY_COLLISION_INSET
-    right = player.x + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET
-    top = player.y + ENEMY_COLLISION_INSET
-    bottom = player.y + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET
-    return (
-        _clamp_float(x, left, right),
-        _clamp_float(y, top, bottom),
+    return _closest_point_on_rect(
+        x, y, player.x, player.y, PLAYER_COLLISION_SIZE, PLAYER_COLLISION_SIZE, ENEMY_COLLISION_INSET,
     )
 
 
@@ -2314,19 +2348,11 @@ def _projectile_hits_wall(level: LevelData, projectile: EnemyProjectile) -> bool
 
 
 def _player_hit_by_projectile(player: PlayerState, projectile: EnemyProjectile) -> bool:
-    x = projectile.x
-    y = projectile.y
-    radius = max(0, projectile.radius)
-
-    if x <= player.x + ENEMY_COLLISION_INSET - radius:
-        return False
-    if x >= player.x + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET + radius:
-        return False
-    if y <= player.y + ENEMY_COLLISION_INSET - radius:
-        return False
-    if y >= player.y + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET + radius:
-        return False
-    return True
+    return _projectile_overlaps_rect(
+        projectile.x, projectile.y, projectile.radius,
+        player.x, player.y, PLAYER_COLLISION_SIZE, PLAYER_COLLISION_SIZE,
+        ENEMY_COLLISION_INSET,
+    )
 
 
 def _projectile_splash_damage(
@@ -2413,19 +2439,11 @@ def _crate_at_projectile(
 
 
 def _crate_hit_by_projectile(crate: CrateState, projectile: EnemyProjectile) -> bool:
-    x = projectile.x
-    y = projectile.y
-    radius = max(0, projectile.radius)
-
-    if x <= crate.x + CRATE_COLLISION_INSET - radius:
-        return False
-    if x >= crate.x + CRATE_SIZE - CRATE_COLLISION_INSET + radius:
-        return False
-    if y <= crate.y + CRATE_COLLISION_INSET - radius:
-        return False
-    if y >= crate.y + CRATE_SIZE - CRATE_COLLISION_INSET + radius:
-        return False
-    return True
+    return _projectile_overlaps_rect(
+        projectile.x, projectile.y, projectile.radius,
+        crate.x, crate.y, CRATE_SIZE, CRATE_SIZE,
+        CRATE_COLLISION_INSET,
+    )
 
 
 def _player_at_point(
@@ -2434,15 +2452,7 @@ def _player_at_point(
     x: int,
     y: int,
 ) -> bool:
-    if x <= player.x + ENEMY_COLLISION_INSET:
-        return False
-    if x >= player.x + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET:
-        return False
-    if y <= player.y + ENEMY_COLLISION_INSET:
-        return False
-    if y >= player.y + PLAYER_COLLISION_SIZE - ENEMY_COLLISION_INSET:
-        return False
-    return True
+    return _point_in_rect(x, y, player.x, player.y, PLAYER_COLLISION_SIZE, PLAYER_COLLISION_SIZE, ENEMY_COLLISION_INSET)
 
 
 def _crate_at_point(
@@ -2454,31 +2464,13 @@ def _crate_at_point(
     for crate in crates:
         if not crate.alive:
             continue
-        if x <= crate.x + CRATE_COLLISION_INSET:
-            continue
-        if x >= crate.x + CRATE_SIZE - CRATE_COLLISION_INSET:
-            continue
-        if y <= crate.y + CRATE_COLLISION_INSET:
-            continue
-        if y >= crate.y + CRATE_SIZE - CRATE_COLLISION_INSET:
-            continue
-        return crate
+        if _point_in_rect(x, y, crate.x, crate.y, CRATE_SIZE, CRATE_SIZE, CRATE_COLLISION_INSET):
+            return crate
     return None
 
 
 def _crate_center_inside_player(crate: CrateState, player: PlayerState) -> bool:
-    cx = crate.center_x
-    cy = crate.center_y
-
-    if cx <= player.x:
-        return False
-    if cx >= player.x + PLAYER_COLLISION_SIZE:
-        return False
-    if cy <= player.y:
-        return False
-    if cy >= player.y + PLAYER_COLLISION_SIZE:
-        return False
-    return True
+    return _point_in_rect(crate.center_x, crate.center_y, player.x, player.y, PLAYER_COLLISION_SIZE, PLAYER_COLLISION_SIZE)
 
 
 def _apply_crate_reward(player: PlayerState, crate: CrateState) -> CrateCollectReport:
@@ -2702,15 +2694,8 @@ def _enemy_at_point(
     for enemy in enemies:
         if not enemy.alive:
             continue
-        if x <= enemy.x + ENEMY_COLLISION_INSET:
-            continue
-        if x >= enemy.x + ENEMY_SIZE - ENEMY_COLLISION_INSET:
-            continue
-        if y <= enemy.y + ENEMY_COLLISION_INSET:
-            continue
-        if y >= enemy.y + ENEMY_SIZE - ENEMY_COLLISION_INSET:
-            continue
-        return enemy
+        if _point_in_rect(x, y, enemy.x, enemy.y, ENEMY_SIZE, ENEMY_SIZE, ENEMY_COLLISION_INSET):
+            return enemy
     return None
 
 
