@@ -131,6 +131,33 @@ class GameplayScene(BaseScene):
     _HUD_WARN_COLOR = 28
     _HUD_OK_COLOR = 112
     _C4_HOT_FUSE_TICKS = 12
+    # Indexed by weapon_slot (1-based, so index 0 is the fallback/fist).
+    _WEAPON_ICON_KINDS: tuple[str, ...] = (
+        "w_generic",   # 0 = fist (fallback)
+        "w_pistol",    # 1
+        "w_shotgun",   # 2
+        "w_uzi",       # 3
+        "w_rifle",     # 4
+        "w_gl",        # 5
+        "w_ag",        # 6
+        "w_hl",        # 7
+        "w_as",        # 8
+        "w_c4",        # 9
+        "w_flame",     # 10
+        "w_mine",      # 11
+    )
+    # Indexed by ammo_type (0-based).
+    _AMMO_ICON_KINDS: tuple[str, ...] = (
+        "a_9mm",       # 0
+        "a_12mm",      # 1
+        "a_shell",     # 2
+        "a_lg",        # 3
+        "a_mg",        # 4
+        "a_hg",        # 5
+        "a_c4",        # 6
+        "a_gas",       # 7
+        "a_mine",      # 8
+    )
     _SHOP_ICON_BITMAPS: dict[str, tuple[str, ...]] = {
         "w_pistol": (
             "..###..",
@@ -395,6 +422,15 @@ class GameplayScene(BaseScene):
         self._crates: list[CrateState] = []
         self._enemy_projectiles: list[EnemyProjectile] = []
         self._player_explosives: list[PlayerExplosive] = []
+
+    @staticmethod
+    def _clamp01(value: float) -> float:
+        """Clamp *value* to the ``[0.0, 1.0]`` range."""
+        if value < 0.0:
+            return 0.0
+        if value > 1.0:
+            return 1.0
+        return value
 
     def _reset_stat_counters(self) -> None:
         """Zero all gameplay stat accumulators."""
@@ -1273,50 +1309,14 @@ class GameplayScene(BaseScene):
         return ""
 
     def _weapon_shop_icon_kind(self, weapon_slot: int) -> str:
-        if weapon_slot == 1:
-            return "w_pistol"
-        if weapon_slot == 2:
-            return "w_shotgun"
-        if weapon_slot == 3:
-            return "w_uzi"
-        if weapon_slot == 4:
-            return "w_rifle"
-        if weapon_slot == 5:
-            return "w_gl"
-        if weapon_slot == 6:
-            return "w_ag"
-        if weapon_slot == 7:
-            return "w_hl"
-        if weapon_slot == 8:
-            return "w_as"
-        if weapon_slot == 9:
-            return "w_c4"
-        if weapon_slot == 10:
-            return "w_flame"
-        if weapon_slot == 11:
-            return "w_mine"
-        return "w_generic"
+        if 0 <= weapon_slot < len(self._WEAPON_ICON_KINDS):
+            return self._WEAPON_ICON_KINDS[weapon_slot]
+        return self._WEAPON_ICON_KINDS[0]
 
     def _ammo_shop_icon_kind(self, ammo_type: int) -> str:
-        if ammo_type == 0:
-            return "a_9mm"
-        if ammo_type == 1:
-            return "a_12mm"
-        if ammo_type == 2:
-            return "a_shell"
-        if ammo_type == 3:
-            return "a_lg"
-        if ammo_type == 4:
-            return "a_mg"
-        if ammo_type == 5:
-            return "a_hg"
-        if ammo_type == 6:
-            return "a_c4"
-        if ammo_type == 7:
-            return "a_gas"
-        if ammo_type == 8:
-            return "a_mine"
-        return "a_9mm"
+        if 0 <= ammo_type < len(self._AMMO_ICON_KINDS):
+            return self._AMMO_ICON_KINDS[ammo_type]
+        return self._AMMO_ICON_KINDS[0]
 
     def _draw_shop_cell_icon(self, pixels: bytearray, *, x: int, y: int, kind: str, color: int) -> None:
         if not kind:
@@ -1575,16 +1575,16 @@ class GameplayScene(BaseScene):
                 ammo_packs = 1
             ammo_label = f"{ammo_packs:02d}"
             if ammo_capacity > 0:
-                ammo_ratio = max(0.0, min(1.0, ammo_units / ammo_capacity))
+                ammo_ratio = self._clamp01(ammo_units / ammo_capacity)
 
         health_ratio = 0.0
         health_capacity = player_health_capacity(self._player)
         if health_capacity > 0.0:
-            health_ratio = max(0.0, min(1.0, self._player.health / health_capacity))
+            health_ratio = self._clamp01(self._player.health / health_capacity)
 
         reload_ratio = 1.0
         if weapon_profile.loading_time > 0:
-            reload_ratio = max(0.0, min(1.0, self._player.load_count / weapon_profile.loading_time))
+            reload_ratio = self._clamp01(self._player.load_count / weapon_profile.loading_time)
 
         hp_color = self._HUD_OK_COLOR if health_ratio > 0.3 else self._HUD_WARN_COLOR
         am_color = self._HUD_OK_COLOR if ammo_ratio > 0.2 or ammo_type < 0 else self._HUD_WARN_COLOR
@@ -1594,11 +1594,11 @@ class GameplayScene(BaseScene):
 
         mine_ready_ratio = 0.0
         if mines_active > 0:
-            mine_ready_ratio = max(0.0, min(1.0, mines_armed / mines_active))
+            mine_ready_ratio = self._clamp01(mines_armed / mines_active)
 
         c4_hot_ratio = 0.0
         if c4_active > 0:
-            c4_hot_ratio = max(0.0, min(1.0, c4_hot / c4_active))
+            c4_hot_ratio = self._clamp01(c4_hot / c4_active)
 
         mine_meter_color = self._HUD_OK_COLOR if mine_ready_ratio >= 1.0 else self._HUD_TEXT_COLOR
         c4_meter_color = self._HUD_WARN_COLOR if c4_hot_ratio > 0.0 else self._HUD_TEXT_COLOR
@@ -1741,7 +1741,7 @@ class GameplayScene(BaseScene):
 
         inner_width = width - 2
         inner_height = height - 2
-        fill_width = int(inner_width * max(0.0, min(1.0, ratio)))
+        fill_width = int(inner_width * self._clamp01(ratio))
         if fill_width <= 0:
             return
 
