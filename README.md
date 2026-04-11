@@ -2,7 +2,9 @@
 
 Python port of **Ultimate Tapan kaikki**, with Gymnasium/PPO tooling for AI training and visible model playback.
 
-![game](screenshots/game_pygame.png)
+<video src="videos/Ultimate-TK-Python-AI-GYM.mp4" width="600" controls muted autoplay loop>
+  Your browser does not support video.
+</video>
 
 ## Origin, Credits, License
 
