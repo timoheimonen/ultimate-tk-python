@@ -2257,40 +2257,23 @@ def _advance_enemy_projectile(
                         for blocker in splash_cover
                         if blocker.crate_id != crate.crate_id
                     )
-                damage = _projectile_splash_damage(
-                    level,
-                    projectile,
-                    player,
-                    crates=splash_cover,
+                _, _, splash_crate_destroyed = _projectile_splash_resolution(
+                    level, projectile, player,
+                    crates=crates, ignore_crate_id=crate.crate_id,
                 )
-                _, splash_crate_destroyed = _projectile_splash_against_crates(
-                    level,
-                    projectile,
-                    crates,
-                    ignore_crate_id=crate.crate_id,
-                )
+                # Player splash uses cover without the hit crate.
+                player_damage = _projectile_splash_damage(level, projectile, player, crates=splash_cover)
                 return EnemyProjectileAdvance(
                     keep_alive=False,
-                    damage_to_player=damage,
+                    damage_to_player=player_damage,
                     crate_hit=True,
                     crate_destroyed=destroyed or splash_crate_destroyed,
                 )
 
         if _projectile_hits_wall(level, projectile):
-            damage = _projectile_splash_damage(
-                level,
-                projectile,
-                player,
-                crates=crates,
+            damage, crate_hit, crate_destroyed = _projectile_splash_resolution(
+                level, projectile, player, crates=crates,
             )
-            crate_hit = False
-            crate_destroyed = False
-            if crates is not None:
-                crate_hit, crate_destroyed = _projectile_splash_against_crates(
-                    level,
-                    projectile,
-                    crates,
-                )
             return EnemyProjectileAdvance(
                 keep_alive=False,
                 damage_to_player=damage,
@@ -2299,17 +2282,10 @@ def _advance_enemy_projectile(
             )
 
         if _player_hit_by_projectile(player, projectile):
-            direct_damage = projectile.damage
-            crate_hit = False
-            crate_destroyed = False
-            if projectile.splash_radius > 0:
-                direct_damage = max(direct_damage, _projectile_splash_damage(level, projectile, player))
-                if crates is not None:
-                    crate_hit, crate_destroyed = _projectile_splash_against_crates(
-                        level,
-                        projectile,
-                        crates,
-                    )
+            splash_damage, crate_hit, crate_destroyed = _projectile_splash_resolution(
+                level, projectile, player, crates=crates,
+            )
+            direct_damage = max(projectile.damage, splash_damage)
             return EnemyProjectileAdvance(
                 keep_alive=False,
                 damage_to_player=direct_damage,
@@ -2319,22 +2295,12 @@ def _advance_enemy_projectile(
 
     projectile.remaining_ticks -= 1
     if projectile.remaining_ticks <= 0:
-        crate_hit = False
-        crate_destroyed = False
-        if crates is not None:
-            crate_hit, crate_destroyed = _projectile_splash_against_crates(
-                level,
-                projectile,
-                crates,
-            )
+        damage, crate_hit, crate_destroyed = _projectile_splash_resolution(
+            level, projectile, player, crates=crates,
+        )
         return EnemyProjectileAdvance(
             keep_alive=False,
-            damage_to_player=_projectile_splash_damage(
-                level,
-                projectile,
-                player,
-                crates=crates,
-            ),
+            damage_to_player=damage,
             crate_hit=crate_hit,
             crate_destroyed=crate_destroyed,
         )
@@ -2438,6 +2404,25 @@ def _projectile_splash_against_crates(
             crate_destroyed = True
 
     return crate_hit, crate_destroyed
+
+
+def _projectile_splash_resolution(
+    level: LevelData,
+    projectile: EnemyProjectile,
+    player: PlayerState,
+    *,
+    crates: Sequence[CrateState] | None = None,
+    ignore_crate_id: int | None = None,
+) -> tuple[float, bool, bool]:
+    """Return ``(player_damage, crate_hit, crate_destroyed)`` from splash."""
+    damage = _projectile_splash_damage(level, projectile, player, crates=crates)
+    crate_hit = False
+    crate_destroyed = False
+    if crates is not None:
+        crate_hit, crate_destroyed = _projectile_splash_against_crates(
+            level, projectile, crates, ignore_crate_id=ignore_crate_id,
+        )
+    return damage, crate_hit, crate_destroyed
 
 
 def _crate_at_projectile(
