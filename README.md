@@ -269,13 +269,14 @@ python3 tools/ppo_eval.py --model runs/ai/ppo/<run>/final_model.zip --episodes 5
 ### Play a saved AI model in pygame (normal FPS cap)
 
 ```bash
-python3 tools/ppo_play_pygame.py --model runs/ai/ppo/<run>/final_model.zip --target-fps 40 --window-scale 3 --device auto
+python3 tools/ppo_play_pygame.py --model runs/ai/ppo/<run>/final_model.zip --target-fps 40 --window-scale 3 --device auto --weapon-mode normal_mode
 ```
 
 Useful playback flags:
 
 - `--max-seconds 30` limit playback wall time
 - `--max-steps 2000` limit simulation steps
+- `--weapon-mode auto_rifle` match playback scenario to training/eval mode
 - `--allow-manual-input` mix keyboard input with AI actions for debugging
 - `--stochastic` enable sampling mode (default playback/eval is deterministic)
 

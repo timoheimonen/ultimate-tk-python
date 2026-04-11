@@ -44,6 +44,7 @@ class PPOToolsCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0)
         self.assertIn("Play PPO model with pygame visualization", result.stdout)
+        self.assertIn("--weapon-mode", result.stdout)
 
 
 if __name__ == "__main__":
