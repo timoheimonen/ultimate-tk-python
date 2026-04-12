@@ -127,7 +127,7 @@ class RewardTracker:
             and not enemy_visible
         ):
             self._shoot_no_target_ticks += 1
-            if self._shoot_no_target_ticks > cfg.shoot_no_target_grace_ticks:
+            if self._shoot_no_target_ticks >= cfg.shoot_no_target_grace_ticks:
                 reward -= cfg.shoot_no_target_cost
         else:
             self._shoot_no_target_ticks = 0
@@ -144,7 +144,7 @@ class RewardTracker:
         else:
             self._stationary_shoot_no_hit_ticks = 0
 
-        if runtime.player_dead or runtime.player_shoot_hold_active:
+        if runtime.player_dead or shooting_active:
             self._stationary_ticks = 0
         elif moved <= cfg.idle_distance_epsilon:
             self._stationary_ticks += 1
@@ -208,6 +208,8 @@ def _enemy_visible(observation: dict[str, Any] | None) -> bool:
 
     matrix = np.asarray(rays, dtype=np.float32)
     if matrix.ndim != 2 or matrix.shape[1] < 2:
+        return False
+    if matrix.shape[0] == 0:
         return False
 
     return bool(np.min(matrix[:, 1]) < 1.0)
