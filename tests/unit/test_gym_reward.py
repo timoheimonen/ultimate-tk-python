@@ -18,7 +18,11 @@ from ultimatetk.core.state import RuntimeState
 
 class GymRewardTests(unittest.TestCase):
     def test_enemy_visible_observation_adds_look_reward(self) -> None:
-        cfg = RewardConfig(step_cost=0.0, look_at_enemy_reward=0.005)
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.005,
+            tile_discovery_reward=0.0,
+        )
         tracker = RewardTracker(config=cfg)
 
         runtime = RuntimeState()
@@ -34,7 +38,11 @@ class GymRewardTests(unittest.TestCase):
         self.assertAlmostEqual(step.value, 0.005, places=6)
 
     def test_no_enemy_visible_does_not_add_look_reward(self) -> None:
-        cfg = RewardConfig(step_cost=0.0, look_at_enemy_reward=0.005)
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.005,
+            tile_discovery_reward=0.0,
+        )
         tracker = RewardTracker(config=cfg)
 
         runtime = RuntimeState()
@@ -48,8 +56,13 @@ class GymRewardTests(unittest.TestCase):
         step = tracker.step(runtime, observation)
         self.assertAlmostEqual(step.value, 0.0, places=6)
 
-    def test_strafing_observation_adds_strafing_reward(self) -> None:
-        cfg = RewardConfig(step_cost=0.0, look_at_enemy_reward=0.0, strafing_reward=0.004)
+    def test_strafing_with_enemy_visible_adds_strafing_reward(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            strafing_reward=0.004,
+            tile_discovery_reward=0.0,
+        )
         tracker = RewardTracker(config=cfg)
 
         runtime = RuntimeState()
@@ -61,14 +74,17 @@ class GymRewardTests(unittest.TestCase):
         }
         observation["rays"][2, 1] = 0.5
         observation["state"][10] = 1.0
-        observation["state"][13] = 1.0
-        runtime.player_shoot_hold_active = True
 
         step = tracker.step(runtime, observation)
         self.assertAlmostEqual(step.value, 0.004, places=6)
 
-    def test_strafing_without_engagement_does_not_add_strafing_reward(self) -> None:
-        cfg = RewardConfig(step_cost=0.0, look_at_enemy_reward=0.0, strafing_reward=0.004)
+    def test_strafing_without_enemy_visible_no_reward(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            strafing_reward=0.004,
+            tile_discovery_reward=0.0,
+        )
         tracker = RewardTracker(config=cfg)
 
         runtime = RuntimeState()
@@ -78,15 +94,18 @@ class GymRewardTests(unittest.TestCase):
             "rays": np.ones((32, 8), dtype=np.float32),
             "state": np.zeros((15,), dtype=np.float32),
         }
-        observation["rays"][2, 1] = 0.5
         observation["state"][10] = 1.0
-        observation["state"][13] = 1.0
 
         step = tracker.step(runtime, observation)
         self.assertAlmostEqual(step.value, 0.0, places=6)
 
     def test_not_strafing_does_not_add_strafing_reward(self) -> None:
-        cfg = RewardConfig(step_cost=0.0, look_at_enemy_reward=0.0, strafing_reward=0.004)
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            strafing_reward=0.004,
+            tile_discovery_reward=0.0,
+        )
         tracker = RewardTracker(config=cfg)
 
         runtime = RuntimeState()
@@ -106,6 +125,7 @@ class GymRewardTests(unittest.TestCase):
             idle_ticks_threshold=2,
             idle_cost=1.0,
             look_at_enemy_reward=0.0,
+            tile_discovery_reward=0.0,
         )
         tracker = RewardTracker(config=cfg)
 
@@ -130,6 +150,7 @@ class GymRewardTests(unittest.TestCase):
             look_at_enemy_reward=0.0,
             stationary_shoot_no_hit_cost=0.25,
             stationary_shoot_no_hit_grace_ticks=2,
+            tile_discovery_reward=0.0,
         )
         tracker = RewardTracker(config=cfg)
 
@@ -152,6 +173,7 @@ class GymRewardTests(unittest.TestCase):
             look_at_enemy_reward=0.0,
             stationary_shoot_no_hit_cost=0.25,
             stationary_shoot_no_hit_grace_ticks=2,
+            tile_discovery_reward=0.0,
         )
         tracker = RewardTracker(config=cfg)
 
@@ -175,6 +197,7 @@ class GymRewardTests(unittest.TestCase):
             stuck_ticks_threshold=2,
             stuck_radius_epsilon=2.0,
             stuck_cost=0.4,
+            tile_discovery_reward=0.0,
         )
         tracker = RewardTracker(config=cfg)
 
@@ -192,6 +215,92 @@ class GymRewardTests(unittest.TestCase):
         self.assertAlmostEqual(first.value, 0.0, places=6)
         self.assertAlmostEqual(second.value, -0.4, places=6)
         self.assertAlmostEqual(third.value, -0.4, places=6)
+
+    def test_level_complete_reward_scales_by_enemy_count(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            level_complete_reward_base=8.0,
+            level_complete_reward_per_enemy=0.8,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        runtime.progression_event = "level_complete"
+        runtime.enemies_total = 4
+        step = tracker.step(runtime, None)
+        self.assertAlmostEqual(step.value, 11.2, places=5)
+
+        runtime.progression_event = ""
+        step = tracker.step(runtime, None)
+
+        runtime.progression_event = "level_complete"
+        runtime.enemies_total = 27
+        step = tracker.step(runtime, None)
+        self.assertAlmostEqual(step.value, 29.6, places=5)
+
+    def test_shoot_without_target_penalty_applies_after_grace_period(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            shoot_no_target_grace_ticks=3,
+            shoot_no_target_cost=0.05,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        observation = {
+            "rays": np.ones((32, 8), dtype=np.float32),
+            "state": np.zeros((15,), dtype=np.float32),
+        }
+
+        runtime.player_shoot_hold_active = True
+        step1 = tracker.step(runtime, observation)
+        self.assertAlmostEqual(step1.value, 0.0, places=6)
+
+        step2 = tracker.step(runtime, observation)
+        self.assertAlmostEqual(step2.value, 0.0, places=6)
+
+        step3 = tracker.step(runtime, observation)
+        self.assertAlmostEqual(step3.value, 0.0, places=6)
+
+        step4 = tracker.step(runtime, observation)
+        self.assertAlmostEqual(step4.value, -0.05, places=6)
+
+    def test_tile_discovery_reward_for_new_tiles(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            tile_discovery_reward=0.001,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        runtime.player_world_x = 5
+        runtime.player_world_y = 5
+        step1 = tracker.step(runtime, None)
+        self.assertAlmostEqual(step1.value, 0.001, places=6)
+
+        step2 = tracker.step(runtime, None)
+        self.assertAlmostEqual(step2.value, 0.0, places=6)
+
+        runtime.player_world_x = 35
+        runtime.player_world_y = 5
+        step3 = tracker.step(runtime, None)
+        self.assertAlmostEqual(step3.value, 0.001, places=6)
+
+        runtime.player_world_x = 5
+        runtime.player_world_y = 35
+        step4 = tracker.step(runtime, None)
+        self.assertAlmostEqual(step4.value, 0.001, places=6)
 
 
 if __name__ == "__main__":
