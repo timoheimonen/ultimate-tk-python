@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from ultimatetk.core.state import RuntimeState
+from ultimatetk.rendering.constants import TILE_SIZE
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,12 +14,12 @@ class RewardConfig:
     step_cost: float = 0.0008
     kill_reward: float = 4.0
     hit_reward: float = 0.35
-    look_at_enemy_reward: float = 0.0015
-    strafing_reward: float = 0.0008
+    look_at_enemy_reward: float = 0.010
+    strafing_reward: float = 0.008
     crate_reward: float = 0.12
     damage_cost: float = 0.03
     death_cost: float = 8.0
-    level_complete_reward: float = 18.0
+    level_complete_reward: float = 0.0
     run_complete_reward: float = 30.0
     strafing_threat_tti_threshold: float = 0.35
     idle_ticks_threshold: int = 45
@@ -29,6 +30,11 @@ class RewardConfig:
     stuck_ticks_threshold: int = 150
     stuck_radius_epsilon: float = 24.0
     stuck_cost: float = 0.08
+    level_complete_reward_base: float = 8.0
+    level_complete_reward_per_enemy: float = 0.8
+    shoot_no_target_grace_ticks: int = 5
+    shoot_no_target_cost: float = 0.04
+    tile_discovery_reward: float = 0.001
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +46,8 @@ class RewardStep:
 class RewardTracker:
     def __init__(self, config: RewardConfig | None = None) -> None:
         self._config = config or RewardConfig()
+        self._visited_tiles: set[tuple[int, int]] = set()
+        self._shoot_no_target_ticks = 0
         self.reset(None)
 
     def reset(self, runtime: RuntimeState | None) -> None:
@@ -58,6 +66,8 @@ class RewardTracker:
             self._stuck_ticks = 0
             self._stuck_anchor_x = 0
             self._stuck_anchor_y = 0
+            self._visited_tiles.clear()
+            self._shoot_no_target_ticks = 0
             return
 
         self._prev_kills = runtime.enemies_killed_by_player
@@ -74,6 +84,8 @@ class RewardTracker:
         self._stuck_ticks = 0
         self._stuck_anchor_x = runtime.player_world_x
         self._stuck_anchor_y = runtime.player_world_y
+        self._visited_tiles.clear()
+        self._shoot_no_target_ticks = 0
 
     def step(self, runtime: RuntimeState, observation: dict[str, Any] | None = None) -> RewardStep:
         cfg = self._config
@@ -93,20 +105,13 @@ class RewardTracker:
         enemy_visible = _enemy_visible(observation)
         if enemy_visible:
             reward += cfg.look_at_enemy_reward
-        if (
-            enemy_visible
-            and _player_strafing(observation)
-            and (
-                shooting_active
-                or delta_hits > 0
-                or _projectile_threat_close(observation, cfg.strafing_threat_tti_threshold)
-            )
-        ):
+        if enemy_visible and _player_strafing(observation):
             reward += cfg.strafing_reward
 
         progression_changed = runtime.progression_event != self._prev_progression_event
         if progression_changed and runtime.progression_event == "level_complete":
-            reward += cfg.level_complete_reward
+            scaled_level_reward = cfg.level_complete_reward_base + max(0, runtime.enemies_total) * cfg.level_complete_reward_per_enemy
+            reward += scaled_level_reward
         if progression_changed and runtime.progression_event == "run_complete":
             reward += cfg.run_complete_reward
 
@@ -114,6 +119,18 @@ class RewardTracker:
             reward -= cfg.death_cost
 
         moved = abs(runtime.player_world_x - self._prev_x) + abs(runtime.player_world_y - self._prev_y)
+
+        # Penalty for shooting without visible target
+        if (
+            not runtime.player_dead
+            and (runtime.player_shoot_hold_active or delta_shots > 0)
+            and not enemy_visible
+        ):
+            self._shoot_no_target_ticks += 1
+            if self._shoot_no_target_ticks >= cfg.shoot_no_target_grace_ticks:
+                reward -= cfg.shoot_no_target_cost
+        else:
+            self._shoot_no_target_ticks = 0
 
         if (
             not runtime.player_dead
@@ -127,7 +144,7 @@ class RewardTracker:
         else:
             self._stationary_shoot_no_hit_ticks = 0
 
-        if runtime.player_dead or runtime.player_shoot_hold_active:
+        if runtime.player_dead or shooting_active:
             self._stationary_ticks = 0
         elif moved <= cfg.idle_distance_epsilon:
             self._stationary_ticks += 1
@@ -159,6 +176,16 @@ class RewardTracker:
                 self._stuck_anchor_x = runtime.player_world_x
                 self._stuck_anchor_y = runtime.player_world_y
 
+        # Tile-based exploration reward: bonus for visiting new tiles
+        if not runtime.player_dead:
+            player_tile_x = int(runtime.player_world_x) // TILE_SIZE
+            player_tile_y = int(runtime.player_world_y) // TILE_SIZE
+            current_tile = (player_tile_x, player_tile_y)
+            
+            if current_tile not in self._visited_tiles:
+                self._visited_tiles.add(current_tile)
+                reward += cfg.tile_discovery_reward
+
         self._prev_kills = runtime.enemies_killed_by_player
         self._prev_hits = runtime.player_hits_total
         self._prev_crates = runtime.crates_collected_by_player
@@ -181,6 +208,8 @@ def _enemy_visible(observation: dict[str, Any] | None) -> bool:
 
     matrix = np.asarray(rays, dtype=np.float32)
     if matrix.ndim != 2 or matrix.shape[1] < 2:
+        return False
+    if matrix.shape[0] == 0:
         return False
 
     return bool(np.min(matrix[:, 1]) < 1.0)

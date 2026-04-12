@@ -250,7 +250,6 @@ Behavior in non-`normal_mode` weapon modes:
 - Selected weapon is forced/equipped from episode start
 - Player ammo is true infinite (no ammo consumption)
 - Crates are disabled/removed
-- Shop remains unavailable to AI via the current action space (same as before)
 
 ### Max-throughput training mode (uncapped training loop)
 
