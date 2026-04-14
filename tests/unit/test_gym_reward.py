@@ -20,6 +20,7 @@ class GymRewardTests(unittest.TestCase):
     def test_enemy_visible_observation_adds_look_reward(self) -> None:
         cfg = RewardConfig(
             step_cost=0.0,
+            hit_reward=0.0,
             look_at_enemy_reward=0.005,
             tile_discovery_reward=0.0,
         )
@@ -33,6 +34,7 @@ class GymRewardTests(unittest.TestCase):
             "state": np.zeros((15,), dtype=np.float32),
         }
         observation["rays"][4, 1] = 0.4
+        runtime.player_hits_total = 1
 
         step = tracker.step(runtime, observation)
         self.assertAlmostEqual(step.value, 0.005, places=6)
@@ -59,6 +61,7 @@ class GymRewardTests(unittest.TestCase):
     def test_strafing_with_enemy_visible_adds_strafing_reward(self) -> None:
         cfg = RewardConfig(
             step_cost=0.0,
+            hit_reward=0.0,
             look_at_enemy_reward=0.0,
             strafing_reward=0.004,
             tile_discovery_reward=0.0,
@@ -74,6 +77,8 @@ class GymRewardTests(unittest.TestCase):
         }
         observation["rays"][2, 1] = 0.5
         observation["state"][10] = 1.0
+        observation["state"][13] = 0.2
+        runtime.player_hits_total = 1
 
         step = tracker.step(runtime, observation)
         self.assertAlmostEqual(step.value, 0.004, places=6)
@@ -268,7 +273,7 @@ class GymRewardTests(unittest.TestCase):
         self.assertAlmostEqual(step2.value, 0.0, places=6)
 
         step3 = tracker.step(runtime, observation)
-        self.assertAlmostEqual(step3.value, 0.0, places=6)
+        self.assertAlmostEqual(step3.value, -0.05, places=6)
 
         step4 = tracker.step(runtime, observation)
         self.assertAlmostEqual(step4.value, -0.05, places=6)
