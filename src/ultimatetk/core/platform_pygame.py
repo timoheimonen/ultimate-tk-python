@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import importlib
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from ultimatetk.core.context import GameContext
 from ultimatetk.core.events import AppEvent, EventType, InputAction
@@ -21,6 +21,9 @@ class PygamePlatformBackend:
     _active_actions: set[InputAction] = field(default_factory=set)
     _key_to_action: dict[int, InputAction] = field(default_factory=dict)
     _key_to_weapon_slot: dict[int, int] = field(default_factory=dict)
+    debug_panel_width_px: int = 0
+    debug_draw_fn: Callable[[Any, Any, Any], None] | None = None
+    _present_window_size: tuple[int, int] = (SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
 
     def startup(self, context: GameContext) -> None:
         self._poll_frame = 0
@@ -42,14 +45,18 @@ class PygamePlatformBackend:
             SCREEN_WIDTH * self.window_scale,
             SCREEN_HEIGHT * self.window_scale,
         )
+        panel_width = max(0, int(self.debug_panel_width_px))
+        self._present_window_size = (self._window_size[0] + panel_width, self._window_size[1])
 
         pygame_module.init()
         pygame_module.key.set_repeat()
-        self._window = pygame_module.display.set_mode(self._window_size)
+        self._window = pygame_module.display.set_mode(self._present_window_size)
         pygame_module.display.set_caption("Ultimate TK (pygame)")
         self._build_key_maps(pygame_module)
         context.logger.info(
-            "Pygame runtime backend started (%dx%d, scale=%d)",
+            "Pygame runtime backend started (%dx%d, game=%dx%d, scale=%d)",
+            self._present_window_size[0],
+            self._present_window_size[1],
             self._window_size[0],
             self._window_size[1],
             self.window_scale,
@@ -130,6 +137,7 @@ class PygamePlatformBackend:
             or len(palette) != 256 * 3
         ):
             self._window.fill((0, 0, 0))
+            self._draw_debug_panel()
             self._pygame.display.flip()
             return
 
@@ -139,7 +147,26 @@ class PygamePlatformBackend:
             frame_surface = self._pygame.transform.scale(frame_surface, self._window_size)
 
         self._window.blit(frame_surface, (0, 0))
+        self._draw_debug_panel()
         self._pygame.display.flip()
+
+    def _draw_debug_panel(self) -> None:
+        if self._pygame is None or self._window is None:
+            return
+
+        panel_width = self._present_window_size[0] - self._window_size[0]
+        if panel_width <= 0:
+            return
+
+        panel_rect = self._pygame.Rect(
+            self._window_size[0],
+            0,
+            panel_width,
+            self._window_size[1],
+        )
+        self._window.fill((10, 10, 14), panel_rect)
+        if self.debug_draw_fn is not None:
+            self.debug_draw_fn(self._pygame, self._window, panel_rect)
 
     def shutdown(self, context: GameContext) -> None:
         self._active_actions.clear()

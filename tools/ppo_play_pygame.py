@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 from time import perf_counter, sleep
 import sys
+
+import numpy as np
 
 
 THIS_FILE = Path(__file__).resolve()
@@ -13,7 +16,20 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ultimatetk.ai.action_codec import ActionCodec
-from ultimatetk.ai.observation import blank_observation, extract_observation
+from ultimatetk.ai.observation import (
+    CHANNEL_C4,
+    CHANNEL_CRATE_AMMO,
+    CHANNEL_CRATE_ENERGY,
+    CHANNEL_CRATE_WEAPON,
+    CHANNEL_ENEMY,
+    CHANNEL_MINE,
+    CHANNEL_PROJECTILE,
+    CHANNEL_WALL,
+    RAY_CHANNEL_COUNT,
+    RAY_SECTOR_COUNT,
+    blank_observation,
+    extract_observation,
+)
 from ultimatetk.ai.runtime_driver import WEAPON_MODE_NORMAL, TrainingRuntimeDriver
 from ultimatetk.ai.sb3_action_wrapper import sb3_vector_to_env_action
 from ultimatetk.ai.training_device import detect_torch_capabilities, resolve_torch_device
@@ -38,6 +54,17 @@ WEAPON_MODE_CHOICES: tuple[str, ...] = (
     "mine_dropper",
 )
 
+_RAY_CHANNEL_LEGEND: tuple[tuple[str, int, tuple[int, int, int]], ...] = (
+    ("wall", CHANNEL_WALL, (255, 255, 255)),
+    ("enemy", CHANNEL_ENEMY, (255, 70, 70)),
+    ("proj", CHANNEL_PROJECTILE, (255, 170, 60)),
+    ("crateW", CHANNEL_CRATE_WEAPON, (80, 170, 255)),
+    ("crateA", CHANNEL_CRATE_AMMO, (100, 220, 120)),
+    ("crateE", CHANNEL_CRATE_ENERGY, (220, 110, 255)),
+    ("mine", CHANNEL_MINE, (255, 215, 70)),
+    ("c4", CHANNEL_C4, (255, 120, 200)),
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Play PPO model with pygame visualization")
@@ -45,6 +72,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "mps", "cuda"))
     parser.add_argument("--target-fps", type=int, default=40, help="Playback FPS limit")
     parser.add_argument("--window-scale", type=int, default=3, help="Pygame window scale")
+    parser.add_argument(
+        "--ray-debug-panel",
+        action="store_true",
+        help="Show right-side 360-degree ray debug panel",
+    )
+    parser.add_argument(
+        "--ray-debug-width",
+        type=int,
+        default=320,
+        help="Ray debug panel width in pixels",
+    )
+    parser.add_argument(
+        "--ray-debug-scale",
+        type=int,
+        default=1,
+        help="Ray debug panel UI scale",
+    )
     parser.add_argument("--level-index", type=int, default=0, help="Start level index")
     parser.add_argument("--seed", type=int, default=123, help="Reserved for future deterministic hooks")
     parser.add_argument(
@@ -95,12 +139,93 @@ def _import_playback_dependencies() -> object:
     return PPO
 
 
+def _build_ray_debug_draw_fn(
+    latest_observation_ref: dict[str, dict[str, np.ndarray] | None],
+    ui_scale: int,
+) -> object:
+    def draw_ray_panel(pygame_module: object, window: object, panel_rect: object) -> None:
+        observation = latest_observation_ref.get("value")
+        if not isinstance(observation, dict):
+            return
+
+        rays = observation.get("rays")
+        if rays is None:
+            return
+
+        matrix = np.asarray(rays, dtype=np.float32)
+        if matrix.ndim != 2 or matrix.shape[0] != RAY_SECTOR_COUNT or matrix.shape[1] < RAY_CHANNEL_COUNT:
+            return
+
+        panel_x = int(panel_rect.x)
+        panel_y = int(panel_rect.y)
+        panel_w = int(panel_rect.width)
+        panel_h = int(panel_rect.height)
+        margin = 12 * ui_scale
+        legend_h = 22 * ui_scale
+        radius = max(10, min(panel_w - (2 * margin), panel_h - (2 * margin) - (legend_h * 3)) // 2)
+        center_x = panel_x + (panel_w // 2)
+        center_y = panel_y + margin + radius
+
+        pygame_module.draw.circle(window, (50, 55, 70), (center_x, center_y), radius, width=max(1, ui_scale))
+        pygame_module.draw.circle(window, (30, 34, 44), (center_x, center_y), max(2, radius // 2), width=1)
+
+        sector_angle = 360.0 / float(RAY_SECTOR_COUNT)
+        for sector in range(RAY_SECTOR_COUNT):
+            angle = math.radians((sector * sector_angle) + (sector_angle * 0.5))
+            dir_x = math.sin(angle)
+            dir_y = -math.cos(angle)
+            spoke_color = (42, 48, 62) if (sector % 4 != 0) else (62, 70, 90)
+            spoke_x = center_x + int(dir_x * radius)
+            spoke_y = center_y + int(dir_y * radius)
+            pygame_module.draw.line(window, spoke_color, (center_x, center_y), (spoke_x, spoke_y), width=1)
+
+        for label, channel, color in _RAY_CHANNEL_LEGEND:
+            del label
+            for sector in range(RAY_SECTOR_COUNT):
+                value = float(matrix[sector, channel])
+                value = 0.0 if value < 0.0 else (1.0 if value > 1.0 else value)
+                angle = math.radians((sector * sector_angle) + (sector_angle * 0.5))
+                dir_x = math.sin(angle)
+                dir_y = -math.cos(angle)
+                point_r = int(value * radius)
+                px = center_x + int(dir_x * point_r)
+                py = center_y + int(dir_y * point_r)
+                pygame_module.draw.circle(window, color, (px, py), max(1, ui_scale))
+
+        pygame_module.draw.circle(window, (255, 255, 255), (center_x, center_y), max(2, ui_scale + 1))
+        pygame_module.draw.line(
+            window,
+            (255, 255, 255),
+            (center_x, center_y),
+            (center_x, center_y - radius),
+            width=max(1, ui_scale),
+        )
+
+        font = pygame_module.font.Font(None, max(14, 14 * ui_scale))
+        legend_x = panel_x + margin
+        legend_y = center_y + radius + (8 * ui_scale)
+        for idx, (label, _channel, color) in enumerate(_RAY_CHANNEL_LEGEND):
+            row = idx // 2
+            col = idx % 2
+            x = legend_x + col * max(100, panel_w // 2 - margin)
+            y = legend_y + row * legend_h
+            pygame_module.draw.rect(window, color, (x, y + 3, 10 * ui_scale, 10 * ui_scale))
+            text_surface = font.render(label, True, (220, 220, 230))
+            window.blit(text_surface, (x + (14 * ui_scale), y))
+
+    return draw_ray_panel
+
+
 def main() -> int:
     args = parse_args()
     if args.target_fps < 1:
         raise ValueError("--target-fps must be >= 1")
     if args.window_scale < 1:
         raise ValueError("--window-scale must be >= 1")
+    if args.ray_debug_width < 1:
+        raise ValueError("--ray-debug-width must be >= 1")
+    if args.ray_debug_scale < 1:
+        raise ValueError("--ray-debug-scale must be >= 1")
     if args.max_steps < 0:
         raise ValueError("--max-steps must be >= 0")
     if args.max_seconds < 0:
@@ -126,8 +251,26 @@ def main() -> int:
     action_codec = ActionCodec()
     action_codec.reset()
 
-    platform = PygamePlatformBackend(window_scale=args.window_scale)
+    latest_observation_ref: dict[str, dict[str, np.ndarray] | None] = {"value": None}
+    debug_draw_fn = None
+    panel_width = 0
+    if args.ray_debug_panel:
+        panel_width = int(args.ray_debug_width)
+        debug_draw_fn = _build_ray_debug_draw_fn(latest_observation_ref, int(args.ray_debug_scale))
+
+    platform = PygamePlatformBackend(
+        window_scale=args.window_scale,
+        debug_panel_width_px=panel_width,
+        debug_draw_fn=debug_draw_fn,
+    )
     platform.startup(driver.context)
+
+    runtime = driver.context.runtime
+    view = driver.gameplay_view()
+    if view is None:
+        latest_observation_ref["value"] = blank_observation(runtime)
+    else:
+        latest_observation_ref["value"] = extract_observation(view, runtime)
 
     driver.scene_manager.render(0.0)
     driver.context.runtime.render_frame += 1
@@ -154,6 +297,7 @@ def main() -> int:
                 observation = blank_observation(runtime)
             else:
                 observation = extract_observation(view, runtime)
+            latest_observation_ref["value"] = observation
 
             action_vector, _ = model.predict(observation, deterministic=bool(args.deterministic))
             ai_action = sb3_vector_to_env_action(action_vector)
