@@ -54,6 +54,7 @@ class RewardConfig:
 class RewardStep:
     value: float
     stationary_ticks: int
+    breakdown: dict[str, float]
 
 
 class RewardTracker:
@@ -106,7 +107,26 @@ class RewardTracker:
 
     def step(self, runtime: RuntimeState, observation: dict[str, Any] | None = None) -> RewardStep:
         cfg = self._config
-        reward = -cfg.step_cost
+        breakdown: dict[str, float] = {
+            "step_cost": -cfg.step_cost,
+            "kill_reward": 0.0,
+            "hit_reward": 0.0,
+            "crate_reward": 0.0,
+            "damage_cost": 0.0,
+            "look_at_enemy_reward": 0.0,
+            "visible_no_hit_cost": 0.0,
+            "strafing_reward": 0.0,
+            "level_complete_reward": 0.0,
+            "run_complete_reward": 0.0,
+            "death_cost": 0.0,
+            "idle_cost": 0.0,
+            "stuck_cost": 0.0,
+            "bad_shoot_cost": 0.0,
+            "stationary_shoot_no_hit_cost": 0.0,
+            "shoot_no_target_cost": 0.0,
+            "tile_discovery_reward": 0.0,
+        }
+        reward = breakdown["step_cost"]
 
         delta_kills = max(0, runtime.enemies_killed_by_player - self._prev_kills)
         delta_hits = max(0, runtime.player_hits_total - self._prev_hits)
@@ -115,33 +135,47 @@ class RewardTracker:
         delta_damage = max(0.0, runtime.player_damage_taken_total - self._prev_damage_taken)
         shooting_active = runtime.player_shoot_hold_active or delta_shots > 0
 
-        reward += cfg.kill_reward * float(delta_kills)
-        reward += cfg.hit_reward * float(delta_hits)
-        reward += cfg.crate_reward * float(delta_crates)
-        reward -= cfg.damage_cost * float(delta_damage)
+        kill_delta = cfg.kill_reward * float(delta_kills)
+        hit_delta = cfg.hit_reward * float(delta_hits)
+        crate_delta = cfg.crate_reward * float(delta_crates)
+        damage_delta = -cfg.damage_cost * float(delta_damage)
+        reward += kill_delta
+        reward += hit_delta
+        reward += crate_delta
+        reward += damage_delta
+        breakdown["kill_reward"] += kill_delta
+        breakdown["hit_reward"] += hit_delta
+        breakdown["crate_reward"] += crate_delta
+        breakdown["damage_cost"] += damage_delta
 
         enemy_visible = self._enemy_visible(observation)
 
         if enemy_visible and not runtime.player_dead:
             reward += cfg.look_at_enemy_reward
+            breakdown["look_at_enemy_reward"] += cfg.look_at_enemy_reward
             self._visible_no_hit_ticks += 1
             if self._visible_no_hit_ticks >= cfg.visible_no_hit_ticks_threshold:
                 reward -= cfg.visible_no_hit_cost
+                breakdown["visible_no_hit_cost"] -= cfg.visible_no_hit_cost
         else:
             self._visible_no_hit_ticks = 0
 
         if enemy_visible and self._player_strafing(observation) and not runtime.player_dead:
             reward += cfg.strafing_reward
+            breakdown["strafing_reward"] += cfg.strafing_reward
 
         progression_changed = runtime.progression_event != self._prev_progression_event
         if progression_changed and runtime.progression_event == "level_complete":
             scaled_level_reward = cfg.level_complete_reward_base + max(0, runtime.enemies_total) * cfg.level_complete_reward_per_enemy
             reward += scaled_level_reward
+            breakdown["level_complete_reward"] += scaled_level_reward
         if progression_changed and runtime.progression_event == "run_complete":
             reward += cfg.run_complete_reward
+            breakdown["run_complete_reward"] += cfg.run_complete_reward
 
         if runtime.player_dead and not self._prev_dead:
             reward -= cfg.death_cost
+            breakdown["death_cost"] -= cfg.death_cost
 
         moved = abs(runtime.player_world_x - self._prev_x) + abs(runtime.player_world_y - self._prev_y)
 
@@ -149,6 +183,7 @@ class RewardTracker:
             self._idle_ticks += 1
             if self._idle_ticks >= cfg.idle_ticks_threshold:
                 reward -= cfg.idle_cost
+                breakdown["idle_cost"] -= cfg.idle_cost
         else:
             self._idle_ticks = 0
 
@@ -158,6 +193,7 @@ class RewardTracker:
             self._stuck_ticks += 1
             if self._stuck_ticks >= cfg.stuck_ticks_threshold:
                 reward -= cfg.stuck_cost
+                breakdown["stuck_cost"] -= cfg.stuck_cost
         else:
             self._stuck_ticks = 0
 
@@ -165,6 +201,7 @@ class RewardTracker:
             self._bad_shoot_ticks += 1
             if self._bad_shoot_ticks >= cfg.bad_shoot_ticks_threshold:
                 reward -= cfg.bad_shoot_cost
+                breakdown["bad_shoot_cost"] -= cfg.bad_shoot_cost
         else:
             self._bad_shoot_ticks = 0
 
@@ -174,6 +211,7 @@ class RewardTracker:
             self._stationary_shoot_ticks += 1
             if self._stationary_shoot_ticks >= cfg.stationary_shoot_no_hit_grace_ticks:
                 reward -= cfg.stationary_shoot_no_hit_cost
+                breakdown["stationary_shoot_no_hit_cost"] -= cfg.stationary_shoot_no_hit_cost
         else:
             self._stationary_shoot_ticks = 0
 
@@ -181,6 +219,7 @@ class RewardTracker:
             self._shoot_no_target_ticks += 1
             if self._shoot_no_target_ticks >= cfg.shoot_no_target_grace_ticks:
                 reward -= cfg.shoot_no_target_cost
+                breakdown["shoot_no_target_cost"] -= cfg.shoot_no_target_cost
         else:
             self._shoot_no_target_ticks = 0
 
@@ -192,6 +231,7 @@ class RewardTracker:
             if current_tile not in self._visited_tiles:
                 self._visited_tiles.add(current_tile)
                 reward += cfg.tile_discovery_reward
+                breakdown["tile_discovery_reward"] += cfg.tile_discovery_reward
 
         self._prev_kills = runtime.enemies_killed_by_player
         self._prev_hits = runtime.player_hits_total
@@ -203,7 +243,7 @@ class RewardTracker:
         self._prev_x = runtime.player_world_x
         self._prev_y = runtime.player_world_y
 
-        return RewardStep(value=reward, stationary_ticks=self._idle_ticks)
+        return RewardStep(value=reward, stationary_ticks=self._idle_ticks, breakdown=breakdown)
 
     def _player_strafing(self, observation: dict[str, Any] | None) -> bool:
         if observation is None:

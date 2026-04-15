@@ -365,6 +365,45 @@ class GymRewardTests(unittest.TestCase):
         self.assertGreater(cfg.stationary_shoot_no_hit_cost, 0.0)
         self.assertGreater(cfg.shoot_no_target_cost, 0.0)
 
+    def test_reward_breakdown_sums_to_total(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.01,
+            kill_reward=2.0,
+            hit_reward=0.5,
+            crate_reward=0.0,
+            damage_cost=0.1,
+            death_cost=0.0,
+            look_at_enemy_reward=0.0,
+            strafing_reward=0.0,
+            idle_cost=0.0,
+            stuck_cost=0.0,
+            bad_shoot_cost=0.0,
+            stationary_shoot_no_hit_cost=0.0,
+            shoot_no_target_cost=0.0,
+            tile_discovery_reward=0.0,
+            visible_no_hit_cost=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+        runtime.enemies_killed_by_player = 1
+        runtime.player_hits_total = 2
+        runtime.player_damage_taken_total = 3.0
+
+        observation = {
+            "rays": np.ones((32, 8), dtype=np.float32),
+            "state": np.zeros((15,), dtype=np.float32),
+        }
+        step = tracker.step(runtime, observation)
+
+        self.assertAlmostEqual(step.value, 2.69, places=6)
+        self.assertAlmostEqual(sum(step.breakdown.values()), step.value, places=6)
+        self.assertAlmostEqual(step.breakdown["step_cost"], -0.01, places=6)
+        self.assertAlmostEqual(step.breakdown["kill_reward"], 2.0, places=6)
+        self.assertAlmostEqual(step.breakdown["hit_reward"], 1.0, places=6)
+        self.assertAlmostEqual(step.breakdown["damage_cost"], -0.3, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

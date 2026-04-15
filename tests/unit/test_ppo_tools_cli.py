@@ -33,6 +33,7 @@ class PPOToolsCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Evaluate PPO checkpoint", result.stdout)
         self.assertIn("--weapon-mode", result.stdout)
+        self.assertIn("--summary-json-out", result.stdout)
 
     def test_ppo_play_pygame_help(self) -> None:
         result = subprocess.run(

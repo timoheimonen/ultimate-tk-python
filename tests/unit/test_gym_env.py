@@ -40,6 +40,23 @@ class GymEnvTests(unittest.TestCase):
         finally:
             env.close()
 
+    def test_step_info_contains_reward_breakdown_with_consistent_sum(self) -> None:
+        env = UltimateTKEnv(project_root=str(PROJECT_ROOT), enforce_asset_manifest=True)
+        try:
+            env.reset(seed=42)
+            action = {
+                "hold": np.zeros((8,), dtype=np.int8),
+                "trigger": np.zeros((1,), dtype=np.int8),
+                "weapon_select": 0,
+            }
+            _, reward, _, _, info = env.step(action)
+            self.assertIn("reward_breakdown", info)
+            breakdown = info["reward_breakdown"]
+            self.assertIsInstance(breakdown, dict)
+            self.assertAlmostEqual(float(sum(float(v) for v in breakdown.values())), float(reward), places=6)
+        finally:
+            env.close()
+
     def test_death_marks_episode_terminated(self) -> None:
         env = UltimateTKEnv(project_root=str(PROJECT_ROOT), enforce_asset_manifest=True)
         try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -75,6 +76,11 @@ def parse_args() -> argparse.Namespace:
             "other modes force selected weapon with infinite ammo and disable crates"
         ),
     )
+    parser.add_argument(
+        "--summary-json-out",
+        default="",
+        help="Optional path for writing aggregate evaluation summary JSON",
+    )
     return parser.parse_args()
 
 
@@ -113,6 +119,7 @@ def main() -> int:
     episode_rewards: list[float] = []
     episode_lengths: list[int] = []
     completion_count = 0
+    reason_counts: dict[str, int] = {}
 
     try:
         for episode in range(args.episodes):
@@ -136,6 +143,9 @@ def main() -> int:
             if game_completed:
                 completion_count += 1
 
+            reason_key = terminal_reason or "unknown"
+            reason_counts[reason_key] = reason_counts.get(reason_key, 0) + 1
+
             episode_rewards.append(reward_total)
             episode_lengths.append(step_count)
             print(
@@ -156,17 +166,37 @@ def main() -> int:
     mean_reward = sum(episode_rewards) / float(len(episode_rewards))
     mean_steps = sum(episode_lengths) / float(len(episode_lengths))
     completion_rate = completion_count / float(len(episode_rewards))
+    sorted_reasons = sorted(reason_counts.items(), key=lambda item: item[0])
+    reason_distribution = ",".join(f"{key}:{value}" for key, value in sorted_reasons)
     print(
-        "aggregate episodes=%d mean_reward=%.3f mean_steps=%.1f completion_rate=%.3f device=%s weapon_mode=%s"
+        "aggregate episodes=%d mean_reward=%.3f mean_steps=%.1f completion_rate=%.3f reasons=%s device=%s weapon_mode=%s"
         % (
             len(episode_rewards),
             mean_reward,
             mean_steps,
             completion_rate,
+            reason_distribution,
             device,
             str(args.weapon_mode),
         ),
     )
+
+    if args.summary_json_out.strip():
+        summary_path = Path(args.summary_json_out).expanduser().resolve()
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_payload = {
+            "episodes": len(episode_rewards),
+            "mean_reward": mean_reward,
+            "mean_steps": mean_steps,
+            "completion_rate": completion_rate,
+            "reason_counts": {key: int(value) for key, value in sorted_reasons},
+            "device": str(device),
+            "weapon_mode": str(args.weapon_mode),
+            "deterministic": bool(args.deterministic),
+            "model": str(model_path),
+        }
+        summary_path.write_text(json.dumps(summary_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
     return 0
 
 

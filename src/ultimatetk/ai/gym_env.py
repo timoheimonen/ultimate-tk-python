@@ -172,6 +172,7 @@ else:
                 "game_completed": game_completed,
                 "terminal_reason": terminal_reason,
                 "stationary_ticks": reward_step.stationary_ticks,
+                "reward_breakdown": dict(reward_step.breakdown),
             }
 
             return observation, float(reward_step.value), terminated, truncated, info
