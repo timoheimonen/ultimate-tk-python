@@ -39,11 +39,22 @@ This phase hardens reward-learning stability and makes reward dynamics easier to
 
 Use matched hyperparameters and seeds, changing only reward configuration under test.
 
+Important: `--run-name phase15_a` vs `phase15_b` alone does not create different reward behavior. Current trainer has no `--reward-profile` flag. Runs differ only if reward source differs (for example different git revision / branch with different `src/ultimatetk/ai/reward.py`).
+
+0) Prepare two code variants where reward logic/defaults differ.
+
+Example with two worktrees:
+
+```bash
+git worktree add ../ultimatetk_a <commit-or-branch-for-variant-a>
+git worktree add ../ultimatetk_b <commit-or-branch-for-variant-b>
+```
+
 1) Train run A and run B with same arguments except reward variant source.
 
 ```bash
-python3 tools/ppo_train.py --run-name phase15_a --total-timesteps 2048 --n-envs 1 --seed 123 --eval-freq 0 --checkpoint-freq 0 --device auto
-python3 tools/ppo_train.py --run-name phase15_b --total-timesteps 2048 --n-envs 1 --seed 123 --eval-freq 0 --checkpoint-freq 0 --device auto
+(cd ../ultimatetk_a && python3 tools/ppo_train.py --run-name phase15_a --total-timesteps 2048 --n-envs 1 --seed 123 --eval-freq 0 --checkpoint-freq 0 --device auto)
+(cd ../ultimatetk_b && python3 tools/ppo_train.py --run-name phase15_b --total-timesteps 2048 --n-envs 1 --seed 123 --eval-freq 0 --checkpoint-freq 0 --device auto)
 ```
 
 2) Evaluate both models with fixed episode count/seed and export summaries.
