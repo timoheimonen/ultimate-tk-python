@@ -78,3 +78,5 @@ python3 tools/ppo_eval.py --model runs/ai/ppo/phase15_b/final_model.zip --episod
 
 - `pytest tests/unit/test_gym_reward.py tests/unit/test_gym_env.py` -> `24 passed`.
 - `python3 tools/gym_random_policy_smoke.py --episodes 3 --max-steps 500` -> passed (3 episodes).
+- `python3 tools/ppo_train.py --run-name phase15_proto_smoke --total-timesteps 512 --n-envs 1 --eval-freq 0 --checkpoint-freq 0 --device auto` -> smoke training passed (SB3 one rollout iteration, final model artifact created).
+- `python3 tools/ppo_eval.py --model runs/ai/ppo/phase15_proto_smoke/final_model.zip --episodes 2 --seed 321 --deterministic --device auto --summary-json-out runs/ai/ppo/phase15_proto_smoke/eval_summary.json` -> eval passed, aggregate included terminal reason distribution and JSON summary (`reason_counts: {"death": 2}`).
