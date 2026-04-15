@@ -18,36 +18,36 @@ class RewardConfig:
     crate_reward: float = 0.15
 
     damage_cost: float = 0.04
-    death_cost: float = 6.0
+    death_cost: float = 12.0
 
     level_complete_reward_base: float = 8.0
     level_complete_reward_per_enemy: float = 0.8
     run_complete_reward: float = 40.0
 
-    look_at_enemy_reward: float = 0.005
-    strafing_reward: float = 0.004
+    look_at_enemy_reward: float = 0.003
+    strafing_reward: float = 0.003
 
-    idle_ticks_threshold: int = 100
-    idle_cost: float = 1.0
+    idle_ticks_threshold: int = 120
+    idle_cost: float = 0.2
     idle_distance_epsilon: float = 2.0
 
-    stationary_shoot_no_hit_cost: float = 0.0
-    stationary_shoot_no_hit_grace_ticks: int = 2
+    stationary_shoot_no_hit_cost: float = 0.01
+    stationary_shoot_no_hit_grace_ticks: int = 4
 
-    stuck_ticks_threshold: int = 2
+    stuck_ticks_threshold: int = 20
     stuck_radius_epsilon: float = 2.0
-    stuck_cost: float = 0.4
+    stuck_cost: float = 0.02
 
-    bad_shoot_ticks_threshold: int = 15
-    bad_shoot_cost: float = 0.05
+    bad_shoot_ticks_threshold: int = 20
+    bad_shoot_cost: float = 0.02
 
-    shoot_no_target_grace_ticks: int = 3
-    shoot_no_target_cost: float = 0.0
+    shoot_no_target_grace_ticks: int = 5
+    shoot_no_target_cost: float = 0.015
 
     tile_discovery_reward: float = 0.001
 
-    visible_no_hit_ticks_threshold: int = 40
-    visible_no_hit_cost: float = 0.02
+    visible_no_hit_ticks_threshold: int = 100
+    visible_no_hit_cost: float = 0.004
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,10 +154,12 @@ class RewardTracker:
 
         if progression_changed or runtime.player_dead:
             self._stuck_ticks = 0
-        elif not shooting_active and not runtime.player_dead and moved <= cfg.stuck_radius_epsilon:
+        elif not shooting_active and moved <= cfg.stuck_radius_epsilon:
             self._stuck_ticks += 1
             if self._stuck_ticks >= cfg.stuck_ticks_threshold:
                 reward -= cfg.stuck_cost
+        else:
+            self._stuck_ticks = 0
 
         if not runtime.player_dead and shooting_active and delta_hits == 0 and not enemy_visible:
             self._bad_shoot_ticks += 1
@@ -172,6 +174,8 @@ class RewardTracker:
             self._stationary_shoot_ticks += 1
             if self._stationary_shoot_ticks >= cfg.stationary_shoot_no_hit_grace_ticks:
                 reward -= cfg.stationary_shoot_no_hit_cost
+        else:
+            self._stationary_shoot_ticks = 0
 
         if not runtime.player_dead and (runtime.player_shoot_hold_active or delta_shots > 0) and not enemy_visible:
             self._shoot_no_target_ticks += 1

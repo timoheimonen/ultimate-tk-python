@@ -8,6 +8,31 @@
 
 Analysis revealed that AI models learn slowly and get stuck in local optima (e.g., "hiding in shop"). This document describes five systematic improvements to the reward-shaping system designed to improve learning dynamics and encourage balanced gameplay.
 
+## April 2026 Follow-up Rebalance
+
+After additional smoke validation, dense penalties were still dominating total return, mainly from stuck logic. Reward defaults were rebalanced for stabler learning and lower penalty saturation:
+
+- `death_cost`: `6.0 -> 12.0`
+- `look_at_enemy_reward`: `0.005 -> 0.003`
+- `strafing_reward`: `0.004 -> 0.003`
+- `idle_ticks_threshold`: `100 -> 120`
+- `idle_cost`: `1.0 -> 0.2`
+- `stuck_ticks_threshold`: `2 -> 20`
+- `stuck_cost`: `0.4 -> 0.02`
+- `bad_shoot_ticks_threshold`: `15 -> 20`
+- `bad_shoot_cost`: `0.05 -> 0.02`
+- `stationary_shoot_no_hit_grace_ticks`: `2 -> 4`
+- `stationary_shoot_no_hit_cost`: `0.0 -> 0.01`
+- `shoot_no_target_grace_ticks`: `3 -> 5`
+- `shoot_no_target_cost`: `0.0 -> 0.015`
+- `visible_no_hit_ticks_threshold`: `40 -> 100`
+- `visible_no_hit_cost`: `0.02 -> 0.004`
+
+Logic fix included in the same follow-up:
+
+- Stuck counter now resets when the player is not trapped (real movement or shooting), not only on progression/death transitions.
+- Stationary shooting no-hit counter now resets when stationary shooting conditions are no longer true.
+
 ---
 
 ## Problem Analysis

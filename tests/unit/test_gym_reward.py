@@ -221,6 +221,58 @@ class GymRewardTests(unittest.TestCase):
         self.assertAlmostEqual(second.value, -0.4, places=6)
         self.assertAlmostEqual(third.value, -0.4, places=6)
 
+    def test_stuck_counter_resets_after_real_movement(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            stuck_ticks_threshold=2,
+            stuck_radius_epsilon=2.0,
+            stuck_cost=0.4,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        tracker.step(runtime, None)
+        second = tracker.step(runtime, None)
+        self.assertAlmostEqual(second.value, -0.4, places=6)
+
+        runtime.player_world_x = 20
+        moved = tracker.step(runtime, None)
+        self.assertAlmostEqual(moved.value, 0.0, places=6)
+
+        runtime.player_world_x = 20
+        stationary_again = tracker.step(runtime, None)
+        self.assertAlmostEqual(stationary_again.value, 0.0, places=6)
+
+    def test_stuck_counter_resets_while_shooting_active(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            stuck_ticks_threshold=2,
+            stuck_radius_epsilon=2.0,
+            stuck_cost=0.4,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        tracker.step(runtime, None)
+        second = tracker.step(runtime, None)
+        self.assertAlmostEqual(second.value, -0.4, places=6)
+
+        runtime.player_shoot_hold_active = True
+        shooting = tracker.step(runtime, None)
+        self.assertAlmostEqual(shooting.value, 0.0, places=6)
+
+        runtime.player_shoot_hold_active = False
+        after_release = tracker.step(runtime, None)
+        self.assertAlmostEqual(after_release.value, 0.0, places=6)
+
     def test_level_complete_reward_scales_by_enemy_count(self) -> None:
         cfg = RewardConfig(
             step_cost=0.0,
@@ -251,6 +303,7 @@ class GymRewardTests(unittest.TestCase):
         cfg = RewardConfig(
             step_cost=0.0,
             look_at_enemy_reward=0.0,
+            stationary_shoot_no_hit_cost=0.0,
             shoot_no_target_grace_ticks=3,
             shoot_no_target_cost=0.05,
             tile_discovery_reward=0.0,
@@ -306,6 +359,11 @@ class GymRewardTests(unittest.TestCase):
         runtime.player_world_y = 35
         step4 = tracker.step(runtime, None)
         self.assertAlmostEqual(step4.value, 0.001, places=6)
+
+    def test_default_reward_config_has_active_shooting_penalties(self) -> None:
+        cfg = RewardConfig()
+        self.assertGreater(cfg.stationary_shoot_no_hit_cost, 0.0)
+        self.assertGreater(cfg.shoot_no_target_cost, 0.0)
 
 
 if __name__ == "__main__":
