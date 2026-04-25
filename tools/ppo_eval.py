@@ -84,15 +84,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _import_eval_dependencies() -> object:
+def _import_eval_dependencies() -> tuple[object, object]:
     try:
         from stable_baselines3 import PPO
+        from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "stable-baselines3 dependencies are missing. Install with conda, for example: "
             "conda install -n ultimatetk -c conda-forge pytorch stable-baselines3",
         ) from exc
-    return PPO
+    return PPO, (DummyVecEnv, VecNormalize)
 
 
 def main() -> int:
@@ -100,7 +101,7 @@ def main() -> int:
     if args.episodes < 1:
         raise ValueError("--episodes must be >= 1")
 
-    PPO = _import_eval_dependencies()
+    PPO, _vec_env_types = _import_eval_dependencies()
     caps = detect_torch_capabilities()
     device = resolve_torch_device(args.device, capabilities=caps)
 
@@ -111,6 +112,7 @@ def main() -> int:
         enforce_asset_manifest=not args.disable_asset_manifest_check,
         render_enabled=bool(args.render_scenes),
         weapon_mode=str(args.weapon_mode),
+        frame_skip=1,
     )()
 
     model_path = Path(args.model).expanduser().resolve()

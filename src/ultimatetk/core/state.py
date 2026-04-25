@@ -56,6 +56,7 @@ class RuntimeState:
     player_hits_total: int = 0
     player_hits_taken_total: int = 0
     player_damage_taken_total: float = 0.0
+    player_damage_dealt_total: float = 0.0
     enemies_total: int = 0
     enemies_alive: int = 0
     enemies_killed_by_player: int = 0

@@ -18,6 +18,7 @@ def build_sb3_env_factory(
     weapon_mode: str = "normal_mode",
     randomize_level_on_reset: bool = False,
     level_index_pool: tuple[int, ...] | None = None,
+    frame_skip: int = 4,
 ) -> Callable[[], Any]:
     resolved_root = str(Path(project_root).expanduser().resolve())
 
@@ -31,6 +32,7 @@ def build_sb3_env_factory(
             weapon_mode=weapon_mode,
             randomize_level_on_reset=randomize_level_on_reset,
             level_index_pool=level_index_pool,
+            frame_skip=frame_skip,
         )
         return SB3ActionWrapper(env)
 

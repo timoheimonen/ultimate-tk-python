@@ -404,6 +404,112 @@ class GymRewardTests(unittest.TestCase):
         self.assertAlmostEqual(step.breakdown["hit_reward"], 1.0, places=6)
         self.assertAlmostEqual(step.breakdown["damage_cost"], -0.3, places=6)
 
+    def test_damage_dealt_reward_from_delta(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            hit_reward=0.0,
+            kill_reward=0.0,
+            damage_dealt_reward=0.03,
+            look_at_enemy_reward=0.0,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
 
-if __name__ == "__main__":
-    unittest.main()
+        runtime = RuntimeState()
+        runtime.player_damage_dealt_total = 0.0
+        tracker.reset(runtime)
+
+        runtime.player_damage_dealt_total = 10.0
+        step = tracker.step(runtime, None)
+        self.assertAlmostEqual(step.value, 0.3, places=6)
+        self.assertAlmostEqual(step.breakdown["damage_dealt_reward"], 0.3, places=6)
+
+        runtime.player_damage_dealt_total = 25.0
+        step2 = tracker.step(runtime, None)
+        self.assertAlmostEqual(step2.value, 0.45, places=6)
+
+    def test_penalty_scale_reduces_step_cost(self) -> None:
+        cfg = RewardConfig(step_cost=0.01, look_at_enemy_reward=0.0, tile_discovery_reward=0.0)
+        tracker = RewardTracker(config=cfg)
+        tracker.set_penalty_scale(0.25)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        step = tracker.step(runtime, None)
+        self.assertAlmostEqual(step.value, -0.0025, places=6)
+
+    def test_penalty_scale_reduces_idle_cost(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            look_at_enemy_reward=0.0,
+            idle_ticks_threshold=2,
+            idle_cost=0.2,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+        tracker.set_penalty_scale(0.5)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+
+        first = tracker.step(runtime, None)
+        self.assertAlmostEqual(first.value, 0.0, places=6)
+
+        second = tracker.step(runtime, None)
+        self.assertAlmostEqual(second.value, -0.1, places=6)
+
+    def test_penalty_scale_does_not_affect_rewards(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            kill_reward=5.0,
+            hit_reward=0.5,
+            look_at_enemy_reward=0.0,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+        tracker.set_penalty_scale(0.1)
+
+        runtime = RuntimeState()
+        tracker.reset(runtime)
+        runtime.enemies_killed_by_player = 1
+
+        step = tracker.step(runtime, None)
+        self.assertAlmostEqual(step.breakdown["kill_reward"], 5.0, places=6)
+
+    def test_set_penalty_scale_clamps_to_float(self) -> None:
+        tracker = RewardTracker()
+        tracker.set_penalty_scale(0)
+        self.assertEqual(tracker._penalty_scale, 0.0)
+        tracker.set_penalty_scale(2.5)
+        self.assertEqual(tracker._penalty_scale, 2.5)
+
+    def test_damage_dealt_zero_when_no_damage_dealt(self) -> None:
+        cfg = RewardConfig(
+            step_cost=0.0,
+            hit_reward=0.0,
+            kill_reward=0.0,
+            damage_dealt_reward=0.03,
+            look_at_enemy_reward=0.0,
+            tile_discovery_reward=0.0,
+        )
+        tracker = RewardTracker(config=cfg)
+
+        runtime = RuntimeState()
+        runtime.player_damage_dealt_total = 0.0
+        tracker.reset(runtime)
+
+        step = tracker.step(runtime, None)
+        self.assertAlmostEqual(step.value, 0.0, places=6)
+        self.assertAlmostEqual(step.breakdown["damage_dealt_reward"], 0.0, places=6)
+
+    def test_default_config_values_updated(self) -> None:
+        cfg = RewardConfig()
+        self.assertAlmostEqual(cfg.step_cost, 0.003, places=6)
+        self.assertAlmostEqual(cfg.look_at_enemy_reward, 0.01, places=6)
+        self.assertAlmostEqual(cfg.strafing_reward, 0.01, places=6)
+        self.assertAlmostEqual(cfg.tile_discovery_reward, 0.005, places=6)
+        self.assertAlmostEqual(cfg.visible_no_hit_cost, 0.01, places=6)
+        self.assertAlmostEqual(cfg.run_complete_reward, 20.0, places=6)
+        self.assertAlmostEqual(cfg.death_cost, 10.0, places=6)
+        self.assertAlmostEqual(cfg.damage_dealt_reward, 0.03, places=6)

@@ -233,6 +233,59 @@ class GymEnvTests(unittest.TestCase):
         finally:
             env.close()
 
+    def test_frame_skip_accumulates_rewards(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            frame_skip=4,
+            max_episode_steps=120,
+        )
+        try:
+            env.reset(seed=42)
+            action = {
+                "hold": np.zeros((8,), dtype=np.int8),
+                "trigger": np.zeros((1,), dtype=np.int8),
+                "weapon_select": 0,
+            }
+            _, reward, _, _, info = env.step(action)
+            # Frame skip multiplies both costs and rewards
+            self.assertIsInstance(reward, float)
+            breakdown_sum = sum(float(v) for v in info["reward_breakdown"].values())
+            self.assertAlmostEqual(breakdown_sum, float(reward), places=6)
+        finally:
+            env.close()
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_frame_skip_1_does_not_accumulate(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+            frame_skip=1,
+            max_episode_steps=120,
+        )
+        try:
+            env.reset(seed=42)
+            action = {
+                "hold": np.zeros((8,), dtype=np.int8),
+                "trigger": np.zeros((1,), dtype=np.int8),
+                "weapon_select": 0,
+            }
+            _, reward, _, _, info = env.step(action)
+            self.assertIsInstance(reward, float)
+            breakdown_sum = sum(float(v) for v in info["reward_breakdown"].values())
+            self.assertAlmostEqual(breakdown_sum, float(reward), places=6)
+        finally:
+            env.close()
+
+    def test_set_penalty_scale_delegates_to_tracker(self) -> None:
+        env = UltimateTKEnv(
+            project_root=str(PROJECT_ROOT),
+            enforce_asset_manifest=True,
+        )
+        try:
+            env.reset(seed=42)
+            env.set_penalty_scale(0.0)
+            self.assertAlmostEqual(env._reward_tracker._penalty_scale, 0.0)
+            env.set_penalty_scale(0.75)
+            self.assertAlmostEqual(env._reward_tracker._penalty_scale, 0.75)
+        finally:
+            env.close()

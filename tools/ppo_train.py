@@ -21,6 +21,7 @@ DEFAULT_TOTAL_TIMESTEPS = 5_000_000
 DEFAULT_N_ENVS = 1
 DEFAULT_MAX_EPISODE_STEPS = 6000
 DEFAULT_TARGET_TICK_RATE = 40
+DEFAULT_FRAME_SKIP = 4
 DEFAULT_CHECKPOINT_FREQ = 1_000_000
 DEFAULT_EVAL_FREQ = 25_000
 DEFAULT_EVAL_EPISODES = 5
@@ -36,6 +37,8 @@ DEFAULT_ENT_COEF_START = 0.05
 DEFAULT_GAMMA = 0.99
 DEFAULT_GAE_LAMBDA = 0.95
 DEFAULT_CLIP_RANGE = 0.2
+DEFAULT_PENALTY_ANNEAL_START = 0.1
+DEFAULT_PENALTY_ANNEAL_END = 1.0
 DEFAULT_WEAPON_MODE = "normal_mode"
 DEFAULT_LEVEL_INDEX_POOL: tuple[int, ...] = tuple(range(10))
 WEAPON_MODE_CHOICES: tuple[str, ...] = (
@@ -63,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-envs", type=int, default=DEFAULT_N_ENVS, help="Number of parallel envs")
     parser.add_argument("--max-episode-steps", type=int, default=DEFAULT_MAX_EPISODE_STEPS, help="Max steps per episode")
     parser.add_argument("--target-tick-rate", type=int, default=DEFAULT_TARGET_TICK_RATE, help="Fixed simulation tick rate")
+    parser.add_argument("--frame-skip", type=int, default=DEFAULT_FRAME_SKIP, help="Action repeat frames (1 = no skip)")
     parser.add_argument("--checkpoint-freq", type=int, default=DEFAULT_CHECKPOINT_FREQ, help="Checkpoint frequency")
     parser.add_argument("--eval-freq", type=int, default=DEFAULT_EVAL_FREQ, help="Evaluation frequency")
     parser.add_argument("--eval-episodes", type=int, default=DEFAULT_EVAL_EPISODES, help="Evaluation episodes per run")
@@ -113,6 +117,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override entropy decay duration in timesteps (default: 80%% of total timesteps)",
     )
+    parser.add_argument(
+        "--penalty-anneal-start",
+        type=float,
+        default=DEFAULT_PENALTY_ANNEAL_START,
+        help="Starting penalty scale factor for reward annealing (0.0-1.0)",
+    )
+    parser.add_argument(
+        "--penalty-anneal-end",
+        type=float,
+        default=DEFAULT_PENALTY_ANNEAL_END,
+        help="Final penalty scale factor after annealing (0.0-1.0)",
+    )
     parser.add_argument("--gamma", type=float, default=DEFAULT_GAMMA, help="Discount factor")
     parser.add_argument("--gae-lambda", type=float, default=DEFAULT_GAE_LAMBDA, help="GAE lambda")
     parser.add_argument("--clip-range", type=float, default=DEFAULT_CLIP_RANGE, help="PPO clipping range")
@@ -152,7 +168,7 @@ def _import_training_dependencies() -> tuple[object, object, object, object, obj
     try:
         from stable_baselines3 import PPO
         from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback, EvalCallback
-        from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
+        from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecMonitor
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "stable-baselines3 dependencies are missing. Install with conda, for example: "
@@ -167,7 +183,7 @@ def _import_training_dependencies() -> tuple[object, object, object, object, obj
             "conda install -n ultimatetk -c conda-forge tensorboard",
         ) from exc
 
-    return PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, (DummyVecEnv, VecMonitor)
+    return PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, (DummyVecEnv, VecNormalize, VecMonitor)
 
 
 def _default_run_name() -> str:
@@ -251,6 +267,51 @@ def _build_entropy_decay_callback(*, base_callback_cls: type, ent_start: float, 
     return EntCoefDecayCallback()
 
 
+def _build_reward_anneal_callback(
+    *,
+    base_callback_cls: type,
+    penalty_start: float,
+    penalty_end: float,
+    decay_steps: int,
+):
+    class RewardAnnealCallback(base_callback_cls):
+        def _on_step(self) -> bool:  # type: ignore[override]
+            scale = _linear_decay_value(
+                start=float(penalty_start),
+                end=float(penalty_end),
+                decay_steps=int(decay_steps),
+                step=int(self.model.num_timesteps),
+            )
+            self.training_env.env_method("set_penalty_scale", scale)
+            return True
+
+    return RewardAnnealCallback()
+
+
+def _build_vecnorm_save_callback(
+    *,
+    base_callback_cls: type,
+    save_path: Path,
+    save_freq: int,
+):
+    class VecNormSaveCallback(base_callback_cls):
+        def __init__(self) -> None:
+            super().__init__()
+            self._save_path = save_path
+            self._save_freq = max(1, save_freq)
+            self._last_saved = 0
+
+        def _on_step(self) -> bool:  # type: ignore[override]
+            steps = int(self.model.num_timesteps)
+            if steps - self._last_saved >= self._save_freq:
+                stats_path = self._save_path / f"vecnormalize_{steps}_steps.pkl"
+                self.training_env.save(str(stats_path))
+                self._last_saved = steps
+            return True
+
+    return VecNormSaveCallback()
+
+
 def main() -> int:
     args = parse_args()
 
@@ -278,6 +339,10 @@ def main() -> int:
         raise ValueError("--ent-coef-start must be >= --ent-coef")
     if args.ent_coef_decay_steps is not None and args.ent_coef_decay_steps < 1:
         raise ValueError("--ent-coef-decay-steps must be >= 1")
+    if args.penalty_anneal_start < 0.0 or args.penalty_anneal_start > 1.0:
+        raise ValueError("--penalty-anneal-start must be in [0.0, 1.0]")
+    if args.penalty_anneal_end < 0.0 or args.penalty_anneal_end > 1.0:
+        raise ValueError("--penalty-anneal-end must be in [0.0, 1.0]")
     if args.gae_lambda <= 0.0 or args.gae_lambda > 1.0:
         raise ValueError("--gae-lambda must be in (0, 1]")
     if args.clip_range <= 0.0 or args.clip_range > 1.0:
@@ -286,7 +351,7 @@ def main() -> int:
     level_index_pool = _parse_level_index_pool(args.level_index_pool)
 
     PPO, BaseCallback, CallbackList, CheckpointCallback, EvalCallback, vec_env_types = _import_training_dependencies()
-    DummyVecEnv, VecMonitor = vec_env_types
+    DummyVecEnv, VecNormalize, VecMonitor = vec_env_types
 
     caps = detect_torch_capabilities()
     device = resolve_torch_device(args.device, capabilities=caps)
@@ -315,9 +380,11 @@ def main() -> int:
         weapon_mode=str(args.weapon_mode),
         randomize_level_on_reset=bool(args.randomize_level_on_reset),
         level_index_pool=level_index_pool,
+        frame_skip=max(1, int(args.frame_skip)),
     )
     train_env = DummyVecEnv([env_factory for _ in range(args.n_envs)])
     train_env = VecMonitor(train_env)
+    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True, clip_reward=10.0)
     train_env.seed(args.seed)
 
     eval_env = None
@@ -331,9 +398,11 @@ def main() -> int:
             weapon_mode=str(args.weapon_mode),
             randomize_level_on_reset=False,
             level_index_pool=level_index_pool,
+            frame_skip=max(1, int(args.frame_skip)),
         )
         eval_env = DummyVecEnv([eval_env_factory])
         eval_env = VecMonitor(eval_env)
+        eval_env = VecNormalize(eval_env, norm_obs=False, norm_reward=True, clip_reward=10.0)
         eval_env.seed(args.seed + 10_000)
 
     resume_path = args.resume_from.strip()
@@ -359,8 +428,12 @@ def main() -> int:
     effective_ent_decay_steps = min(int(effective_ent_decay_steps), int(args.total_timesteps))
 
     if resume_path:
+        resolved_resume = Path(resume_path).expanduser().resolve()
+        vecnormalize_stats_path = resolved_resume.with_suffix(".pkl")
+        if vecnormalize_stats_path.exists():
+            VecNormalize.load(str(vecnormalize_stats_path), train_env)
         model = PPO.load(
-            str(Path(resume_path).expanduser().resolve()),
+            str(resolved_resume),
             env=train_env,
             device=device,
             print_system_info=False,
@@ -401,12 +474,27 @@ def main() -> int:
             decay_steps=effective_ent_decay_steps,
         ),
     )
+    callback_items.append(
+        _build_reward_anneal_callback(
+            base_callback_cls=BaseCallback,
+            penalty_start=float(args.penalty_anneal_start),
+            penalty_end=float(args.penalty_anneal_end),
+            decay_steps=effective_ent_decay_steps,
+        ),
+    )
     if checkpoint_save_freq > 0:
         callback_items.append(
             CheckpointCallback(
                 save_freq=max(1, checkpoint_save_freq // args.n_envs),
                 save_path=str(checkpoints_dir),
                 name_prefix="ppo_model",
+            ),
+        )
+        callback_items.append(
+            _build_vecnorm_save_callback(
+                base_callback_cls=BaseCallback,
+                save_path=checkpoints_dir,
+                save_freq=max(1, checkpoint_save_freq // args.n_envs),
             ),
         )
     if eval_freq > 0:
@@ -437,6 +525,7 @@ def main() -> int:
         "n_envs": int(args.n_envs),
         "max_episode_steps": int(args.max_episode_steps),
         "target_tick_rate": int(args.target_tick_rate),
+        "frame_skip": int(args.frame_skip),
         "checkpoint_freq": int(args.checkpoint_freq),
         "eval_freq": int(args.eval_freq),
         "eval_episodes": int(args.eval_episodes),
@@ -449,6 +538,8 @@ def main() -> int:
         "ent_coef": float(args.ent_coef),
         "ent_coef_start": float(args.ent_coef_start),
         "ent_coef_decay_steps": int(effective_ent_decay_steps),
+        "penalty_anneal_start": float(args.penalty_anneal_start),
+        "penalty_anneal_end": float(args.penalty_anneal_end),
         "decay_ratio": float(args.decay_ratio),
         "gamma": float(args.gamma),
         "gae_lambda": float(args.gae_lambda),
@@ -477,6 +568,8 @@ def main() -> int:
         )
         final_model_path = run_dir / "final_model"
         model.save(str(final_model_path))
+        vecnorm_stats_path = run_dir / "vecnormalize.pkl"
+        train_env.save(str(vecnorm_stats_path))
     finally:
         train_env.close()
         if eval_env is not None:

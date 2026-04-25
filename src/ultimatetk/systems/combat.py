@@ -372,6 +372,7 @@ class PlayerExplosiveReport:
     crates_destroyed: int = 0
     player_hit: bool = False
     damage_to_player: float = 0.0
+    total_damage_dealt: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1160,6 +1161,7 @@ def update_player_explosives(
     crates_destroyed = 0
     player_hit = False
     damage_to_player = 0.0
+    total_damage_dealt = 0.0
 
     for explosive in explosives:
         if explosive.arming_ticks > 0:
@@ -1192,6 +1194,7 @@ def update_player_explosives(
         enemies_killed += detonation.enemies_killed
         crates_hit += detonation.crates_hit
         crates_destroyed += detonation.crates_destroyed
+        total_damage_dealt += detonation.total_damage_dealt
         if detonation.player_damage > 0:
             player_hit = True
             damage_to_player += detonation.player_damage
@@ -1205,6 +1208,7 @@ def update_player_explosives(
         crates_destroyed=crates_destroyed,
         player_hit=player_hit,
         damage_to_player=damage_to_player,
+        total_damage_dealt=total_damage_dealt,
     )
 
 
@@ -1215,6 +1219,7 @@ class _PlayerExplosiveDetonation:
     crates_hit: int = 0
     crates_destroyed: int = 0
     player_damage: float = 0.0
+    total_damage_dealt: float = 0.0
 
 
 def _detonate_player_explosive(
@@ -1230,6 +1235,7 @@ def _detonate_player_explosive(
 
     enemies_hit = 0
     enemies_killed = 0
+    total_damage_to_enemies = 0.0
     for enemy in _alive_enemies_by_blast_distance(enemies, blast_x=blast_x, blast_y=blast_y):
 
         damage = _player_explosive_damage(
@@ -1248,11 +1254,13 @@ def _detonate_player_explosive(
 
         enemy.hit_flash_ticks = ENEMY_FLASH_TICKS
         enemies_hit += 1
+        total_damage_to_enemies += damage
         if enemy.apply_damage(damage):
             enemies_killed += 1
 
     crates_hit = 0
     crates_destroyed = 0
+    total_damage_to_crates = 0.0
     if crates is not None:
         for crate in _alive_crates_by_blast_distance(crates, blast_x=blast_x, blast_y=blast_y):
 
@@ -1273,6 +1281,7 @@ def _detonate_player_explosive(
 
             crate.hit_flash_ticks = CRATE_FLASH_TICKS
             crates_hit += 1
+            total_damage_to_crates += damage
             if crate.apply_damage(damage):
                 crates_destroyed += 1
 
@@ -1296,6 +1305,7 @@ def _detonate_player_explosive(
         crates_hit=crates_hit,
         crates_destroyed=crates_destroyed,
         player_damage=player_damage,
+        total_damage_dealt=total_damage_to_enemies + total_damage_to_crates,
     )
 
 

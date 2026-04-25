@@ -448,6 +448,7 @@ class GameplayScene(BaseScene):
         self._player_explosive_detonations = 0
         self._enemy_hits_by_player = 0
         self._enemies_killed_by_player = 0
+        self._player_damage_dealt = 0.0
         self._crates_destroyed_by_player = 0
         self._crates_collected_by_player = 0
         self._enemy_shots_fired = 0
@@ -500,6 +501,7 @@ class GameplayScene(BaseScene):
         context.runtime.player_hits_total = 0
         context.runtime.player_hits_taken_total = 0
         context.runtime.player_damage_taken_total = 0.0
+        context.runtime.player_damage_dealt_total = 0.0
         context.runtime.enemies_total = 0
         context.runtime.enemies_alive = 0
         context.runtime.enemies_killed_by_player = 0
@@ -746,6 +748,7 @@ class GameplayScene(BaseScene):
                     self._player_explosive_detonations += explosive_report.detonations
                     self._enemy_hits_by_player += explosive_report.enemies_hit
                     self._enemies_killed_by_player += explosive_report.enemies_killed
+                    self._player_damage_dealt += explosive_report.total_damage_dealt
                     self._crates_destroyed_by_player += explosive_report.crates_destroyed
 
                     report = update_enemy_behavior(
@@ -1842,6 +1845,8 @@ class GameplayScene(BaseScene):
             self._player.shot_effect_y = result.impact_y
             if result.enemy_id is not None:
                 self._enemy_hits_by_player += 1
+            if result.enemy_id is not None or result.crate_id is not None:
+                self._player_damage_dealt += result.damage
             if result.enemy_killed:
                 self._enemies_killed_by_player += 1
             if result.crate_destroyed:
@@ -2055,6 +2060,7 @@ class GameplayScene(BaseScene):
         context.runtime.player_hits_total = self._enemy_hits_by_player
         context.runtime.player_hits_taken_total = self._player.hits_taken_total
         context.runtime.player_damage_taken_total = self._player.damage_taken_total
+        context.runtime.player_damage_dealt_total = self._player_damage_dealt
         context.runtime.enemies_total = len(self._enemies)
         context.runtime.enemies_alive = alive_enemy_count(self._enemies)
         context.runtime.enemies_killed_by_player = self._enemies_killed_by_player

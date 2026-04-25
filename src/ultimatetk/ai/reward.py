@@ -11,21 +11,22 @@ from ultimatetk.rendering.constants import TILE_SIZE
 
 @dataclass(frozen=True, slots=True)
 class RewardConfig:
-    step_cost: float = 0.001
+    step_cost: float = 0.003
 
     kill_reward: float = 5.0
     hit_reward: float = 0.5
     crate_reward: float = 0.15
+    damage_dealt_reward: float = 0.03
 
     damage_cost: float = 0.04
-    death_cost: float = 12.0
+    death_cost: float = 10.0
 
     level_complete_reward_base: float = 8.0
     level_complete_reward_per_enemy: float = 0.8
-    run_complete_reward: float = 40.0
+    run_complete_reward: float = 20.0
 
-    look_at_enemy_reward: float = 0.003
-    strafing_reward: float = 0.003
+    look_at_enemy_reward: float = 0.01
+    strafing_reward: float = 0.01
 
     idle_ticks_threshold: int = 120
     idle_cost: float = 0.2
@@ -44,10 +45,10 @@ class RewardConfig:
     shoot_no_target_grace_ticks: int = 5
     shoot_no_target_cost: float = 0.015
 
-    tile_discovery_reward: float = 0.001
+    tile_discovery_reward: float = 0.005
 
     visible_no_hit_ticks_threshold: int = 100
-    visible_no_hit_cost: float = 0.004
+    visible_no_hit_cost: float = 0.01
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +61,12 @@ class RewardStep:
 class RewardTracker:
     def __init__(self, config: RewardConfig | None = None) -> None:
         self._config = config or RewardConfig()
+        self._penalty_scale: float = 1.0
         self._visited_tiles: set[tuple[int, int]] = set()
         self._reset(None)
+
+    def set_penalty_scale(self, scale: float) -> None:
+        self._penalty_scale = float(scale)
 
     def _reset(self, runtime: RuntimeState | None) -> None:
         if runtime is None:
@@ -69,6 +74,7 @@ class RewardTracker:
             self._prev_hits = 0
             self._prev_crates = 0
             self._prev_damage_taken = 0.0
+            self._prev_damage_dealt = 0.0
             self._prev_dead = False
             self._prev_progression_event = ""
             self._prev_shots_fired = 0
@@ -88,6 +94,7 @@ class RewardTracker:
         self._prev_hits = runtime.player_hits_total
         self._prev_crates = runtime.crates_collected_by_player
         self._prev_damage_taken = runtime.player_damage_taken_total
+        self._prev_damage_dealt = runtime.player_damage_dealt_total
         self._prev_dead = runtime.player_dead
         self._prev_progression_event = runtime.progression_event
         self._prev_shots_fired = runtime.player_shots_fired_total
@@ -108,10 +115,11 @@ class RewardTracker:
     def step(self, runtime: RuntimeState, observation: dict[str, Any] | None = None) -> RewardStep:
         cfg = self._config
         breakdown: dict[str, float] = {
-            "step_cost": -cfg.step_cost,
+            "step_cost": -cfg.step_cost * self._penalty_scale,
             "kill_reward": 0.0,
             "hit_reward": 0.0,
             "crate_reward": 0.0,
+            "damage_dealt_reward": 0.0,
             "damage_cost": 0.0,
             "look_at_enemy_reward": 0.0,
             "visible_no_hit_cost": 0.0,
@@ -139,14 +147,17 @@ class RewardTracker:
         hit_delta = cfg.hit_reward * float(delta_hits)
         crate_delta = cfg.crate_reward * float(delta_crates)
         damage_delta = -cfg.damage_cost * float(delta_damage)
+        damage_dealt_delta = cfg.damage_dealt_reward * max(0.0, runtime.player_damage_dealt_total - self._prev_damage_dealt)
         reward += kill_delta
         reward += hit_delta
         reward += crate_delta
         reward += damage_delta
+        reward += damage_dealt_delta
         breakdown["kill_reward"] += kill_delta
         breakdown["hit_reward"] += hit_delta
         breakdown["crate_reward"] += crate_delta
         breakdown["damage_cost"] += damage_delta
+        breakdown["damage_dealt_reward"] += damage_dealt_delta
 
         enemy_visible = self._enemy_visible(observation)
 
@@ -155,8 +166,8 @@ class RewardTracker:
             breakdown["look_at_enemy_reward"] += cfg.look_at_enemy_reward
             self._visible_no_hit_ticks += 1
             if self._visible_no_hit_ticks >= cfg.visible_no_hit_ticks_threshold:
-                reward -= cfg.visible_no_hit_cost
-                breakdown["visible_no_hit_cost"] -= cfg.visible_no_hit_cost
+                reward -= cfg.visible_no_hit_cost * self._penalty_scale
+                breakdown["visible_no_hit_cost"] -= cfg.visible_no_hit_cost * self._penalty_scale
         else:
             self._visible_no_hit_ticks = 0
 
@@ -182,8 +193,8 @@ class RewardTracker:
         if not shooting_active and not runtime.player_dead and moved <= cfg.idle_distance_epsilon:
             self._idle_ticks += 1
             if self._idle_ticks >= cfg.idle_ticks_threshold:
-                reward -= cfg.idle_cost
-                breakdown["idle_cost"] -= cfg.idle_cost
+                reward -= cfg.idle_cost * self._penalty_scale
+                breakdown["idle_cost"] -= cfg.idle_cost * self._penalty_scale
         else:
             self._idle_ticks = 0
 
@@ -192,16 +203,16 @@ class RewardTracker:
         elif not shooting_active and moved <= cfg.stuck_radius_epsilon:
             self._stuck_ticks += 1
             if self._stuck_ticks >= cfg.stuck_ticks_threshold:
-                reward -= cfg.stuck_cost
-                breakdown["stuck_cost"] -= cfg.stuck_cost
+                reward -= cfg.stuck_cost * self._penalty_scale
+                breakdown["stuck_cost"] -= cfg.stuck_cost * self._penalty_scale
         else:
             self._stuck_ticks = 0
 
         if not runtime.player_dead and shooting_active and delta_hits == 0 and not enemy_visible:
             self._bad_shoot_ticks += 1
             if self._bad_shoot_ticks >= cfg.bad_shoot_ticks_threshold:
-                reward -= cfg.bad_shoot_cost
-                breakdown["bad_shoot_cost"] -= cfg.bad_shoot_cost
+                reward -= cfg.bad_shoot_cost * self._penalty_scale
+                breakdown["bad_shoot_cost"] -= cfg.bad_shoot_cost * self._penalty_scale
         else:
             self._bad_shoot_ticks = 0
 
@@ -210,16 +221,16 @@ class RewardTracker:
         elif not runtime.player_dead and shooting_active and moved <= cfg.idle_distance_epsilon:
             self._stationary_shoot_ticks += 1
             if self._stationary_shoot_ticks >= cfg.stationary_shoot_no_hit_grace_ticks:
-                reward -= cfg.stationary_shoot_no_hit_cost
-                breakdown["stationary_shoot_no_hit_cost"] -= cfg.stationary_shoot_no_hit_cost
+                reward -= cfg.stationary_shoot_no_hit_cost * self._penalty_scale
+                breakdown["stationary_shoot_no_hit_cost"] -= cfg.stationary_shoot_no_hit_cost * self._penalty_scale
         else:
             self._stationary_shoot_ticks = 0
 
         if not runtime.player_dead and (runtime.player_shoot_hold_active or delta_shots > 0) and not enemy_visible:
             self._shoot_no_target_ticks += 1
             if self._shoot_no_target_ticks >= cfg.shoot_no_target_grace_ticks:
-                reward -= cfg.shoot_no_target_cost
-                breakdown["shoot_no_target_cost"] -= cfg.shoot_no_target_cost
+                reward -= cfg.shoot_no_target_cost * self._penalty_scale
+                breakdown["shoot_no_target_cost"] -= cfg.shoot_no_target_cost * self._penalty_scale
         else:
             self._shoot_no_target_ticks = 0
 
@@ -237,6 +248,7 @@ class RewardTracker:
         self._prev_hits = runtime.player_hits_total
         self._prev_crates = runtime.crates_collected_by_player
         self._prev_damage_taken = runtime.player_damage_taken_total
+        self._prev_damage_dealt = runtime.player_damage_dealt_total
         self._prev_dead = runtime.player_dead
         self._prev_progression_event = runtime.progression_event
         self._prev_shots_fired = runtime.player_shots_fired_total

@@ -55,6 +55,7 @@ else:
             reward_config: RewardConfig | None = None,
             randomize_level_on_reset: bool = False,
             level_index_pool: tuple[int, ...] | None = None,
+            frame_skip: int = 4,
         ) -> None:
             super().__init__()
             self._max_episode_steps = max(1, int(max_episode_steps))
@@ -63,6 +64,7 @@ else:
             self._project_root = project_root
             self._render_enabled = bool(render_enabled)
             self._weapon_mode = str(weapon_mode)
+            self._frame_skip = max(1, int(frame_skip))
             self._randomize_level_on_reset = bool(randomize_level_on_reset)
             if level_index_pool is None:
                 self._level_index_pool = (0,)
@@ -138,49 +140,67 @@ else:
                 raise RuntimeError("reset() must be called before step()")
 
             events = self._action_codec.decode(action)
-            self._driver.step(events)
-            self._episode_steps += 1
+            total_reward = 0.0
+            terminal_info: dict[str, Any] = {}
+            accumulated_breakdown: dict[str, float] = {}
 
-            runtime = self._driver.context.runtime
-            view = self._driver.gameplay_view()
-            if view is None:
-                observation = self._last_observation or blank_observation(runtime)
-            else:
-                observation = extract_observation(view, runtime)
-            self._last_observation = observation
+            for _ in range(self._frame_skip):
+                self._driver.step(events)
+                self._episode_steps += 1
 
-            reward_step = self._reward_tracker.step(runtime, observation)
+                runtime = self._driver.context.runtime
+                view = self._driver.gameplay_view()
+                if view is None:
+                    observation = self._last_observation or blank_observation(runtime)
+                else:
+                    observation = extract_observation(view, runtime)
+                self._last_observation = observation
 
-            terminated = False
-            truncated = False
-            game_completed = False
-            terminal_reason = ""
+                reward_step = self._reward_tracker.step(runtime, observation)
+                total_reward += float(reward_step.value)
 
-            if runtime.player_dead:
-                terminated = True
-                terminal_reason = "death"
-            elif runtime.mode == AppMode.RUN_COMPLETE or runtime.progression_event == "run_complete":
-                terminated = True
-                game_completed = True
-                terminal_reason = "game_completed"
-            elif self._episode_steps >= self._max_episode_steps:
-                truncated = True
-                terminal_reason = "time_limit"
+                if not accumulated_breakdown:
+                    accumulated_breakdown = dict(reward_step.breakdown)
+                else:
+                    for key, value in reward_step.breakdown.items():
+                        accumulated_breakdown[key] = accumulated_breakdown.get(key, 0.0) + value
 
-            info: dict[str, Any] = {
-                "level_index": int(self._driver.context.session.level_index),
-                "game_completed": game_completed,
-                "terminal_reason": terminal_reason,
-                "stationary_ticks": reward_step.stationary_ticks,
-                "reward_breakdown": dict(reward_step.breakdown),
-            }
+                terminated = False
+                truncated = False
+                game_completed = False
+                terminal_reason = ""
 
-            return observation, float(reward_step.value), terminated, truncated, info
+                if runtime.player_dead:
+                    terminated = True
+                    terminal_reason = "death"
+                elif runtime.mode == AppMode.RUN_COMPLETE or runtime.progression_event == "run_complete":
+                    terminated = True
+                    game_completed = True
+                    terminal_reason = "game_completed"
+                elif self._episode_steps >= self._max_episode_steps:
+                    truncated = True
+                    terminal_reason = "time_limit"
+
+                terminal_info = {
+                    "level_index": int(self._driver.context.session.level_index),
+                    "game_completed": game_completed,
+                    "terminal_reason": terminal_reason,
+                    "stationary_ticks": reward_step.stationary_ticks,
+                    "reward_breakdown": accumulated_breakdown,
+                }
+
+                if terminated or truncated:
+                    return observation, total_reward, terminated, truncated, terminal_info
+
+            return observation, total_reward, False, False, terminal_info
 
         def close(self) -> None:
             if self._driver is not None:
                 self._driver.close()
                 self._driver = None
+
+        def set_penalty_scale(self, scale: float) -> None:
+            self._reward_tracker.set_penalty_scale(scale)
 
 
 def make_env(**kwargs: Any) -> UltimateTKEnv:
