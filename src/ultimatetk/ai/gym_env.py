@@ -185,7 +185,7 @@ else:
                     "level_index": int(self._driver.context.session.level_index),
                     "game_completed": game_completed,
                     "terminal_reason": terminal_reason,
-                    "stationary_ticks": reward_step.stationary_ticks,
+                    "inactivity_ticks": reward_step.inactivity_ticks,
                     "reward_breakdown": accumulated_breakdown,
                 }
 

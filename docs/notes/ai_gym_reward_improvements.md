@@ -1,66 +1,98 @@
-# AI-Gym Reward System Improvements
+# AI-Gym Reward System
 
-**Status:** COMPLETED (with April 2026 follow-up rebalance)  
-**Date:** April 2026  
-**Author:** Analysis & Implementation
+**Status:** ACTIVE (April 2026 face-engagement redesign)  
+**Date:** April 2026
 
 ## Current State (Authoritative)
 
-This section is source of truth for active default reward shaping in `src/ultimatetk/ai/reward.py`.
+The reward model is split into three tiers: **progression**, **engagement**, and **anti-passivity**.
 
-### Active default parameters
+### Engagement rewards (dense, per-tick)
 
-| Parameter | Current default | Notes |
+`face_enemy_reward` and `aim_center_reward` fire when **any** visible enemy occupies a front sector (0/1/31). `alignment` is based on the nearest visible enemy's sector, regardless of front/center status. All four values are computed in a single `_enemy_target_signal()` call.
+
+| Parameter | Default | Trigger |
 |---|---:|---|
-| `step_cost` | `0.001` | Small per-step pressure to act with purpose |
-| `kill_reward` | `5.0` | Sparse high-value combat success signal |
-| `hit_reward` | `0.5` | Intermediate combat progress signal |
-| `crate_reward` | `0.15` | Pickup incentive |
-| `damage_cost` | `0.04` | Damage-taking discouragement |
-| `death_cost` | `12.0` | Strong terminal failure penalty |
-| `level_complete_reward_base` | `8.0` | Completion base bonus |
-| `level_complete_reward_per_enemy` | `0.8` | Difficulty scaling by enemy count |
-| `run_complete_reward` | `40.0` | Full-run completion reward |
-| `look_at_enemy_reward` | `0.003` | Light engagement shaping |
-| `strafing_reward` | `0.003` | Light defensive movement shaping |
-| `idle_ticks_threshold` | `120` | Idle grace before penalty |
-| `idle_cost` | `0.2` | Anti-idle penalty |
-| `stationary_shoot_no_hit_grace_ticks` | `4` | Grace before stationary no-hit penalty |
-| `stationary_shoot_no_hit_cost` | `0.01` | Discourages stationary blind fire |
-| `stuck_ticks_threshold` | `20` | Trapped-area grace before penalty |
-| `stuck_cost` | `0.02` | Mild anti-stuck penalty |
-| `bad_shoot_ticks_threshold` | `20` | Grace for sustained bad shooting |
-| `bad_shoot_cost` | `0.02` | Discourages low-value shooting patterns |
-| `shoot_no_target_grace_ticks` | `5` | Grace for no-target shooting |
-| `shoot_no_target_cost` | `0.015` | Discourages shooting with no visible target |
-| `tile_discovery_reward` | `0.001` | Exploration bonus for newly visited tiles |
-| `visible_no_hit_ticks_threshold` | `100` | Grace before visible-no-hit penalty |
-| `visible_no_hit_cost` | `0.004` | Discourages passive enemy visibility farming |
+| `face_enemy_reward` | `0.004` | Enemy in front sector (0, 1, or 31) — one tick |
+| `aim_center_reward` | `0.002` | Enemy in exact center (sector 0) — one tick, additive |
+| `alignment_improvement_reward` | `0.015` | Player turns *toward* nearest enemy (delta scored, not farmable) |
+| `valid_shot_reward` | `0.025` | Shot fired while enemy is in front sector |
 
-### Active reward-logic behavior
+### Exploration rewards
 
-- `level_complete` uses scaled reward: `base + enemies_total * per_enemy`.
-- `stuck` counter resets when player is not trapped (real movement or shooting), not only on progression/death transitions.
-- `stationary_shoot_no_hit` counter resets when stationary-shoot conditions stop being true.
-- `shoot_no_target` and `stationary_shoot_no_hit` penalties are active by default (non-zero costs).
-- Exploration bonus (`tile_discovery_reward`) applies once per newly visited tile.
-- Gym step info now exposes `reward_breakdown` with component-wise reward contributions per step.
+| Parameter | Default | Trigger |
+|---|---:|---|
+| `tile_discovery_reward` | `0.03` | Tile not visited this episode |
+| `frontier_tile_reward` | `0.04` | Tile further from spawn than any previous (Chebyshev radius) |
 
-## Why Follow-up Rebalance Was Needed
+### Progression rewards
 
-Post-implementation smoke validation showed dense penalties still dominated total return, especially trapped-area behavior. Follow-up rebalance reduced penalty saturation, increased terminal failure cost relative to combat gains, and improved counter-reset behavior to stabilize policy learning.
+| Parameter | Default | Trigger |
+|---|---:|---|
+| `step_cost` | `0.0015` | Every tick (light time pressure) |
+| `kill_reward` | `6.0` | Per enemy killed |
+| `hit_reward` | `0.4` | Per projectile hit on enemy |
+| `damage_dealt_reward` | `0.04` | Per point of damage dealt |
+| `crate_reward` | `0.12` | Per crate collected |
+| `damage_cost` | `0.05` | Per point of damage taken |
+| `death_cost` | `15.0` | Terminal failure |
+| `level_complete_reward_base` | `10.0` | Level completion |
+| `level_complete_reward_per_enemy` | `1.0` | Scaled by enemy headcount |
+| `run_complete_reward` | `30.0` | Full-run victory |
 
-## Validation Snapshot
+### Anti-passivity penalties
 
-- `pytest tests/unit/test_gym_reward.py` -> `15 passed`
-- `python3 tools/gym_random_policy_smoke.py --episodes 3 --max-steps 500` -> passed (3 episodes)
+| Parameter | Default | Trigger |
+|---|---:|---|
+| `inactivity_ticks_threshold` | `60` | Grace before inactivity penalty |
+| `inactivity_cost` | `0.015` | No new tile AND no combat progress (hits/kills/damage/valid-shot) |
+| `enemy_los_penalty_ticks` | `80` | Grace while enemy visible in front |
+| `enemy_los_penalty_cost` | `0.008` | Enemy in front but no hits for too long |
+| `stuck_ticks_threshold` | `20` | Movement < 2px per tick |
+| `stuck_cost` | `0.02` | Penalty per tick beyond stuck threshold |
 
-## Historical Notes (Superseded)
+### Shooting discipline
 
-Original v1 tuning notes in earlier revisions of this document (including values such as `look_at_enemy_reward=0.010`, `strafing_reward=0.008`, `shoot_no_target_cost=0.04`) are historical context only and are not current defaults.
+| Parameter | Default | Trigger |
+|---|---:|---|
+| `stationary_shoot_no_hit_grace_ticks` | `5` | Grace for stationary shooting |
+| `stationary_shoot_no_hit_cost` | `0.015` | Stationary shooting without hits |
+| `shoot_no_target_grace_ticks` | `5` | Grace for blind shooting |
+| `shoot_no_target_cost` | `0.02` | Shooting with no front-sector enemy |
 
-## Next Iteration
+### How "front" is determined
 
-Phase 15 tracks reward stabilization and observability follow-up work:
+`_enemy_target_signal()` inspects ray channel 1 (enemy) across all 32 sectors. Returns `(front, centered, alignment, any_visible)`:
+- `front` / `centered`: true if **any** visible enemy is in sector 0, 1, or 31 (front) / sector 0 (centered). Not limited to nearest.
+- `alignment`: 1.0 - (circular_sector_offset / 16) of the **nearest** visible enemy, clamped ≥ 0.
+- `any_visible`: false when no enemy is visible at all; used to reset the alignment baseline so re-sightings are not rewarded.
 
-- `docs/notes/phase15_reward_stabilization_observability.md`
+### Inactivity / exploration reset conditions
+
+`_inactivity_ticks` resets to 0 when ANY of these occur:
+- New tile discovered
+- Hit, kill, or damage dealt (combat progress)
+- Valid shot (shot fired + enemy in front sector)
+
+This replaces the old idle penalty, which only suppressed while shooting — the new version also resets on exploration, so moving into new territory is explicitly encouraged.
+
+### What was removed
+
+| Old parameter | Replacement |
+|---|---:|
+| `look_at_enemy_reward` | `face_enemy_reward` + `aim_center_reward` (front-only, not 360°) |
+| `strafing_reward` | Removed; replaced by valid-shot and face engagement signals |
+| `idle_cost` / `idle_ticks_threshold` | `inactivity_cost` / `inactivity_ticks_threshold` (resets on exploration too) |
+| `bad_shoot_cost` | Covered by `shoot_no_target_cost` + `stationary_shoot_no_hit_cost` |
+| `visible_no_hit_cost` | `enemy_los_penalty_cost` (front-only, shorter grace) |
+
+### Gym environment
+
+- `info["reward_breakdown"]` exposes all breakdown keys.
+- `info["inactivity_ticks"]` replaced the old `stationary_ticks`.
+
+## Validation
+
+- `pytest tests/unit/test_gym_reward.py` → `43 passed`
+- `pytest tests/unit/test_gym_env.py tests/unit/test_gym_reward.py` → `54 passed`
+- `python3 tools/gym_random_policy_smoke.py --episodes 3 --max-steps 500` → passed

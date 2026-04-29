@@ -11,50 +11,53 @@ from ultimatetk.rendering.constants import TILE_SIZE
 
 @dataclass(frozen=True, slots=True)
 class RewardConfig:
-    step_cost: float = 0.003
+    step_cost: float = 0.0015
 
-    kill_reward: float = 5.0
-    hit_reward: float = 0.5
-    crate_reward: float = 0.15
-    damage_dealt_reward: float = 0.03
+    kill_reward: float = 6.0
+    hit_reward: float = 0.4
+    crate_reward: float = 0.12
+    damage_dealt_reward: float = 0.04
 
-    damage_cost: float = 0.04
-    death_cost: float = 10.0
+    damage_cost: float = 0.05
+    death_cost: float = 15.0
 
-    level_complete_reward_base: float = 8.0
-    level_complete_reward_per_enemy: float = 0.8
-    run_complete_reward: float = 20.0
+    level_complete_reward_base: float = 10.0
+    level_complete_reward_per_enemy: float = 1.0
+    run_complete_reward: float = 30.0
 
-    look_at_enemy_reward: float = 0.01
-    strafing_reward: float = 0.01
+    face_enemy_reward: float = 0.004
+    aim_center_reward: float = 0.002
+    alignment_improvement_reward: float = 0.015
+    valid_shot_reward: float = 0.025
 
-    idle_ticks_threshold: int = 120
-    idle_cost: float = 0.2
-    idle_distance_epsilon: float = 2.0
+    tile_discovery_reward: float = 0.03
+    frontier_tile_reward: float = 0.04
 
-    stationary_shoot_no_hit_cost: float = 0.01
-    stationary_shoot_no_hit_grace_ticks: int = 4
+    inactivity_ticks_threshold: int = 60
+    inactivity_cost: float = 0.015
+
+    enemy_los_penalty_ticks: int = 80
+    enemy_los_penalty_cost: float = 0.008
 
     stuck_ticks_threshold: int = 20
     stuck_radius_epsilon: float = 2.0
     stuck_cost: float = 0.02
 
-    bad_shoot_ticks_threshold: int = 20
-    bad_shoot_cost: float = 0.02
+    stationary_shoot_no_hit_cost: float = 0.015
+    stationary_shoot_no_hit_grace_ticks: int = 5
 
     shoot_no_target_grace_ticks: int = 5
-    shoot_no_target_cost: float = 0.015
+    shoot_no_target_cost: float = 0.02
 
-    tile_discovery_reward: float = 0.005
 
-    visible_no_hit_ticks_threshold: int = 100
-    visible_no_hit_cost: float = 0.01
+_FRONT_SECTORS: set[int] = {0, 1, 31}
+_RAY_SECTOR_COUNT: int = 32
 
 
 @dataclass(frozen=True, slots=True)
 class RewardStep:
     value: float
-    stationary_ticks: int
+    inactivity_ticks: int
     breakdown: dict[str, float]
 
 
@@ -80,13 +83,14 @@ class RewardTracker:
             self._prev_shots_fired = 0
             self._prev_x = 0
             self._prev_y = 0
-            self._stationary_ticks = 0
-            self._bad_shoot_ticks = 0
+            self._prev_enemy_alignment = -1.0
+            self._spawn_tile = (0, 0)
+            self._max_tile_radius = 0
             self._stationary_shoot_ticks = 0
-            self._visible_no_hit_ticks = 0
-            self._shoot_no_target_ticks = 0
-            self._idle_ticks = 0
+            self._inactivity_ticks = 0
             self._stuck_ticks = 0
+            self._shoot_no_target_ticks = 0
+            self._enemy_los_no_hit_ticks = 0
             self._visited_tiles.clear()
             return
 
@@ -100,14 +104,18 @@ class RewardTracker:
         self._prev_shots_fired = runtime.player_shots_fired_total
         self._prev_x = runtime.player_world_x
         self._prev_y = runtime.player_world_y
-        self._stationary_ticks = 0
-        self._bad_shoot_ticks = 0
+        self._prev_enemy_alignment = -1.0
+        spawn_x = int(runtime.player_world_x) // TILE_SIZE
+        spawn_y = int(runtime.player_world_y) // TILE_SIZE
+        self._spawn_tile = (spawn_x, spawn_y)
+        self._max_tile_radius = 0
         self._stationary_shoot_ticks = 0
-        self._visible_no_hit_ticks = 0
-        self._shoot_no_target_ticks = 0
-        self._idle_ticks = 0
+        self._inactivity_ticks = 0
         self._stuck_ticks = 0
+        self._shoot_no_target_ticks = 0
+        self._enemy_los_no_hit_ticks = 0
         self._visited_tiles.clear()
+        self._visited_tiles.add((spawn_x, spawn_y))
 
     def reset(self, runtime: RuntimeState | None) -> None:
         self._reset(runtime)
@@ -121,18 +129,20 @@ class RewardTracker:
             "crate_reward": 0.0,
             "damage_dealt_reward": 0.0,
             "damage_cost": 0.0,
-            "look_at_enemy_reward": 0.0,
-            "visible_no_hit_cost": 0.0,
-            "strafing_reward": 0.0,
+            "face_enemy_reward": 0.0,
+            "aim_center_reward": 0.0,
+            "alignment_improvement_reward": 0.0,
+            "valid_shot_reward": 0.0,
             "level_complete_reward": 0.0,
             "run_complete_reward": 0.0,
             "death_cost": 0.0,
-            "idle_cost": 0.0,
+            "inactivity_cost": 0.0,
             "stuck_cost": 0.0,
-            "bad_shoot_cost": 0.0,
             "stationary_shoot_no_hit_cost": 0.0,
             "shoot_no_target_cost": 0.0,
             "tile_discovery_reward": 0.0,
+            "frontier_tile_reward": 0.0,
+            "enemy_los_penalty": 0.0,
         }
         reward = breakdown["step_cost"]
 
@@ -141,13 +151,16 @@ class RewardTracker:
         delta_crates = max(0, runtime.crates_collected_by_player - self._prev_crates)
         delta_shots = max(0, runtime.player_shots_fired_total - self._prev_shots_fired)
         delta_damage = max(0.0, runtime.player_damage_taken_total - self._prev_damage_taken)
+        delta_damage_dealt = max(0.0, runtime.player_damage_dealt_total - self._prev_damage_dealt)
         shooting_active = runtime.player_shoot_hold_active or delta_shots > 0
+        moved = abs(runtime.player_world_x - self._prev_x) + abs(runtime.player_world_y - self._prev_y)
 
         kill_delta = cfg.kill_reward * float(delta_kills)
         hit_delta = cfg.hit_reward * float(delta_hits)
         crate_delta = cfg.crate_reward * float(delta_crates)
         damage_delta = -cfg.damage_cost * float(delta_damage)
-        damage_dealt_delta = cfg.damage_dealt_reward * max(0.0, runtime.player_damage_dealt_total - self._prev_damage_dealt)
+        damage_dealt_delta = cfg.damage_dealt_reward * delta_damage_dealt
+
         reward += kill_delta
         reward += hit_delta
         reward += crate_delta
@@ -159,21 +172,26 @@ class RewardTracker:
         breakdown["damage_cost"] += damage_delta
         breakdown["damage_dealt_reward"] += damage_dealt_delta
 
-        enemy_visible = self._enemy_visible(observation)
+        front, centered, alignment, enemy_visible = self._enemy_target_signal(observation)
 
-        if enemy_visible and not runtime.player_dead:
-            reward += cfg.look_at_enemy_reward
-            breakdown["look_at_enemy_reward"] += cfg.look_at_enemy_reward
-            self._visible_no_hit_ticks += 1
-            if self._visible_no_hit_ticks >= cfg.visible_no_hit_ticks_threshold:
-                reward -= cfg.visible_no_hit_cost * self._penalty_scale
-                breakdown["visible_no_hit_cost"] -= cfg.visible_no_hit_cost * self._penalty_scale
-        else:
-            self._visible_no_hit_ticks = 0
+        if front and not runtime.player_dead:
+            reward += cfg.face_enemy_reward
+            breakdown["face_enemy_reward"] += cfg.face_enemy_reward
+            if centered:
+                reward += cfg.aim_center_reward
+                breakdown["aim_center_reward"] += cfg.aim_center_reward
 
-        if enemy_visible and self._player_strafing(observation) and not runtime.player_dead:
-            reward += cfg.strafing_reward
-            breakdown["strafing_reward"] += cfg.strafing_reward
+        if not enemy_visible:
+            self._prev_enemy_alignment = -1.0
+        elif self._prev_enemy_alignment >= 0.0 and alignment > self._prev_enemy_alignment + 0.001 and not runtime.player_dead:
+            alignment_delta = alignment - self._prev_enemy_alignment
+            reward += alignment_delta * cfg.alignment_improvement_reward
+            breakdown["alignment_improvement_reward"] += alignment_delta * cfg.alignment_improvement_reward
+
+        if delta_shots > 0 and front and not runtime.player_dead:
+            valid_shots = float(delta_shots)
+            reward += valid_shots * cfg.valid_shot_reward
+            breakdown["valid_shot_reward"] += valid_shots * cfg.valid_shot_reward
 
         progression_changed = runtime.progression_event != self._prev_progression_event
         if progression_changed and runtime.progression_event == "level_complete":
@@ -188,15 +206,39 @@ class RewardTracker:
             reward -= cfg.death_cost
             breakdown["death_cost"] -= cfg.death_cost
 
-        moved = abs(runtime.player_world_x - self._prev_x) + abs(runtime.player_world_y - self._prev_y)
+        exploration_event = False
+        if not runtime.player_dead:
+            player_tile_x = int(runtime.player_world_x) // TILE_SIZE
+            player_tile_y = int(runtime.player_world_y) // TILE_SIZE
+            current_tile = (player_tile_x, player_tile_y)
 
-        if not shooting_active and not runtime.player_dead and moved <= cfg.idle_distance_epsilon:
-            self._idle_ticks += 1
-            if self._idle_ticks >= cfg.idle_ticks_threshold:
-                reward -= cfg.idle_cost * self._penalty_scale
-                breakdown["idle_cost"] -= cfg.idle_cost * self._penalty_scale
+            if current_tile not in self._visited_tiles:
+                self._visited_tiles.add(current_tile)
+                reward += cfg.tile_discovery_reward
+                breakdown["tile_discovery_reward"] += cfg.tile_discovery_reward
+                exploration_event = True
+
+                radius = max(abs(player_tile_x - self._spawn_tile[0]), abs(player_tile_y - self._spawn_tile[1]))
+                if radius > self._max_tile_radius:
+                    self._max_tile_radius = radius
+                    reward += cfg.frontier_tile_reward
+                    breakdown["frontier_tile_reward"] += cfg.frontier_tile_reward
+
+        combat_progress = (
+            delta_hits > 0
+            or delta_kills > 0
+            or delta_damage_dealt > 0.0
+            or (delta_shots > 0 and front)
+        )
+        valid_engagement = exploration_event or combat_progress
+
+        if runtime.player_dead or valid_engagement:
+            self._inactivity_ticks = 0
         else:
-            self._idle_ticks = 0
+            self._inactivity_ticks += 1
+            if self._inactivity_ticks >= cfg.inactivity_ticks_threshold:
+                reward -= cfg.inactivity_cost * self._penalty_scale
+                breakdown["inactivity_cost"] -= cfg.inactivity_cost * self._penalty_scale
 
         if progression_changed or runtime.player_dead:
             self._stuck_ticks = 0
@@ -208,17 +250,9 @@ class RewardTracker:
         else:
             self._stuck_ticks = 0
 
-        if not runtime.player_dead and shooting_active and delta_hits == 0 and not enemy_visible:
-            self._bad_shoot_ticks += 1
-            if self._bad_shoot_ticks >= cfg.bad_shoot_ticks_threshold:
-                reward -= cfg.bad_shoot_cost * self._penalty_scale
-                breakdown["bad_shoot_cost"] -= cfg.bad_shoot_cost * self._penalty_scale
-        else:
-            self._bad_shoot_ticks = 0
-
         if delta_hits > 0:
             self._stationary_shoot_ticks = 0
-        elif not runtime.player_dead and shooting_active and moved <= cfg.idle_distance_epsilon:
+        elif not runtime.player_dead and shooting_active and moved <= cfg.stuck_radius_epsilon:
             self._stationary_shoot_ticks += 1
             if self._stationary_shoot_ticks >= cfg.stationary_shoot_no_hit_grace_ticks:
                 reward -= cfg.stationary_shoot_no_hit_cost * self._penalty_scale
@@ -226,7 +260,7 @@ class RewardTracker:
         else:
             self._stationary_shoot_ticks = 0
 
-        if not runtime.player_dead and (runtime.player_shoot_hold_active or delta_shots > 0) and not enemy_visible:
+        if not runtime.player_dead and shooting_active and not front:
             self._shoot_no_target_ticks += 1
             if self._shoot_no_target_ticks >= cfg.shoot_no_target_grace_ticks:
                 reward -= cfg.shoot_no_target_cost * self._penalty_scale
@@ -234,15 +268,15 @@ class RewardTracker:
         else:
             self._shoot_no_target_ticks = 0
 
-        if not runtime.player_dead:
-            player_tile_x = int(runtime.player_world_x) // TILE_SIZE
-            player_tile_y = int(runtime.player_world_y) // TILE_SIZE
-            current_tile = (player_tile_x, player_tile_y)
-
-            if current_tile not in self._visited_tiles:
-                self._visited_tiles.add(current_tile)
-                reward += cfg.tile_discovery_reward
-                breakdown["tile_discovery_reward"] += cfg.tile_discovery_reward
+        if delta_hits > 0:
+            self._enemy_los_no_hit_ticks = 0
+        elif front and not runtime.player_dead:
+            self._enemy_los_no_hit_ticks += 1
+            if self._enemy_los_no_hit_ticks >= cfg.enemy_los_penalty_ticks:
+                reward -= cfg.enemy_los_penalty_cost * self._penalty_scale
+                breakdown["enemy_los_penalty"] -= cfg.enemy_los_penalty_cost * self._penalty_scale
+        else:
+            self._enemy_los_no_hit_ticks = 0
 
         self._prev_kills = runtime.enemies_killed_by_player
         self._prev_hits = runtime.player_hits_total
@@ -254,31 +288,33 @@ class RewardTracker:
         self._prev_shots_fired = runtime.player_shots_fired_total
         self._prev_x = runtime.player_world_x
         self._prev_y = runtime.player_world_y
+        self._prev_enemy_alignment = alignment if enemy_visible else -1.0
 
-        return RewardStep(value=reward, stationary_ticks=self._idle_ticks, breakdown=breakdown)
+        return RewardStep(value=reward, inactivity_ticks=self._inactivity_ticks, breakdown=breakdown)
 
-    def _player_strafing(self, observation: dict[str, Any] | None) -> bool:
-        if observation is None:
-            return False
-        state = observation.get("state")
-        if state is None:
-            return False
-        state_arr = np.asarray(state, dtype=np.float32)
-        if state_arr.size < 11:
-            return False
-        return bool(state_arr[10] >= 1.0)
-
-    def _enemy_visible(self, observation: dict[str, Any] | None) -> bool:
+    @staticmethod
+    def _enemy_target_signal(observation: dict[str, Any] | None) -> tuple[bool, bool, float, bool]:
         if not observation:
-            return False
+            return False, False, 0.0, False
         rays = observation.get("rays")
         if rays is None:
-            return False
+            return False, False, 0.0, False
 
         matrix = np.asarray(rays, dtype=np.float32)
-        if matrix.ndim != 2 or matrix.shape[1] < 2:
-            return False
-        if matrix.shape[0] == 0:
-            return False
+        if matrix.ndim != 2 or matrix.shape[1] < 2 or matrix.shape[0] < _RAY_SECTOR_COUNT:
+            return False, False, 0.0, False
 
-        return bool(np.min(matrix[:, 1]) < 1.0)
+        enemy_dists = matrix[:_RAY_SECTOR_COUNT, 1]
+        visible_mask = enemy_dists < 1.0
+        any_visible = bool(np.any(visible_mask))
+        if not any_visible:
+            return False, False, 0.0, False
+
+        front = bool(np.any(visible_mask[0])) or bool(np.any(visible_mask[1])) or bool(np.any(visible_mask[31]))
+        centered = bool(visible_mask[0])
+
+        nearest_sector = int(np.argmin(enemy_dists))
+        sector_offset = min(nearest_sector, _RAY_SECTOR_COUNT - nearest_sector)
+        alignment = 1.0 - (float(sector_offset) / 16.0)
+
+        return front, centered, max(0.0, alignment), True
